@@ -1,5 +1,6 @@
 <Solution>
   <Project Path="src/SameieHub.Domain/SameieHub.Domain.csproj" />
+  <Project Path="src/SameieHub.Infrastructure/SameieHub.Infrastructure.csproj" />
   <Project Path="src/SameieHub.Web/SameieHub.Web.csproj" />
   <Project Path="tests/SameieHub.Tests/SameieHub.Tests.csproj" />
 </Solution>

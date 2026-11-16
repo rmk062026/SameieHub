@@ -16,6 +16,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\SameieHub.Domain\SameieHub.Domain.csproj" />
+    <ProjectReference Include="..\..\src\SameieHub.Infrastructure\SameieHub.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\SameieHub.Web\SameieHub.Web.csproj" />
   </ItemGroup>
 
   <ItemGroup>

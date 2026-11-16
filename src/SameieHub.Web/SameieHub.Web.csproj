@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\SameieHub.Domain\SameieHub.Domain.csproj" />
+    <ProjectReference Include="..\SameieHub.Infrastructure\SameieHub.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>
