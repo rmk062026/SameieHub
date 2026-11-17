@@ -1,3 +1,6 @@
+using SameieHub.Domain;
+using SameieHub.Infrastructure;
+using SameieHub.Infrastructure.Persistence;
 using SameieHub.Web.Components;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -6,7 +9,12 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
+builder.Services.AddSameieHubInfrastructure(DatabaseLocation.GetDefaultPath());
+builder.Services.AddScoped<HousingUnitService>();
+
 var app = builder.Build();
+
+await app.Services.MigrateSameieHubDatabaseAsync();
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
