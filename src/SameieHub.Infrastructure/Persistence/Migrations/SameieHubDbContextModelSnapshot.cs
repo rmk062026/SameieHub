@@ -26,6 +26,42 @@ namespace SameieHub.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<decimal?>("AreaSquareMeters")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("HousingType")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OwnerEmail")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OwnerName")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OwnerPhoneNumber")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SecondOwnerEmail")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SecondOwnerName")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SecondOwnerPhoneNumber")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("SectionNumber")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("UnitNumber")
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
                     b.ToTable("HousingUnits");

@@ -18,5 +18,6 @@ public class SameieHubDbContext : DbContext
 
         housingUnit.HasKey(unit => unit.Id);
         housingUnit.Property(unit => unit.Address).IsRequired();
+        housingUnit.Property(unit => unit.HousingType).HasConversion<string>();
     }
 }

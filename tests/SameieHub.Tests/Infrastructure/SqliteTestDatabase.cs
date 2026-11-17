@@ -1,7 +1,11 @@
 using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.DependencyInjection;
 using SameieHub.Domain;
 using SameieHub.Infrastructure;
+using SameieHub.Infrastructure.Persistence;
 
 namespace SameieHub.Tests.Infrastructure;
 
@@ -33,6 +37,49 @@ public sealed class SqliteTestDatabase : IAsyncDisposable
         await database._provider.MigrateSameieHubDatabaseAsync();
 
         return database;
+    }
+
+    /// <summary>
+    /// Creates the database file without applying any migrations, for testing upgrades from older schemas.
+    /// </summary>
+    public static Task<SqliteTestDatabase> CreateUnmigratedAsync()
+    {
+        return Task.FromResult(new SqliteTestDatabase());
+    }
+
+    public async Task MigrateToFirstMigrationAsync()
+    {
+        var factory = _provider.GetRequiredService<IDbContextFactory<SameieHubDbContext>>();
+        await using var context = await factory.CreateDbContextAsync();
+
+        var firstMigration = context.Database.GetMigrations().First();
+        await context.GetService<IMigrator>().MigrateAsync(firstMigration);
+    }
+
+    public Task MigrateToLatestAsync()
+    {
+        return _provider.MigrateSameieHubDatabaseAsync();
+    }
+
+    public async Task ExecuteSqlAsync(string sql)
+    {
+        await using var connection = new SqliteConnection($"Data Source={DatabasePath}");
+        await connection.OpenAsync();
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        await command.ExecuteNonQueryAsync();
+    }
+
+    public async Task<string?> QueryTextAsync(string sql)
+    {
+        await using var connection = new SqliteConnection($"Data Source={DatabasePath}");
+        await connection.OpenAsync();
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = sql;
+
+        return (await command.ExecuteScalarAsync())?.ToString();
     }
 
     /// <summary>
