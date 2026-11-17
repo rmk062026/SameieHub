@@ -2,7 +2,7 @@
 
 Lokalt administrasjonsprogram for små sameier: oversikt over boenheter, styresaker og oppgaver/vedlikehold. Bygget med C#, .NET 10, Blazor (Interactive Server) og SQLite. Kodehode-prosjekt og porteføljeeksempel.
 
-**Status:** M0 – prosjektfundament. Ingen funksjonalitet er implementert ennå.
+**Status:** M0 fundament ferdig. M1A (`HousingUnit` med adressevalidering) ferdig; resten av boenhetsmodulen kommer i M1B.
 
 ![CI](https://github.com/rmk062026/SameieHub/actions/workflows/ci.yml/badge.svg)
 

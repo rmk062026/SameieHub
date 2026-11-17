@@ -38,8 +38,7 @@ erDiagram
     BoardCase ||--o{ TaskItem : "kan gi"
     HousingUnit {
         int Id
-        string Number
-        string Owner
+        string Address
     }
     BoardCase {
         int Id
@@ -56,3 +55,12 @@ erDiagram
 ```
 
 Relasjonene er hypoteser; endelige felter og regler besluttes i M1–M3 før koden skrives.
+
+## Domenemodell: HousingUnit (M1A)
+
+`HousingUnit` har foreløpig `Id` og `Address`. Flere felter kommer i senere deloppgaver.
+
+- **Invarianter i klassen:** `Address` har `private set` og kan bare endres via konstruktøren eller `ChangeAddress()`. Begge bruker `NormalizeAddress`, slik at valideringen finnes på ett sted.
+- **Regel:** adressen kan ikke være `null`, tom eller bare mellomrom. Gyldige adresser trimmes.
+- **Feilhåndtering:** ugyldig adresse gir `ArgumentException` (`ArgumentNullException` for `null`). Ved feil beholdes den gamle adressen, fordi tilordningen skjer etter vellykket validering.
+- **`Id`:** satt av databasen senere (0 til da); `private set` er nok for EF Core.

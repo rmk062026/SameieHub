@@ -16,8 +16,11 @@ Lokalt administrasjonsprogram for et lite sameie (selveide boliger i tomannsboli
 
 ## Kodekonvensjoner
 - Engelske navn i kode. Nullable reference types, async/await for I/O, korte metoder med ett ansvar.
-- `.editorconfig` er gjeldende. XML-doc på viktige offentlige API-er når det tilfører verdi; kommentarer forklarer *hvorfor*.
-- Validering og feilhåndtering ved systemgrenser.
+- `.editorconfig` er gjeldende. Validering og feilhåndtering ved systemgrenser.
+- Enkel, idiomatisk og konsekvent C# som prosjekteieren (en student) kan forstå, feilsøke og videreutvikle. Ingen overengineering, unødvendige mellomlag eller avansert syntaks for syns skyld.
+- Selvforklarende kode fremfor kommentarer. XML-dokumentasjon kun når den tilfører noe signaturen ikke viser (kontrakt, begrensning, sideeffekt, uvanlig oppførsel). Vanlige kommentarer kun for *hvorfor*. Ingen TODO- eller undervisningskommentarer i ferdig kode.
+- Undervisning gis i samtalen eller i `docs/`, ikke som kommentarer i C#-filene. Lengre arkitekturforklaringer hører hjemme i `docs/`.
+- Terminologi: dette er et sameie (ikke borettslag).
 
 ## Test og kvalitet
 - TDD for testbar forretningslogikk: test først → bekreft feil av riktig årsak → implementer → grønn → refaktorer. Ingen kunstige commits for å simulere TDD.
