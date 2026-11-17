@@ -106,4 +106,108 @@ public class HousingUnitServiceTests
         var found = await _service.GetByIdAsync(unit.Id);
         Assert.Equal("Storgata 1A", found!.Address);
     }
+
+    private static HousingUnitDetails FullDetails() => new()
+    {
+        Address = "Storgata 1A",
+        UnitNumber = "H0101",
+        SectionNumber = 12,
+        HousingType = HousingType.Duplex,
+        AreaSquareMeters = 85.5m,
+        OwnerName = "Test Eier",
+        OwnerPhoneNumber = "400 00 000",
+        OwnerEmail = "eier@example.test",
+        SecondOwnerName = "Test Medeier",
+        Notes = "Fiktive testdata."
+    };
+
+    [Fact]
+    public async Task RegisterAsync_AllDetails_StoresEverythingAndIsActive()
+    {
+        var registered = await _service.RegisterAsync(FullDetails());
+
+        var found = await _service.GetByIdAsync(registered.Id);
+        Assert.Equal("H0101", found!.UnitNumber);
+        Assert.Equal(HousingType.Duplex, found.HousingType);
+        Assert.Equal("Test Medeier", found.SecondOwnerName);
+        Assert.True(found.IsActive);
+    }
+
+    [Fact]
+    public async Task RegisterAsync_InvalidDetails_ThrowsAndStoresNothing()
+    {
+        var invalid = FullDetails() with { OwnerEmail = "not-an-email" };
+
+        await Assert.ThrowsAsync<ArgumentException>(() => _service.RegisterAsync(invalid));
+
+        Assert.Empty(await _service.GetAllAsync());
+    }
+
+    [Fact]
+    public async Task UpdateDetailsAsync_ExistingUnit_ReplacesDetails()
+    {
+        var unit = await _service.RegisterAsync(FullDetails());
+
+        await _service.UpdateDetailsAsync(unit.Id, FullDetails() with { Address = "Storgata 2A", SecondOwnerName = null });
+
+        var found = await _service.GetByIdAsync(unit.Id);
+        Assert.Equal("Storgata 2A", found!.Address);
+        Assert.Null(found.SecondOwnerName);
+        Assert.Equal("Test Eier", found.OwnerName);
+    }
+
+    [Fact]
+    public async Task UpdateDetailsAsync_InvalidDetails_ThrowsAndKeepsStoredValues()
+    {
+        var unit = await _service.RegisterAsync(FullDetails());
+
+        await Assert.ThrowsAnyAsync<ArgumentException>(() =>
+            _service.UpdateDetailsAsync(unit.Id, FullDetails() with { Address = "Ny adresse", AreaSquareMeters = -1 }));
+
+        var found = await _service.GetByIdAsync(unit.Id);
+        Assert.Equal("Storgata 1A", found!.Address);
+        Assert.Equal(85.5m, found.AreaSquareMeters);
+    }
+
+    [Fact]
+    public async Task UpdateDetailsAsync_UnknownId_ThrowsKeyNotFoundException()
+    {
+        await Assert.ThrowsAsync<KeyNotFoundException>(() => _service.UpdateDetailsAsync(999, FullDetails()));
+    }
+
+    [Fact]
+    public async Task DeactivateAsync_ActiveUnit_IsStoredAsInactiveWithDataKept()
+    {
+        var unit = await _service.RegisterAsync(FullDetails());
+
+        await _service.DeactivateAsync(unit.Id);
+
+        var found = await _service.GetByIdAsync(unit.Id);
+        Assert.False(found!.IsActive);
+        Assert.Equal("Test Eier", found.OwnerName);
+    }
+
+    [Fact]
+    public async Task ActivateAsync_InactiveUnit_IsStoredAsActive()
+    {
+        var unit = await _service.RegisterAsync(FullDetails());
+        await _service.DeactivateAsync(unit.Id);
+
+        await _service.ActivateAsync(unit.Id);
+
+        var found = await _service.GetByIdAsync(unit.Id);
+        Assert.True(found!.IsActive);
+    }
+
+    [Fact]
+    public async Task DeactivateAsync_UnknownId_ThrowsKeyNotFoundException()
+    {
+        await Assert.ThrowsAsync<KeyNotFoundException>(() => _service.DeactivateAsync(999));
+    }
+
+    [Fact]
+    public async Task ActivateAsync_UnknownId_ThrowsKeyNotFoundException()
+    {
+        await Assert.ThrowsAsync<KeyNotFoundException>(() => _service.ActivateAsync(999));
+    }
 }
