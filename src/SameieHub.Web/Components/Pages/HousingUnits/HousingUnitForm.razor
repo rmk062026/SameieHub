@@ -1,0 +1,95 @@
+@inject ILogger<HousingUnitForm> Logger
+
+<EditForm Model="_model" OnValidSubmit="SaveAsync" class="surface-card form-card" novalidate>
+    <DataAnnotationsValidator />
+
+    @if (_errorMessage != null)
+    {
+        <div class="alert alert-danger" role="alert">@_errorMessage</div>
+    }
+
+    <div class="mb-4">
+        <label for="address" class="form-label fw-semibold">Adresse</label>
+        <InputText id="address" @ref="_addressInput" class="form-control" @bind-Value="_model.Address"
+                   aria-describedby="address-help" />
+        <div id="address-help" class="form-text">For eksempel «Storgata 1A». Mellomrom i begynnelsen og slutten fjernes.</div>
+        <ValidationMessage For="() => _model.Address" />
+    </div>
+
+    <div class="d-flex flex-wrap gap-2">
+        <button type="submit" class="btn btn-primary" disabled="@_isSaving">
+            @if (_isSaving)
+            {
+                <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
+                <span>Lagrer …</span>
+            }
+            else
+            {
+                @SubmitText
+            }
+        </button>
+        <a class="btn btn-outline-secondary" href="/boenheter">Avbryt</a>
+    </div>
+</EditForm>
+
+@code {
+    private readonly HousingUnitFormModel _model = new();
+    private InputText? _addressInput;
+    private bool _isSaving;
+    private string? _errorMessage;
+
+    [Parameter]
+    public string InitialAddress { get; set; } = string.Empty;
+
+    [Parameter, EditorRequired]
+    public string SubmitText { get; set; } = string.Empty;
+
+    [Parameter, EditorRequired]
+    public Func<string, Task> OnSave { get; set; } = _ => Task.CompletedTask;
+
+    protected override void OnInitialized()
+    {
+        _model.Address = InitialAddress;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && _addressInput?.Element is { } element)
+        {
+            await element.FocusAsync();
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_isSaving)
+        {
+            return;
+        }
+
+        _isSaving = true;
+        _errorMessage = null;
+
+        try
+        {
+            await OnSave(_model.Address);
+        }
+        catch (ArgumentException)
+        {
+            _errorMessage = "Adressen er ugyldig. Skriv inn en adresse.";
+        }
+        catch (KeyNotFoundException)
+        {
+            _errorMessage = "Boenheten finnes ikke lenger. Gå tilbake til oversikten og prøv på nytt.";
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Could not save housing unit.");
+            _errorMessage = "Kunne ikke lagre. Kontroller at databasen er tilgjengelig og prøv på nytt.";
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+}

@@ -1,0 +1,114 @@
+@page "/boenheter"
+@inject HousingUnitService HousingUnitService
+@inject ILogger<HousingUnitList> Logger
+
+<PageTitle>Boenheter – SameieHub</PageTitle>
+
+<PageHeader Title="Boenheter" Description="Oversikt over boligene i sameiet.">
+    <a class="btn btn-primary" href="/boenheter/ny">Registrer boenhet</a>
+</PageHeader>
+
+@if (StatusMessage != null)
+{
+    <div class="alert alert-success" role="status">@StatusMessage</div>
+}
+
+@if (_isLoading)
+{
+    <div class="surface-card" role="status">
+        <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Laster boenheter …
+    </div>
+}
+else if (_loadError != null)
+{
+    <div class="alert alert-danger" role="alert">
+        <p>@_loadError</p>
+        <button type="button" class="btn btn-outline-danger btn-sm" @onclick="LoadAsync">Prøv igjen</button>
+    </div>
+}
+else if (_units.Count == 0)
+{
+    <section class="surface-card empty-state">
+        <h2>Ingen boenheter registrert ennå</h2>
+        <p>Registrer den første boenheten for å komme i gang.</p>
+        <a class="btn btn-primary" href="/boenheter/ny">Registrer boenhet</a>
+    </section>
+}
+else
+{
+    <p class="summary"><strong>@_units.Count</strong> @(_units.Count == 1 ? "boenhet" : "boenheter") registrert</p>
+
+    <div class="data-table-card table-responsive">
+        <table class="table data-table">
+            <caption class="visually-hidden">Registrerte boenheter, sortert etter adresse</caption>
+            <thead>
+                <tr>
+                    <th scope="col" class="col-id">ID</th>
+                    <th scope="col">Adresse</th>
+                    <th scope="col" class="col-actions"><span class="visually-hidden">Handlinger</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var unit in _units)
+                {
+                    <tr>
+                        <td class="col-id">@unit.Id</td>
+                        <td>@unit.Address</td>
+                        <td class="col-actions">
+                            <a class="btn btn-outline-primary btn-sm" href="/boenheter/@unit.Id/rediger"
+                               aria-label="Rediger @unit.Address">Rediger</a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    // Numeric ordering puts "Storgata 2A" before "Storgata 10B".
+    private static readonly IComparer<string> AddressComparer = Comparer<string>.Create((first, second) =>
+        new System.Globalization.CultureInfo("nb-NO").CompareInfo.Compare(
+            first, second, System.Globalization.CompareOptions.IgnoreCase | System.Globalization.CompareOptions.NumericOrdering));
+
+    private List<HousingUnit> _units = [];
+    private bool _isLoading = true;
+    private string? _loadError;
+
+    [SupplyParameterFromQuery(Name = "status")]
+    public string? Status { get; set; }
+
+    private string? StatusMessage => Status switch
+    {
+        "opprettet" => "Boenheten er registrert.",
+        "endret" => "Adressen er oppdatert.",
+        _ => null
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _isLoading = true;
+        _loadError = null;
+
+        try
+        {
+            var units = await HousingUnitService.GetAllAsync();
+
+            _units = units.OrderBy(unit => unit.Address, AddressComparer).ToList();
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Could not load housing units.");
+            _loadError = "Kunne ikke hente boenhetene. Kontroller at databasen er tilgjengelig og prøv igjen.";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+}

@@ -9,7 +9,8 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
-builder.Services.AddSameieHubInfrastructure(DatabaseLocation.GetDefaultPath());
+var databasePath = builder.Configuration["Database:Path"] ?? DatabaseLocation.GetDefaultPath();
+builder.Services.AddSameieHubInfrastructure(databasePath);
 builder.Services.AddScoped<HousingUnitService>();
 
 var app = builder.Build();

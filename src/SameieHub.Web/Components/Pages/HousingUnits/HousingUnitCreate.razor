@@ -1,0 +1,19 @@
+@page "/boenheter/ny"
+@inject HousingUnitService HousingUnitService
+@inject NavigationManager Navigation
+
+<PageTitle>Registrer boenhet – SameieHub</PageTitle>
+
+<PageHeader Title="Registrer boenhet" Description="Legg til en ny bolig i sameiet."
+            BackHref="/boenheter" BackText="Boenheter" />
+
+<HousingUnitForm SubmitText="Registrer boenhet" OnSave="RegisterAsync" />
+
+@code {
+    private async Task RegisterAsync(string address)
+    {
+        await HousingUnitService.RegisterAsync(address);
+
+        Navigation.NavigateTo("/boenheter?status=opprettet");
+    }
+}

@@ -1,0 +1,68 @@
+@page "/boenheter/{Id:int}/rediger"
+@inject HousingUnitService HousingUnitService
+@inject NavigationManager Navigation
+@inject ILogger<HousingUnitEdit> Logger
+
+<PageTitle>Rediger boenhet – SameieHub</PageTitle>
+
+<PageHeader Title="Rediger boenhet" Description="Endre adressen til boenheten."
+            BackHref="/boenheter" BackText="Boenheter" />
+
+@if (_isLoading)
+{
+    <div class="surface-card" role="status">
+        <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Laster boenhet …
+    </div>
+}
+else if (_loadError != null)
+{
+    <div class="alert alert-danger" role="alert">@_loadError</div>
+}
+else if (_unit == null)
+{
+    <div class="surface-card empty-state">
+        <h2>Fant ikke boenheten</h2>
+        <p>Boenheten finnes ikke, eller den er fjernet.</p>
+        <a class="btn btn-primary" href="/boenheter">Tilbake til boenheter</a>
+    </div>
+}
+else
+{
+    <HousingUnitForm InitialAddress="@_unit.Address" SubmitText="Lagre endring" OnSave="ChangeAddressAsync" />
+}
+
+@code {
+    private HousingUnit? _unit;
+    private bool _isLoading = true;
+    private string? _loadError;
+
+    [Parameter]
+    public int Id { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _isLoading = true;
+        _loadError = null;
+
+        try
+        {
+            _unit = await HousingUnitService.GetByIdAsync(Id);
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Could not load housing unit {Id}.", Id);
+            _loadError = "Kunne ikke hente boenheten. Kontroller at databasen er tilgjengelig og prøv på nytt.";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task ChangeAddressAsync(string address)
+    {
+        await HousingUnitService.ChangeAddressAsync(Id, address);
+
+        Navigation.NavigateTo("/boenheter?status=endret");
+    }
+}
