@@ -26,3 +26,13 @@ EF Core-pakker pinnes til 10.0.x så lenge prosjektet målretter `net10.0`.
 
 ## Milepæler
 M0 fundament · M1 Boenheter · M2 Styresaker · M3 Oppgaver · M4 Dashboard · M5 Backup/gjenoppretting og lokal pakking. Hver milepæl avsluttes med kontrollrapport og krever godkjenning.
+
+## Legge til et nytt felt i `HousingUnit`
+Eksempel: `ParkingSpace` (tekst). Følg rekkefølgen, og skriv testen først (TDD):
+1. **Test (Domain):** i `HousingUnitDetailsTests`, test normalisering og regler for feltet (og at ugyldig verdi ikke endrer noe).
+2. **Domenet:** legg til `public string? ParkingSpace { get; private set; }` i `HousingUnit`, en egenskap i `HousingUnitDetails`, en lengdekonstant og en `Normalize…`-linje i `UpdateDetails` (valider først, tilordne sist). Bruk `nameof(...)` som feltnavn i feilen, fordi UI bruker det.
+3. **Søk (valgfritt):** legg feltet til i `HousingUnitFilter.MatchesText`.
+4. **Database:** legg ved behov mapping i `SameieHubDbContext.OnModelCreating`, og lag migrering: `dotnet ef migrations add AddParkingSpace --project src/SameieHub.Infrastructure --output-dir Persistence/Migrations`. Kontroller den genererte filen, og gi ikke-valgfrie kolonner en fornuftig standardverdi. Endre aldri en migrering som allerede er brukt.
+5. **UI:** egenskap i `HousingUnitFormModel` (`From` og `ToDetails`), felt i `HousingUnitForm.razor`, melding i `HousingUnitFieldMessages`, og visning i `HousingUnitDetail.razor` (`DetailItem`).
+6. **Tester:** persistenstest og bUnit-test for skjema og detaljside. Kjør `dotnet test`.
+7. **Dokumentasjon:** `REQUIREMENTS.md` (regler) og `ARCHITECTURE.md` (beslutning).

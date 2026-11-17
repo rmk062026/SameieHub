@@ -8,6 +8,7 @@ Lokalt administrasjonsprogram for et lite sameie (selveide boliger i tomannsboli
 - Utenfor v1.0: økonomi, flere brukere/innlogging, dokumentarkiv, ekstern tilgang, flere sameier, eksterne integrasjoner.
 - Én lokal bruker, ingen separat API, ingen Docker, ingen skyhosting, ingen avansert autentisering.
 - Må kunne kjøres uten Visual Studio, .NET SDK og internett. Backup/gjenoppretting av SQLite er obligatorisk før v1.0.
+- Personopplysninger (eiernavn, telefon, e-post): bare i lokal database; aldri i logger, tester, seed-data eller commits. Bruk fiktive testdata.
 
 ## Teknologi og arkitektur
 - C#, .NET 10, Blazor Web App (Interactive Server), SQLite + EF Core, xUnit, GitHub Actions. Windows lokalt.

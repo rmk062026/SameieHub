@@ -39,6 +39,13 @@ erDiagram
     HousingUnit {
         int Id
         string Address
+        string UnitNumber
+        int SectionNumber
+        string HousingType
+        decimal AreaSquareMeters
+        string OwnerName
+        string SecondOwnerName
+        bool IsActive
     }
     BoardCase {
         int Id
@@ -56,43 +63,34 @@ erDiagram
 
 Relasjonene er hypoteser; endelige felter og regler besluttes i M1–M3 før koden skrives.
 
-## Domenemodell: HousingUnit (M1A)
+## Domenemodell: HousingUnit (M1A–M1E)
 
-`HousingUnit` har foreløpig `Id` og `Address`. Flere felter kommer i senere deloppgaver.
+`HousingUnit` har `Id`, `Address`, `UnitNumber`, `SectionNumber`, `HousingType`, `AreaSquareMeters`, eier 1 (`OwnerName`, `OwnerPhoneNumber`, `OwnerEmail`), eier 2 (`SecondOwnerName`, `SecondOwnerPhoneNumber`, `SecondOwnerEmail`), `Notes` og `IsActive`. Alle properties har `private set`.
 
-- **Invarianter i klassen:** `Address` har `private set` og kan bare endres via konstruktøren eller `ChangeAddress()`. Begge bruker `NormalizeAddress`, slik at valideringen finnes på ett sted.
-- **Regel:** adressen kan ikke være `null`, tom eller bare mellomrom. Gyldige adresser trimmes.
-- **Feilhåndtering:** ugyldig adresse gir `ArgumentException` (`ArgumentNullException` for `null`). Ved feil beholdes den gamle adressen, fordi tilordningen skjer etter vellykket validering.
-- **`Id`:** satt av databasen senere (0 til da); `private set` er nok for EF Core.
+- **Opprettelse:** `new HousingUnit(address)` (bare adresse) eller `new HousingUnit(details)`.
+- **Endring:** `UpdateDetails(HousingUnitDetails)` erstatter alle opplysningene. Alt valideres og normaliseres først, og først deretter tilordnes verdiene, så ugyldig input etterlater aldri objektet halvt oppdatert. `ChangeAddress()` finnes fortsatt.
+- **Normalisering:** tekst trimmes; tomme valgfrie tekster blir `null`.
+- **Feil:** `ArgumentException` (eller `ArgumentOutOfRangeException`) der `ParamName` er navnet på feltet. Meldingene inneholder aldri selve verdien (personvern).
+- **Status:** `Deactivate()` og `Activate()` er idempotente. Inaktive enheter kan fortsatt redigeres. Data beholdes.
+- **`Id`:** satt av databasen (se «Lagring» og `AssignId`).
+- Reglenes grenser er offentlige konstanter (`HousingUnit.MaxAddressLength` osv.) slik at UI kan bruke de samme tallene.
+- **Søk/filter:** `HousingUnitFilter.Apply(units, text, statusFilter)` er ren domenelogikk uten database. Teksten søkes (uten hensyn til store/små bokstaver) i adresse, bolignummer, seksjonsnummer og begge eiernavn. Søk gjøres i minnet fordi antallet boenheter er lite.
 
-## Repository og tjeneste for boenheter (M1B)
-
-```mermaid
-graph LR
-    Service["HousingUnitService<br/>(Domain)"] --> Interface["IHousingUnitRepository<br/>(Domain)"]
-    Fake["FakeHousingUnitRepository<br/>(Tests)"] -.implementerer.-> Interface
-    Ef["EF Core-repository<br/>(Infrastructure, M1C)"] -.implementerer.-> Interface
-```
-
-- `HousingUnitService` håndterer brukstilfellene (registrere, hente, hente alle, endre adresse) og kjenner kun interfacet.
-- `IHousingUnitRepository` ligger i Domain. Fake-repoet ligger i testprosjektet; EF Core-implementasjonen kommer i Infrastructure (M1C).
-- Ukjent Id: `GetByIdAsync` returnerer `null`; `ChangeAddressAsync` kaster `KeyNotFoundException`.
-
-### Beslutning: Id-tildeling
-`HousingUnit.Id` skal være satt på objektet etter lagring, uansett om det lagres i fake-repo eller av EF Core/SQLite.
-
-| Alternativ | Vurdering |
-|---|---|
-| Repository returnerer Id, objektet beholder `Id == 0` | Ingen domeneendring, men inkonsekvent: fake og EF Core oppfører seg ulikt, og objektet viser feil Id. Forkastet. |
-| Reflection eller `InternalsVisibleTo` | Omvei som skjuler kontrakten. Forkastet. |
-| Guid generert i konstruktøren | Konsekvent og enkelt, men mindre lesbare Id-er og tyngre for læring av SQL-relasjoner. Forkastet. |
-| **`AssignId(int)` på `HousingUnit`, kalt av repository** | Valgt. Eksplisitt, ingen omveier. Beskyttet: Id må være positiv og kan bare settes én gang. |
-
-`AddAsync` er derfor `Task` (ikke `Task<int>`), og `RegisterAsync` returnerer den lagrede `HousingUnit` med Id. EF Core fyller `Id` selv ved `SaveChanges`, slik at kontrakten er lik. Ulempen er at `AssignId` er offentlig; den er dokumentert som beregnet på repositories.
+### Beslutninger (M1E)
+| Beslutning | Alternativer | Begrunnelse |
+|---|---|---|
+| Seksjonsnummer er `int?` (1–9999) | tekst | Seksjonsnummer er et heltall; heltall gir enkel validering og sortering. Bolignummer med bokstaver (H0101) er eget tekstfelt. |
+| `HousingType` er en enum lagret som tekst (`HasConversion<string>`) | enum som tall, fritekst | Lesbar database, tåler omrekkefølge av enum-verdier. Norske navn finnes bare i UI (`HousingTypeText`). |
+| Areal er `decimal?` | `double` | Nøyaktig for m². SQLite lagrer det som TEXT; vi sorterer eller summerer ikke på det i databasen. |
+| To flate sett med eierfelter | eget `Owner`-objekt/tabell (EF `OwnsOne`, relasjon) | Enklest for maks to eiere. Ingen eierskapsmodell. Feltene heter `Owner…` og `SecondOwner…` (ikke `PhoneNumber`/`Email`) for å gjøre de to settene symmetriske. |
+| `HousingUnitDetails` (record) + `UpdateDetails` | stor konstruktør, mange `SetX`-metoder | Én endringsoperasjon med alt-eller-ingenting-validering uten konstruktør med 12 parametere. |
+| Feil fra domenet vises ved riktig felt via `ParamName` | duplisere reglene i UI med DataAnnotations | Domenet er eneste kilde til reglene. UI har bare norske meldinger per felt (`HousingUnitFieldMessages`) og `[Required]` på adresse. |
+| Ingen lengdegrenser i databasen | `HasMaxLength` | Som i M1C: SQLite håndhever ikke lengde, og grensene håndheves i domenet. |
+| `IsActive` med migreringsstandard `true` | `false`/modellstandard | Eksisterende boenheter skal forbli aktive. Standarden er satt i migreringen, ikke i modellen (`HasDefaultValue(true)` ville gjort at EF overstyrte `false`). |
 
 ## Lagring med EF Core og SQLite (M1C)
 
-- **`SameieHubDbContext`** (Infrastructure/Persistence) konfigurerer `HousingUnit` med Fluent API: `Id` er primærnøkkel (autoinkrement i SQLite) og `Address` er påkrevd. Domain har ingen EF-attributter. EF fyller `private set`-properties og bruker konstruktøren `HousingUnit(string address)` ved lesing.
+- **`SameieHubDbContext`** (Infrastructure/Persistence) konfigurerer `HousingUnit` med Fluent API: `Id` er primærnøkkel (autoinkrement i SQLite), `Address` er påkrevd og `HousingType` lagres som tekst. Domain har ingen EF-attributter. EF fyller `private set`-properties og bruker konstruktøren `HousingUnit(string address)` ved lesing.
 - **`EfHousingUnitRepository`** implementerer `IHousingUnitRepository`. Hver metode lager en kortlevd `DbContext` fra `IDbContextFactory`. Lesing bruker `AsNoTracking`. `UpdateAsync` bruker `Update()` fordi enheten kommer fra en annen kontekst.
 - **Plassering:** `%LocalAppData%\SameieHub\sameiehub.db` (`DatabaseLocation`). Mappen opprettes ved oppstart. Plasseringen er fast, slik at backup og gjenoppretting (M5) vet hvor filen ligger. Filen ligger utenfor repoet, og `.gitignore` utelukker `*.db`.
 - **Oppstart:** `Program.cs` kaller `MigrateSameieHubDatabaseAsync()`, som kjører `Database.MigrateAsync()`. Migreringene er eneste måte skjemaet opprettes på; `EnsureCreated()` brukes ikke.
@@ -107,13 +105,17 @@ graph LR
 ### Beslutning: Id og EF Core
 EF Core tildeler `Id` ved `SaveChangesAsync` og setter den på objektet (verifisert i `EfHousingUnitRepositoryTests`). `EfHousingUnitRepository` kaller derfor ikke `AssignId()`; den brukes bare av fake-repoet. Svakheter: `AssignId` er offentlig, og EF og fake setter Id på ulike måter, men begge oppfyller kontrakten «Id er satt etter `AddAsync`», som begge er testet.
 
-### Beslutning: adresselengde
-Ingen maksimal lengde i databasen: domenet har ingen slik regel, og SQLite håndhever ikke lengde. Hvis en grense innføres, skal den innføres i `HousingUnit` først og deretter i modellen.
+### Beslutning: lengder
+Ingen maksimal lengde i databasen: SQLite håndhever ikke lengde, og grensene håndheves i `HousingUnit`.
 
 ## Brukergrensesnitt (M1D)
 
 - Blazor-komponentene bruker `HousingUnitService` via `@inject`. De kjenner verken `DbContext` eller repository.
 - Rendermodus: Interactive Server uten prerendering (`App.razor`). Alternativet, prerendering, ville kjørt `OnInitializedAsync` og dermed databasespørringen to ganger per sidevisning. For en lokal app uten søkemotorer gir prerendering ingen nytte.
 - Feilhåndtering ved UI-grensen: `HousingUnitForm` og sidene fanger feil, logger dem (`ILogger`) og viser en norsk melding. `ArgumentException` (domeneregel) og `KeyNotFoundException` (enhet fjernet) får egne meldinger; andre feil logges med full detalj.
-- Skjemavalidering: `[Required]` i `HousingUnitFormModel` gir en vennlig melding ved feltet. Domenet validerer fortsatt alt og er siste forsvar.
+- Skjemavalidering: bare adressen har `[Required]` i `HousingUnitFormModel`. Alle andre regler kommer fra domenet: skjemaet fanger `ArgumentException`, leser `ParamName` og viser en norsk melding (`HousingUnitFieldMessages`) ved riktig felt. Se M1E.
 - Databasesti kan overstyres med konfigurasjonsnøkkelen `Database:Path` (miljøvariabel `Database__Path`). Brukes til isolert testing; standard er AppData.
+
+### Migreringer
+- `InitialCreate` (M1C): tabellen `HousingUnits` med `Id` og `Address`.
+- `AddHousingUnitDetails` (M1E): legger til de nye kolonnene (alle valgfrie, unntatt `IsActive` som er `NOT NULL` med standard `true`). Eksisterende rader beholdes, og får `IsActive = true`. Migreringen er testet fra `InitialCreate`-skjemaet med rader satt inn før oppgraderingen (`HousingUnitMigrationTests`). Eksisterende migreringer endres aldri.

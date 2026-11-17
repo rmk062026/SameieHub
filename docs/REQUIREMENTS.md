@@ -11,15 +11,27 @@ Et enkelt, lokalt program for administrasjon av et lite sameie med selveide boli
 
 Detaljerte felter og relasjoner fastsettes i M1–M3 (se «Datamodell» i [ARCHITECTURE.md](ARCHITECTURE.md)).
 
-### Boenheter – status etter M1D
-Ferdig: registrere, vise (liste med antall) og endre adresse, lagret i SQLite.
+### Boenheter (M1E)
+Registrere, vise, redigere, søke etter og deaktivere/reaktivere boenheter. Bare adressen er obligatorisk.
 
-**Gjenstår før hele M1 kan godkjennes** (foreslått som M1E, hvert punkt avklares før koding):
-1. **Eier og kontaktinformasjon:** nye felter i `HousingUnit` (f.eks. eiernavn, e-post, telefon). Avklar hvilke som er obligatoriske, valideringsregler og personvern (data er personopplysninger og lagres bare lokalt).
-2. **Identifikasjon av boligen:** husnummer/bokstav som eget felt, i stedet for å legge alt i `Address`, hvis det er nødvendig for sortering og visning.
-3. **Sletting eller deaktivering:** avklar først kontrakten (`IHousingUnitRepository`, `HousingUnitService`) og hva som skjer med senere koblinger fra styresaker og oppgaver. Foreslått: deaktivering fremfor hard sletting.
-4. **Søk/filter i listen** hvis antall boenheter gjør det nyttig.
-5. Ny migrering, repository/service-tester og UI-tester for hvert nytt felt.
+| Opplysning | Regel |
+|---|---|
+| Adresse | Obligatorisk, maks 200 tegn |
+| Bolignummer (f.eks. H0101) | Valgfritt, maks 20 tegn |
+| Seksjonsnummer | Valgfritt heltall 1–9999 |
+| Boligtype | Valgfri: Tomannsbolig, Enebolig, Rekkehus, Leilighet, Annet |
+| Areal | Valgfritt, større enn 0 og høyst 1000 m² |
+| Eier 1 og eier 2: navn, telefon, e-post | Valgfritt. Navn maks 100 tegn, telefon 5–30 tegn (tall, mellomrom, + - og parenteser, minst 5 siffer), e-post maks 254 tegn og gyldig adresse |
+| Merknader | Valgfritt, maks 2000 tegn |
+| Aktiv/inaktiv | Standard aktiv |
+
+**Begrensninger**
+- En boenhet har **maksimalt to eiere**, som to enkle sett med felter. Det finnes ikke noe personregister, eierandeler eller eierskifter. Ved eierskifte endres feltene.
+- Det finnes **ingen hard sletting**. Deaktivering beholder alle data og kan angres, slik at fremtidige koblinger fra styresaker og oppgaver ikke ødelegges.
+
+**Personvern.** Eiernavn, telefon og e-post er personopplysninger. De lagres bare i den lokale databasen, sendes ikke til eksterne tjenester, skrives ikke i logger, og testene bruker bare fiktive data. SameieHub er et lokalt register; praktisk bruk må følge gjeldende personvernkrav (f.eks. formål, tilgang og sletting av opplysninger som ikke lenger trengs).
+
+**Gjenstår (senere):** hard sletting (hvis det blir nødvendig, krever egen avklaring), eksport av data og backup/gjenoppretting (M5).
 
 ## Ikke-funksjonelle krav
 - Kjører lokalt på Windows uten Visual Studio, .NET SDK eller internett (selvstendig publisering, M5).
