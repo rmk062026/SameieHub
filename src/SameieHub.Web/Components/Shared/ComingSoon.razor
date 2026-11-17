@@ -1,0 +1,16 @@
+<PageTitle>@Title – SameieHub</PageTitle>
+
+<PageHeader Title="@Title" Description="@Description" />
+
+<section class="surface-card empty-state">
+    <h2>Dette området er ikke laget ennå</h2>
+    <p>Det blir tilgjengelig i en senere versjon av SameieHub.</p>
+</section>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = string.Empty;
+
+    [Parameter]
+    public string? Description { get; set; }
+}

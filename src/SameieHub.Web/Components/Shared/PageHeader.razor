@@ -1,0 +1,35 @@
+<header class="page-header">
+    <div>
+        @if (BackHref != null)
+        {
+            <a class="back-link" href="@BackHref">← @BackText</a>
+        }
+        <h1>@Title</h1>
+        @if (Description != null)
+        {
+            <p>@Description</p>
+        }
+    </div>
+
+    @if (ChildContent != null)
+    {
+        <div class="page-actions">@ChildContent</div>
+    }
+</header>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = string.Empty;
+
+    [Parameter]
+    public string? Description { get; set; }
+
+    [Parameter]
+    public string? BackHref { get; set; }
+
+    [Parameter]
+    public string BackText { get; set; } = "Tilbake";
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+}

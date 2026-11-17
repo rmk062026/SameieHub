@@ -1,41 +1,188 @@
+:root {
+    --sh-primary: #1d5f8f;
+    --sh-primary-dark: #164a72;
+    --sh-sidebar: #17232f;
+    --sh-sidebar-text: #c9d4de;
+    --sh-bg: #f3f5f8;
+    --sh-surface: #ffffff;
+    --sh-text: #1f2933;
+    --sh-muted: #5b6875;
+    --sh-border: #dde3ea;
+    --sh-danger: #b42318;
+    --sh-success: #1e7a46;
+    --sh-radius: 0.5rem;
+    --sh-focus: 0 0 0 0.15rem #fff, 0 0 0 0.3rem #2b7ac0;
+}
+
 html, body {
-    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    font-family: system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: var(--sh-bg);
+    color: var(--sh-text);
 }
 
-a, .btn-link {
-    color: #006bb7;
+a {
+    color: var(--sh-primary);
 }
 
-.btn-primary {
-    color: #fff;
-    background-color: #1b6ec2;
-    border-color: #1861ac;
-}
-
-.btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
-  box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem #258cfb;
-}
-
-.content {
-    padding-top: 1.1rem;
+h1 {
+    font-size: 1.75rem;
+    font-weight: 650;
+    margin-bottom: 0.25rem;
 }
 
 h1:focus {
     outline: none;
 }
 
-.valid.modified:not([type=checkbox]) {
-    outline: 1px solid #26b050;
+h2 {
+    font-size: 1.2rem;
+    font-weight: 600;
 }
 
-.invalid {
-    outline: 1px solid #e50000;
+/* Buttons */
+.btn-primary {
+    --bs-btn-bg: var(--sh-primary);
+    --bs-btn-border-color: var(--sh-primary);
+    --bs-btn-hover-bg: var(--sh-primary-dark);
+    --bs-btn-hover-border-color: var(--sh-primary-dark);
+    --bs-btn-active-bg: var(--sh-primary-dark);
+    --bs-btn-active-border-color: var(--sh-primary-dark);
+    --bs-btn-disabled-bg: var(--sh-primary);
+    --bs-btn-disabled-border-color: var(--sh-primary);
+}
+
+.btn-outline-primary {
+    --bs-btn-color: var(--sh-primary);
+    --bs-btn-border-color: var(--sh-primary);
+    --bs-btn-hover-bg: var(--sh-primary);
+    --bs-btn-hover-border-color: var(--sh-primary);
+    --bs-btn-active-bg: var(--sh-primary-dark);
+    --bs-btn-active-border-color: var(--sh-primary-dark);
+}
+
+a:focus-visible,
+.btn:focus-visible,
+.btn:active:focus,
+.form-control:focus {
+    outline: none;
+    box-shadow: var(--sh-focus);
+}
+
+/* Layout building blocks */
+.surface-card {
+    background: var(--sh-surface);
+    border: 1px solid var(--sh-border);
+    border-radius: var(--sh-radius);
+    padding: 1.5rem;
+}
+
+.page-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+    .page-header p {
+        margin: 0;
+        color: var(--sh-muted);
+    }
+
+.back-link {
+    display: inline-block;
+    margin-bottom: 0.5rem;
+    text-decoration: none;
+}
+
+    .back-link:hover {
+        text-decoration: underline;
+    }
+
+.empty-state {
+    text-align: center;
+    padding: 3rem 1.5rem;
+}
+
+    .empty-state p {
+        color: var(--sh-muted);
+    }
+
+.summary {
+    margin-bottom: 0.75rem;
+    color: var(--sh-muted);
+}
+
+    .summary strong {
+        color: var(--sh-text);
+        font-size: 1.25rem;
+    }
+
+/* Tables */
+.data-table-card {
+    background: var(--sh-surface);
+    border: 1px solid var(--sh-border);
+    border-radius: var(--sh-radius);
+    overflow: hidden;
+}
+
+.data-table {
+    margin: 0;
+}
+
+    .data-table th {
+        background: #f8fafc;
+        color: var(--sh-muted);
+        font-size: 0.8rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+
+    .data-table th, .data-table td {
+        padding: 0.8rem 1rem;
+        vertical-align: middle;
+    }
+
+    .data-table .col-id {
+        width: 6rem;
+        color: var(--sh-muted);
+    }
+
+    .data-table .col-actions {
+        width: 8rem;
+        text-align: right;
+    }
+
+/* Forms */
+.form-card {
+    max-width: 36rem;
+}
+
+.form-control.invalid {
+    border-color: var(--sh-danger);
 }
 
 .validation-message {
-    color: #e50000;
+    color: var(--sh-danger);
+    font-size: 0.875rem;
+    margin-top: 0.35rem;
 }
 
+.alert-success {
+    --bs-alert-color: #14532d;
+    --bs-alert-bg: #e6f4ec;
+    --bs-alert-border-color: #b7dfc8;
+}
+
+.alert-danger {
+    --bs-alert-color: #7a1710;
+    --bs-alert-bg: #fdecea;
+    --bs-alert-border-color: #f3c0bb;
+}
+
+/* Blazor error boundary */
 .blazor-error-boundary {
     background: url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTYiIGhlaWdodD0iNDkiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgeG1sbnM6eGxpbms9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkveGxpbmsiIG92ZXJmbG93PSJoaWRkZW4iPjxkZWZzPjxjbGlwUGF0aCBpZD0iY2xpcDAiPjxyZWN0IHg9IjIzNSIgeT0iNTEiIHdpZHRoPSI1NiIgaGVpZ2h0PSI0OSIvPjwvY2xpcFBhdGg+PC9kZWZzPjxnIGNsaXAtcGF0aD0idXJsKCNjbGlwMCkiIHRyYW5zZm9ybT0idHJhbnNsYXRlKC0yMzUgLTUxKSI+PHBhdGggZD0iTTI2My41MDYgNTFDMjY0LjcxNyA1MSAyNjUuODEzIDUxLjQ4MzcgMjY2LjYwNiA1Mi4yNjU4TDI2Ny4wNTIgNTIuNzk4NyAyNjcuNTM5IDUzLjYyODMgMjkwLjE4NSA5Mi4xODMxIDI5MC41NDUgOTIuNzk1IDI5MC42NTYgOTIuOTk2QzI5MC44NzcgOTMuNTEzIDI5MSA5NC4wODE1IDI5MSA5NC42NzgyIDI5MSA5Ny4wNjUxIDI4OS4wMzggOTkgMjg2LjYxNyA5OUwyNDAuMzgzIDk5QzIzNy45NjMgOTkgMjM2IDk3LjA2NTEgMjM2IDk0LjY3ODIgMjM2IDk0LjM3OTkgMjM2LjAzMSA5NC4wODg2IDIzNi4wODkgOTMuODA3MkwyMzYuMzM4IDkzLjAxNjIgMjM2Ljg1OCA5Mi4xMzE0IDI1OS40NzMgNTMuNjI5NCAyNTkuOTYxIDUyLjc5ODUgMjYwLjQwNyA1Mi4yNjU4QzI2MS4yIDUxLjQ4MzcgMjYyLjI5NiA1MSAyNjMuNTA2IDUxWk0yNjMuNTg2IDY2LjAxODNDMjYwLjczNyA2Ni4wMTgzIDI1OS4zMTMgNjcuMTI0NSAyNTkuMzEzIDY5LjMzNyAyNTkuMzEzIDY5LjYxMDIgMjU5LjMzMiA2OS44NjA4IDI1OS4zNzEgNzAuMDg4N0wyNjEuNzk1IDg0LjAxNjEgMjY1LjM4IDg0LjAxNjEgMjY3LjgyMSA2OS43NDc1QzI2Ny44NiA2OS43MzA5IDI2Ny44NzkgNjkuNTg3NyAyNjcuODc5IDY5LjMxNzkgMjY3Ljg3OSA2Ny4xMTgyIDI2Ni40NDggNjYuMDE4MyAyNjMuNTg2IDY2LjAxODNaTTI2My41NzYgODYuMDU0N0MyNjEuMDQ5IDg2LjA1NDcgMjU5Ljc4NiA4Ny4zMDA1IDI1OS43ODYgODkuNzkyMSAyNTkuNzg2IDkyLjI4MzcgMjYxLjA0OSA5My41Mjk1IDI2My41NzYgOTMuNTI5NSAyNjYuMTE2IDkzLjUyOTUgMjY3LjM4NyA5Mi4yODM3IDI2Ny4zODcgODkuNzkyMSAyNjcuMzg3IDg3LjMwMDUgMjY2LjExNiA4Ni4wNTQ3IDI2My41NzYgODYuMDU0N1oiIGZpbGw9IiNGRkU1MDAiIGZpbGwtcnVsZT0iZXZlbm9kZCIvPjwvZz48L3N2Zz4=) no-repeat 1rem/1.8rem, #b32121;
     padding: 1rem 1rem 1rem 3.7rem;
@@ -43,18 +190,5 @@ h1:focus {
 }
 
     .blazor-error-boundary::after {
-        content: "An error has occurred."
+        content: "Det oppstod en feil."
     }
-
-.darker-border-checkbox.form-check-input {
-    border-color: #929292;
-}
-
-.form-floating > .form-control-plaintext::placeholder, .form-floating > .form-control::placeholder {
-    color: var(--bs-secondary-color);
-    text-align: end;
-}
-
-.form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
-    text-align: start;
-}
