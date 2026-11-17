@@ -17,7 +17,8 @@ Lokalt administrasjonsprogram for et lite sameie (selveide boliger i tomannsboli
 ## Kodekonvensjoner
 - Engelske navn i kode. Nullable reference types, async/await for I/O, korte metoder med ett ansvar.
 - `.editorconfig` er gjeldende. Validering og feilhåndtering ved systemgrenser.
-- Enkel, idiomatisk og konsekvent C# som prosjekteieren (en student) kan forstå, feilsøke og videreutvikle. Ingen overengineering, unødvendige mellomlag eller avansert syntaks for syns skyld.
+- Enkel, idiomatisk og konsekvent C# som en fersk C#-utvikler kan forstå, feilsøke og videreutvikle: tydelige `if`/`else`, `foreach` fremfor kompleks LINQ, små klasser og metoder, klare navn. Ikke kunstig dårlig kode, og ingen overengineering, unødvendige mellomlag eller avansert syntaks for syns skyld.
+- `try/catch` kun der feilen faktisk kan håndteres (brukerhandling, filer, database). Ingen tomme `catch` og ingen catch-og-kast-videre uten grunn. Bruk presise unntakstyper og tydelige feilmeldinger.
 - Selvforklarende kode fremfor kommentarer. XML-dokumentasjon kun når den tilfører noe signaturen ikke viser (kontrakt, begrensning, sideeffekt, uvanlig oppførsel). Vanlige kommentarer kun for *hvorfor*. Ingen TODO- eller undervisningskommentarer i ferdig kode.
 - Undervisning gis i samtalen eller i `docs/`, ikke som kommentarer i C#-filene. Lengre arkitekturforklaringer hører hjemme i `docs/`.
 - Terminologi: dette er et sameie (ikke borettslag).
@@ -38,7 +39,8 @@ Lokalt administrasjonsprogram for et lite sameie (selveide boliger i tomannsboli
 
 ## Læring (obligatorisk)
 - Forklaringer på norsk; kode på engelsk.
-- Når nye C#/.NET-konsepter introduseres: hva det er, hvorfor vi bruker det, hvordan det samspiller med andre klasser, kort eksempel fra faktisk kode, hvordan det testes, gjerne en liten øvelse. Ingen lange teoriforelesninger.
+- Claude implementerer all kode i godkjent milepæl; ingen studentoppgaver som stopper utviklingen. Eieren lærer gjennom forklaringer, kodegjennomgang og egne øvelser utenfor utviklingsflyten (gis kun på forespørsel).
+- Etter hver deloppgave: kort forklaring (hva ble laget, hvem har ansvar for hva, hvordan klassene samarbeider, viktige C#-konsepter, hvor i prosjektet koden finnes) med eksempler fra faktisk kode. Ingen lange teoriforelesninger.
 
 ## Milepælbasert arbeid
 - Jobb kun innen godkjent milepæl; STOPP ved slutten og vent på uttrykkelig godkjenning før neste. Avslutt hver milepæl med kontrollrapport (struktur, endrede filer, build/test-resultater, CI-status lokalt vs. GitHub, commits, feil, begreper, kontrollspørsmål).

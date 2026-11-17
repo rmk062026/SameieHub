@@ -64,3 +64,28 @@ Relasjonene er hypoteser; endelige felter og regler besluttes i M1–M3 før kod
 - **Regel:** adressen kan ikke være `null`, tom eller bare mellomrom. Gyldige adresser trimmes.
 - **Feilhåndtering:** ugyldig adresse gir `ArgumentException` (`ArgumentNullException` for `null`). Ved feil beholdes den gamle adressen, fordi tilordningen skjer etter vellykket validering.
 - **`Id`:** satt av databasen senere (0 til da); `private set` er nok for EF Core.
+
+## Repository og tjeneste for boenheter (M1B)
+
+```mermaid
+graph LR
+    Service["HousingUnitService<br/>(Domain)"] --> Interface["IHousingUnitRepository<br/>(Domain)"]
+    Fake["FakeHousingUnitRepository<br/>(Tests)"] -.implementerer.-> Interface
+    Ef["EF Core-repository<br/>(Infrastructure, M1C)"] -.implementerer.-> Interface
+```
+
+- `HousingUnitService` håndterer brukstilfellene (registrere, hente, hente alle, endre adresse) og kjenner kun interfacet.
+- `IHousingUnitRepository` ligger i Domain. Fake-repoet ligger i testprosjektet; EF Core-implementasjonen kommer i Infrastructure (M1C).
+- Ukjent Id: `GetByIdAsync` returnerer `null`; `ChangeAddressAsync` kaster `KeyNotFoundException`.
+
+### Beslutning: Id-tildeling
+`HousingUnit.Id` skal være satt på objektet etter lagring, uansett om det lagres i fake-repo eller av EF Core/SQLite.
+
+| Alternativ | Vurdering |
+|---|---|
+| Repository returnerer Id, objektet beholder `Id == 0` | Ingen domeneendring, men inkonsekvent: fake og EF Core oppfører seg ulikt, og objektet viser feil Id. Forkastet. |
+| Reflection eller `InternalsVisibleTo` | Omvei som skjuler kontrakten. Forkastet. |
+| Guid generert i konstruktøren | Konsekvent og enkelt, men mindre lesbare Id-er og tyngre for læring av SQL-relasjoner. Forkastet. |
+| **`AssignId(int)` på `HousingUnit`, kalt av repository** | Valgt. Eksplisitt, ingen omveier. Beskyttet: Id må være positiv og kan bare settes én gang. |
+
+`AddAsync` er derfor `Task` (ikke `Task<int>`), og `RegisterAsync` returnerer den lagrede `HousingUnit` med Id. EF Core fyller `Id` selv ved `SaveChanges`, slik at kontrakten er lik. Ulempen er at `AssignId` er offentlig; den er dokumentert som beregnet på repositories.
