@@ -1,0 +1,29 @@
+<div class="detail-item">
+    <dt>@Label</dt>
+    <dd>
+        @if (string.IsNullOrWhiteSpace(Value))
+        {
+            <span class="text-muted">Ikke registrert</span>
+        }
+        else if (LinkPrefix != null)
+        {
+            <a href="@(LinkPrefix + Value)">@Value</a>
+        }
+        else
+        {
+            @Value
+        }
+    </dd>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Label { get; set; } = string.Empty;
+
+    [Parameter]
+    public string? Value { get; set; }
+
+    /// <summary>Makes the value a link, for example "mailto:" or "tel:".</summary>
+    [Parameter]
+    public string? LinkPrefix { get; set; }
+}

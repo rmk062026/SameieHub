@@ -1,0 +1,202 @@
+@page "/boenheter/{Id:int}"
+@inject HousingUnitService HousingUnitService
+@inject ILogger<HousingUnitDetail> Logger
+
+<PageTitle>@(_unit?.Address ?? "Boenhet") – SameieHub</PageTitle>
+
+@if (_isLoading)
+{
+    <PageHeader Title="Boenhet" BackHref="/boenheter" BackText="Boenheter" />
+    <div class="surface-card" role="status">
+        <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Laster boenhet …
+    </div>
+}
+else if (_loadError != null)
+{
+    <PageHeader Title="Boenhet" BackHref="/boenheter" BackText="Boenheter" />
+    <div class="alert alert-danger" role="alert">
+        <p>@_loadError</p>
+        <button type="button" class="btn btn-outline-danger btn-sm" @onclick="LoadAsync">Prøv igjen</button>
+    </div>
+}
+else if (_unit == null)
+{
+    <PageHeader Title="Boenhet" BackHref="/boenheter" BackText="Boenheter" />
+    <div class="surface-card empty-state">
+        <h2>Fant ikke boenheten</h2>
+        <p>Boenheten finnes ikke, eller den er fjernet.</p>
+        <a class="btn btn-primary" href="/boenheter">Tilbake til boenheter</a>
+    </div>
+}
+else
+{
+    <PageHeader Title="@_unit.Address" BackHref="/boenheter" BackText="Boenheter">
+        <a class="btn btn-primary" href="/boenheter/@_unit.Id/rediger">Rediger</a>
+        @if (_unit.IsActive)
+        {
+            <button type="button" class="btn btn-outline-secondary" disabled="@_isChangingStatus" @onclick="DeactivateAsync">Deaktiver</button>
+        }
+        else
+        {
+            <button type="button" class="btn btn-outline-secondary" disabled="@_isChangingStatus" @onclick="ActivateAsync">Reaktiver</button>
+        }
+    </PageHeader>
+
+    @if (_message != null)
+    {
+        <div class="alert alert-success" role="status">@_message</div>
+    }
+    @if (_errorMessage != null)
+    {
+        <div class="alert alert-danger" role="alert">@_errorMessage</div>
+    }
+
+    <div class="detail-meta">
+        <HousingUnitStatusBadge IsActive="_unit.IsActive" />
+        <span class="text-muted">ID @_unit.Id</span>
+        @if (!_unit.IsActive)
+        {
+            <span class="text-muted">Inaktive boenheter beholdes i registeret og kan reaktiveres.</span>
+        }
+    </div>
+
+    <div class="detail-grid">
+        <section class="surface-card">
+            <h2>Boliginformasjon</h2>
+            <dl class="detail-list">
+                <DetailItem Label="Adresse" Value="@_unit.Address" />
+                <DetailItem Label="Bolignummer" Value="@_unit.UnitNumber" />
+                <DetailItem Label="Seksjonsnummer" Value="@_unit.SectionNumber?.ToString()" />
+                <DetailItem Label="Boligtype" Value="@(_unit.HousingType is { } type ? HousingTypeText.ToNorwegian(type) : null)" />
+                <DetailItem Label="Areal" Value="@(_unit.AreaSquareMeters is { } area ? $"{area:0.##} m²" : null)" />
+            </dl>
+        </section>
+
+        <section class="surface-card">
+            <h2>Eier og kontaktinformasjon</h2>
+            @if (HasSecondOwner)
+            {
+                <h3 class="owner-title">Eier 1</h3>
+            }
+            <dl class="detail-list">
+                <DetailItem Label="Navn" Value="@_unit.OwnerName" />
+                <DetailItem Label="Telefon" Value="@_unit.OwnerPhoneNumber" LinkPrefix="tel:" />
+                <DetailItem Label="E-post" Value="@_unit.OwnerEmail" LinkPrefix="mailto:" />
+            </dl>
+            @if (HasSecondOwner)
+            {
+                <h3 class="owner-title">Eier 2</h3>
+                <dl class="detail-list">
+                    <DetailItem Label="Navn" Value="@_unit.SecondOwnerName" />
+                    <DetailItem Label="Telefon" Value="@_unit.SecondOwnerPhoneNumber" LinkPrefix="tel:" />
+                    <DetailItem Label="E-post" Value="@_unit.SecondOwnerEmail" LinkPrefix="mailto:" />
+                </dl>
+            }
+        </section>
+
+        <section class="surface-card detail-wide">
+            <h2>Merknader</h2>
+            @if (string.IsNullOrWhiteSpace(_unit.Notes))
+            {
+                <p class="text-muted mb-0">Ikke registrert</p>
+            }
+            else
+            {
+                <p class="notes-text mb-0">@_unit.Notes</p>
+            }
+        </section>
+    </div>
+}
+
+@code {
+    private HousingUnit? _unit;
+    private bool _isLoading = true;
+    private bool _isChangingStatus;
+    private string? _loadError;
+    private string? _message;
+    private string? _errorMessage;
+
+    [Parameter]
+    public int Id { get; set; }
+
+    [SupplyParameterFromQuery(Name = "status")]
+    public string? Status { get; set; }
+
+    private bool HasSecondOwner =>
+        _unit != null
+        && (_unit.SecondOwnerName != null || _unit.SecondOwnerPhoneNumber != null || _unit.SecondOwnerEmail != null);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _message = Status switch
+        {
+            "opprettet" => "Boenheten er registrert.",
+            "endret" => "Endringene er lagret.",
+            _ => null
+        };
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _isLoading = true;
+        _loadError = null;
+
+        try
+        {
+            _unit = await HousingUnitService.GetByIdAsync(Id);
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Could not load housing unit {Id}.", Id);
+            _loadError = "Kunne ikke hente boenheten. Kontroller at databasen er tilgjengelig og prøv igjen.";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task DeactivateAsync()
+    {
+        await ChangeStatusAsync(() => HousingUnitService.DeactivateAsync(Id), "Boenheten er deaktivert.");
+    }
+
+    private async Task ActivateAsync()
+    {
+        await ChangeStatusAsync(() => HousingUnitService.ActivateAsync(Id), "Boenheten er reaktivert.");
+    }
+
+    private async Task ChangeStatusAsync(Func<Task> change, string successMessage)
+    {
+        if (_isChangingStatus)
+        {
+            return;
+        }
+
+        _isChangingStatus = true;
+        _message = null;
+        _errorMessage = null;
+
+        try
+        {
+            await change();
+            _unit = await HousingUnitService.GetByIdAsync(Id);
+            _message = successMessage;
+        }
+        catch (KeyNotFoundException)
+        {
+            _errorMessage = "Boenheten finnes ikke lenger.";
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Could not change status of housing unit {Id}.", Id);
+            _errorMessage = "Kunne ikke endre status. Kontroller at databasen er tilgjengelig og prøv på nytt.";
+        }
+        finally
+        {
+            _isChangingStatus = false;
+        }
+    }
+}

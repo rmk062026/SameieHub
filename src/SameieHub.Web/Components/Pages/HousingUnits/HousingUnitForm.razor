@@ -1,6 +1,6 @@
 @inject ILogger<HousingUnitForm> Logger
 
-<EditForm Model="_model" OnValidSubmit="SaveAsync" class="surface-card form-card" novalidate>
+<EditForm EditContext="_editContext" OnValidSubmit="SaveAsync" novalidate>
     <DataAnnotationsValidator />
 
     @if (_errorMessage != null)
@@ -8,15 +8,114 @@
         <div class="alert alert-danger" role="alert">@_errorMessage</div>
     }
 
-    <div class="mb-4">
-        <label for="address" class="form-label fw-semibold">Adresse</label>
-        <InputText id="address" @ref="_addressInput" class="form-control" @bind-Value="_model.Address"
-                   aria-describedby="address-help" />
-        <div id="address-help" class="form-text">For eksempel «Storgata 1A». Mellomrom i begynnelsen og slutten fjernes.</div>
-        <ValidationMessage For="() => _model.Address" />
-    </div>
+    <section class="surface-card form-section">
+        <h2>Boliginformasjon</h2>
+        <div class="row g-3">
+            <div class="col-12">
+                <label for="address" class="form-label">Adresse <span class="required-mark" aria-hidden="true">*</span></label>
+                <InputText id="address" @ref="_addressInput" class="form-control" @bind-Value="_model.Address"
+                           maxlength="@HousingUnit.MaxAddressLength" aria-required="true" autocomplete="off" />
+                <ValidationMessage For="() => _model.Address" />
+            </div>
+            <div class="col-md-6">
+                <label for="unitNumber" class="form-label">Bolignummer</label>
+                <InputText id="unitNumber" class="form-control" @bind-Value="_model.UnitNumber"
+                           maxlength="@HousingUnit.MaxUnitNumberLength" aria-describedby="unitNumber-help" autocomplete="off" />
+                <div id="unitNumber-help" class="form-text">For eksempel H0101.</div>
+                <ValidationMessage For="() => _model.UnitNumber" />
+            </div>
+            <div class="col-md-6">
+                <label for="sectionNumber" class="form-label">Seksjonsnummer</label>
+                <InputNumber id="sectionNumber" class="form-control" @bind-Value="_model.SectionNumber"
+                             ParsingErrorMessage="Seksjonsnummer må være et helt tall." inputmode="numeric" />
+                <ValidationMessage For="() => _model.SectionNumber" />
+            </div>
+            <div class="col-md-6">
+                <label for="housingType" class="form-label">Boligtype</label>
+                <InputSelect id="housingType" class="form-select" @bind-Value="_model.HousingType">
+                    <option value="">Ikke valgt</option>
+                    @foreach (var housingType in HousingTypeText.All)
+                    {
+                        <option value="@housingType">@HousingTypeText.ToNorwegian(housingType)</option>
+                    }
+                </InputSelect>
+                <ValidationMessage For="() => _model.HousingType" />
+            </div>
+            <div class="col-md-6">
+                <label for="areaSquareMeters" class="form-label">Areal (m²)</label>
+                <InputNumber id="areaSquareMeters" class="form-control" @bind-Value="_model.AreaSquareMeters"
+                             ParsingErrorMessage="Arealet må være et tall, for eksempel 85.5." inputmode="decimal" />
+                <ValidationMessage For="() => _model.AreaSquareMeters" />
+            </div>
+        </div>
+    </section>
 
-    <div class="d-flex flex-wrap gap-2">
+    <section class="surface-card form-section">
+        <h2>Eier og kontaktinformasjon</h2>
+        <h3 class="owner-title">Eier 1</h3>
+        <div class="row g-3">
+            <div class="col-12">
+                <label for="ownerName" class="form-label">Navn</label>
+                <InputText id="ownerName" class="form-control" @bind-Value="_model.OwnerName"
+                           maxlength="@HousingUnit.MaxOwnerNameLength" autocomplete="off" />
+                <ValidationMessage For="() => _model.OwnerName" />
+            </div>
+            <div class="col-md-6">
+                <label for="ownerPhoneNumber" class="form-label">Telefon</label>
+                <InputText id="ownerPhoneNumber" type="tel" class="form-control" @bind-Value="_model.OwnerPhoneNumber"
+                           maxlength="@HousingUnit.MaxPhoneNumberLength" autocomplete="off" />
+                <ValidationMessage For="() => _model.OwnerPhoneNumber" />
+            </div>
+            <div class="col-md-6">
+                <label for="ownerEmail" class="form-label">E-post</label>
+                <InputText id="ownerEmail" type="email" class="form-control" @bind-Value="_model.OwnerEmail"
+                           maxlength="@HousingUnit.MaxEmailLength" autocomplete="off" />
+                <ValidationMessage For="() => _model.OwnerEmail" />
+            </div>
+        </div>
+
+        @if (_showSecondOwner)
+        {
+            <div class="owner-heading">
+                <h3 class="owner-title">Eier 2</h3>
+                <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="RemoveSecondOwner">Fjern eier 2</button>
+            </div>
+            <div class="row g-3">
+                <div class="col-12">
+                    <label for="secondOwnerName" class="form-label">Navn</label>
+                    <InputText id="secondOwnerName" class="form-control" @bind-Value="_model.SecondOwnerName"
+                               maxlength="@HousingUnit.MaxOwnerNameLength" autocomplete="off" />
+                    <ValidationMessage For="() => _model.SecondOwnerName" />
+                </div>
+                <div class="col-md-6">
+                    <label for="secondOwnerPhoneNumber" class="form-label">Telefon</label>
+                    <InputText id="secondOwnerPhoneNumber" type="tel" class="form-control" @bind-Value="_model.SecondOwnerPhoneNumber"
+                               maxlength="@HousingUnit.MaxPhoneNumberLength" autocomplete="off" />
+                    <ValidationMessage For="() => _model.SecondOwnerPhoneNumber" />
+                </div>
+                <div class="col-md-6">
+                    <label for="secondOwnerEmail" class="form-label">E-post</label>
+                    <InputText id="secondOwnerEmail" type="email" class="form-control" @bind-Value="_model.SecondOwnerEmail"
+                               maxlength="@HousingUnit.MaxEmailLength" autocomplete="off" />
+                    <ValidationMessage For="() => _model.SecondOwnerEmail" />
+                </div>
+            </div>
+        }
+        else
+        {
+            <button type="button" class="btn btn-outline-primary btn-sm mt-3" @onclick="AddSecondOwner">+ Legg til eier 2</button>
+        }
+    </section>
+
+    <section class="surface-card form-section">
+        <h2>Andre opplysninger</h2>
+        <label for="notes" class="form-label">Merknader</label>
+        <InputTextArea id="notes" class="form-control" rows="4" @bind-Value="_model.Notes"
+                       maxlength="@HousingUnit.MaxNotesLength" />
+        <ValidationMessage For="() => _model.Notes" />
+    </section>
+
+    <div class="form-actions">
         <button type="submit" class="btn btn-primary" disabled="@_isSaving">
             @if (_isSaving)
             {
@@ -28,28 +127,40 @@
                 @SubmitText
             }
         </button>
-        <a class="btn btn-outline-secondary" href="/boenheter">Avbryt</a>
+        <a class="btn btn-outline-secondary" href="@CancelHref">Avbryt</a>
     </div>
 </EditForm>
 
 @code {
-    private readonly HousingUnitFormModel _model = new();
+    private HousingUnitFormModel _model = new();
+    private EditContext _editContext = default!;
+    private ValidationMessageStore _messageStore = default!;
     private InputText? _addressInput;
+    private bool _showSecondOwner;
     private bool _isSaving;
     private string? _errorMessage;
 
     [Parameter]
-    public string InitialAddress { get; set; } = string.Empty;
+    public HousingUnit? Unit { get; set; }
 
     [Parameter, EditorRequired]
     public string SubmitText { get; set; } = string.Empty;
 
+    [Parameter]
+    public string CancelHref { get; set; } = "/boenheter";
+
     [Parameter, EditorRequired]
-    public Func<string, Task> OnSave { get; set; } = _ => Task.CompletedTask;
+    public Func<HousingUnitDetails, Task> OnSave { get; set; } = _ => Task.CompletedTask;
 
     protected override void OnInitialized()
     {
-        _model.Address = InitialAddress;
+        _model = Unit == null ? new HousingUnitFormModel() : HousingUnitFormModel.From(Unit);
+        _showSecondOwner = _model.HasSecondOwnerData;
+
+        _editContext = new EditContext(_model);
+        _messageStore = new ValidationMessageStore(_editContext);
+        _editContext.OnValidationRequested += (_, _) => _messageStore.Clear();
+        _editContext.OnFieldChanged += (_, e) => _messageStore.Clear(e.FieldIdentifier);
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -58,6 +169,18 @@
         {
             await element.FocusAsync();
         }
+    }
+
+    private void AddSecondOwner()
+    {
+        _showSecondOwner = true;
+    }
+
+    private void RemoveSecondOwner()
+    {
+        _model.ClearSecondOwner();
+        _messageStore.Clear();
+        _showSecondOwner = false;
     }
 
     private async Task SaveAsync()
@@ -72,11 +195,15 @@
 
         try
         {
-            await OnSave(_model.Address);
+            await OnSave(_model.ToDetails());
+        }
+        catch (ArgumentException exception) when (HousingUnitFieldMessages.TryGet(exception.ParamName, out _))
+        {
+            ShowFieldError(exception.ParamName!);
         }
         catch (ArgumentException)
         {
-            _errorMessage = "Adressen er ugyldig. Skriv inn en adresse.";
+            _errorMessage = "En av verdiene er ugyldig. Kontroller skjemaet og prøv på nytt.";
         }
         catch (KeyNotFoundException)
         {
@@ -84,6 +211,7 @@
         }
         catch (Exception exception)
         {
+            // Only the exception is logged, never the form values, because they can be personal data.
             Logger.LogError(exception, "Could not save housing unit.");
             _errorMessage = "Kunne ikke lagre. Kontroller at databasen er tilgjengelig og prøv på nytt.";
         }
@@ -91,5 +219,13 @@
         {
             _isSaving = false;
         }
+    }
+
+    private void ShowFieldError(string fieldName)
+    {
+        HousingUnitFieldMessages.TryGet(fieldName, out var message);
+
+        _messageStore.Add(_editContext.Field(fieldName), message);
+        _editContext.NotifyValidationStateChanged();
     }
 }

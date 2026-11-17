@@ -8,11 +8,6 @@
     <a class="btn btn-primary" href="/boenheter/ny">Registrer boenhet</a>
 </PageHeader>
 
-@if (StatusMessage != null)
-{
-    <div class="alert alert-success" role="status">@StatusMessage</div>
-}
-
 @if (_isLoading)
 {
     <div class="surface-card" role="status">
@@ -26,7 +21,7 @@ else if (_loadError != null)
         <button type="button" class="btn btn-outline-danger btn-sm" @onclick="LoadAsync">Prøv igjen</button>
     </div>
 }
-else if (_units.Count == 0)
+else if (_allUnits.Count == 0)
 {
     <section class="surface-card empty-state">
         <h2>Ingen boenheter registrert ennå</h2>
@@ -36,54 +31,106 @@ else if (_units.Count == 0)
 }
 else
 {
-    <p class="summary"><strong>@_units.Count</strong> @(_units.Count == 1 ? "boenhet" : "boenheter") registrert</p>
-
-    <div class="data-table-card table-responsive">
-        <table class="table data-table">
-            <caption class="visually-hidden">Registrerte boenheter, sortert etter adresse</caption>
-            <thead>
-                <tr>
-                    <th scope="col" class="col-id">ID</th>
-                    <th scope="col">Adresse</th>
-                    <th scope="col" class="col-actions"><span class="visually-hidden">Handlinger</span></th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var unit in _units)
-                {
-                    <tr>
-                        <td class="col-id">@unit.Id</td>
-                        <td>@unit.Address</td>
-                        <td class="col-actions">
-                            <a class="btn btn-outline-primary btn-sm" href="/boenheter/@unit.Id/rediger"
-                               aria-label="Rediger @unit.Address">Rediger</a>
-                        </td>
-                    </tr>
-                }
-            </tbody>
-        </table>
+    <div class="stat-row">
+        <div class="stat-card"><span class="stat-value">@_allUnits.Count</span><span class="stat-label">Registrerte</span></div>
+        <div class="stat-card"><span class="stat-value">@ActiveCount</span><span class="stat-label">Aktive</span></div>
+        <div class="stat-card"><span class="stat-value">@(_allUnits.Count - ActiveCount)</span><span class="stat-label">Inaktive</span></div>
     </div>
+
+    <div class="toolbar">
+        <input type="search" class="form-control" aria-label="Søk i boenheter"
+               placeholder="Søk i adresse, eier, bolignummer eller seksjon"
+               @bind="_searchText" @bind:event="oninput" />
+        <div class="btn-group" role="group" aria-label="Filtrer på status">
+            @foreach (var option in StatusOptions)
+            {
+                <button type="button" class="btn @(_statusFilter == option.Filter ? "btn-primary" : "btn-outline-primary")"
+                        aria-pressed="@(_statusFilter == option.Filter ? "true" : "false")"
+                        @onclick="() => _statusFilter = option.Filter">
+                    @option.Text
+                </button>
+            }
+        </div>
+    </div>
+
+    var visibleUnits = GetVisibleUnits();
+
+    @if (visibleUnits.Count == 0)
+    {
+        <section class="surface-card empty-state">
+            <h2>Ingen boenheter funnet</h2>
+            <p>Ingen boenheter passer med søket og filteret ditt.</p>
+            <button type="button" class="btn btn-outline-primary" @onclick="ResetFilters">Nullstill søk og filter</button>
+        </section>
+    }
+    else
+    {
+        <p class="summary" role="status">Viser <strong>@visibleUnits.Count</strong> av @_allUnits.Count @(_allUnits.Count == 1 ? "boenhet" : "boenheter")</p>
+
+        <div class="data-table-card table-responsive">
+            <table class="table data-table">
+                <caption class="visually-hidden">Registrerte boenheter, sortert etter adresse</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Adresse</th>
+                        <th scope="col" class="d-none d-md-table-cell">Eier</th>
+                        <th scope="col" class="d-none d-md-table-cell">Seksjon</th>
+                        <th scope="col">Status</th>
+                        <th scope="col" class="col-actions"><span class="visually-hidden">Handlinger</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var unit in visibleUnits)
+                    {
+                        <tr>
+                            <td>
+                                <a class="unit-link" href="/boenheter/@unit.Id">@unit.Address</a>
+                                @if (unit.UnitNumber != null)
+                                {
+                                    <div class="unit-sub">@unit.UnitNumber</div>
+                                }
+                                @if (unit.OwnerName != null || unit.SecondOwnerName != null)
+                                {
+                                    <div class="unit-sub d-md-none">@OwnerText(unit)</div>
+                                }
+                            </td>
+                            <td class="d-none d-md-table-cell owner-cell">@OwnerText(unit)</td>
+                            <td class="d-none d-md-table-cell">@(unit.SectionNumber?.ToString() ?? "–")</td>
+                            <td><HousingUnitStatusBadge IsActive="unit.IsActive" /></td>
+                            <td class="col-actions">
+                                <a class="btn btn-outline-primary btn-sm" href="/boenheter/@unit.Id"
+                                   aria-label="Åpne @unit.Address">Åpne</a>
+                                <a class="btn btn-link btn-sm" href="/boenheter/@unit.Id/rediger"
+                                   aria-label="Rediger @unit.Address">Rediger</a>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
 }
 
 @code {
+    private static readonly (HousingUnitStatusFilter Filter, string Text)[] StatusOptions =
+    [
+        (HousingUnitStatusFilter.Active, "Aktive"),
+        (HousingUnitStatusFilter.Inactive, "Inaktive"),
+        (HousingUnitStatusFilter.All, "Alle")
+    ];
+
     // Numeric ordering puts "Storgata 2A" before "Storgata 10B".
     private static readonly IComparer<string> AddressComparer = Comparer<string>.Create((first, second) =>
         new System.Globalization.CultureInfo("nb-NO").CompareInfo.Compare(
             first, second, System.Globalization.CompareOptions.IgnoreCase | System.Globalization.CompareOptions.NumericOrdering));
 
-    private List<HousingUnit> _units = [];
+    private IReadOnlyList<HousingUnit> _allUnits = [];
+    private string _searchText = string.Empty;
+    private HousingUnitStatusFilter _statusFilter = HousingUnitStatusFilter.Active;
     private bool _isLoading = true;
     private string? _loadError;
 
-    [SupplyParameterFromQuery(Name = "status")]
-    public string? Status { get; set; }
-
-    private string? StatusMessage => Status switch
-    {
-        "opprettet" => "Boenheten er registrert.",
-        "endret" => "Adressen er oppdatert.",
-        _ => null
-    };
+    private int ActiveCount => _allUnits.Count(unit => unit.IsActive);
 
     protected override async Task OnInitializedAsync()
     {
@@ -97,9 +144,7 @@ else
 
         try
         {
-            var units = await HousingUnitService.GetAllAsync();
-
-            _units = units.OrderBy(unit => unit.Address, AddressComparer).ToList();
+            _allUnits = await HousingUnitService.GetAllAsync();
         }
         catch (Exception exception)
         {
@@ -110,5 +155,34 @@ else
         {
             _isLoading = false;
         }
+    }
+
+    private List<HousingUnit> GetVisibleUnits()
+    {
+        var filtered = HousingUnitFilter.Apply(_allUnits, _searchText, _statusFilter);
+
+        return filtered.OrderBy(unit => unit.Address, AddressComparer).ToList();
+    }
+
+    private void ResetFilters()
+    {
+        _searchText = string.Empty;
+        _statusFilter = HousingUnitStatusFilter.All;
+    }
+
+    private static string OwnerText(HousingUnit unit)
+    {
+        var names = new List<string>();
+        if (unit.OwnerName != null)
+        {
+            names.Add(unit.OwnerName);
+        }
+
+        if (unit.SecondOwnerName != null)
+        {
+            names.Add(unit.SecondOwnerName);
+        }
+
+        return names.Count == 0 ? "–" : string.Join(" og ", names);
     }
 }

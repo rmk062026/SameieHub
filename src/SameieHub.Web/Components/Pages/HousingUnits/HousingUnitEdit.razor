@@ -5,8 +5,8 @@
 
 <PageTitle>Rediger boenhet – SameieHub</PageTitle>
 
-<PageHeader Title="Rediger boenhet" Description="Endre adressen til boenheten."
-            BackHref="/boenheter" BackText="Boenheter" />
+<PageHeader Title="Rediger boenhet" Description="Endre opplysningene om boenheten."
+            BackHref="@($"/boenheter/{Id}")" BackText="Tilbake til boenheten" />
 
 @if (_isLoading)
 {
@@ -28,7 +28,7 @@ else if (_unit == null)
 }
 else
 {
-    <HousingUnitForm InitialAddress="@_unit.Address" SubmitText="Lagre endring" OnSave="ChangeAddressAsync" />
+    <HousingUnitForm Unit="_unit" SubmitText="Lagre endringer" CancelHref="@($"/boenheter/{Id}")" OnSave="UpdateAsync" />
 }
 
 @code {
@@ -59,10 +59,10 @@ else
         }
     }
 
-    private async Task ChangeAddressAsync(string address)
+    private async Task UpdateAsync(HousingUnitDetails details)
     {
-        await HousingUnitService.ChangeAddressAsync(Id, address);
+        await HousingUnitService.UpdateDetailsAsync(Id, details);
 
-        Navigation.NavigateTo("/boenheter?status=endret");
+        Navigation.NavigateTo($"/boenheter/{Id}?status=endret");
     }
 }

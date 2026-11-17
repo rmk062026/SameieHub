@@ -4,16 +4,16 @@
 
 <PageTitle>Registrer boenhet – SameieHub</PageTitle>
 
-<PageHeader Title="Registrer boenhet" Description="Legg til en ny bolig i sameiet."
+<PageHeader Title="Registrer boenhet" Description="Bare adressen er obligatorisk. Resten kan du fylle inn senere."
             BackHref="/boenheter" BackText="Boenheter" />
 
 <HousingUnitForm SubmitText="Registrer boenhet" OnSave="RegisterAsync" />
 
 @code {
-    private async Task RegisterAsync(string address)
+    private async Task RegisterAsync(HousingUnitDetails details)
     {
-        await HousingUnitService.RegisterAsync(address);
+        var unit = await HousingUnitService.RegisterAsync(details);
 
-        Navigation.NavigateTo("/boenheter?status=opprettet");
+        Navigation.NavigateTo($"/boenheter/{unit.Id}?status=opprettet");
     }
 }

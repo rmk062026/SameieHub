@@ -1,4 +1,5 @@
 using Bunit;
+using SameieHub.Domain;
 using SameieHub.Web.Components.Pages.HousingUnits;
 
 namespace SameieHub.Tests.Web;
@@ -15,25 +16,15 @@ public class HousingUnitListTests : HousingUnitUiTestBase
     }
 
     [Fact]
-    public async Task Render_StoredUnits_ShowsIdAndAddressSortedByAddress()
+    public async Task Render_StoredUnits_ShowsAddressOwnersSectionAndStatusSortedNumerically()
     {
-        await Service.RegisterAsync("Storgata 2B");
-        await Service.RegisterAsync("Storgata 1A");
-
-        var cut = Render<HousingUnitList>();
-
-        cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll("tbody tr").Count));
-        var rows = cut.FindAll("tbody tr");
-        Assert.Contains("Storgata 1A", rows[0].TextContent);
-        Assert.Contains("Storgata 2B", rows[1].TextContent);
-        Assert.Contains("2", rows[0].QuerySelector(".col-id")!.TextContent);
-        Assert.Contains("1", rows[1].QuerySelector(".col-id")!.TextContent);
-    }
-
-    [Fact]
-    public async Task Render_NumbersInAddresses_AreSortedNumerically()
-    {
-        await Service.RegisterAsync("Storgata 10B");
+        await Service.RegisterAsync(new HousingUnitDetails
+        {
+            Address = "Storgata 10B",
+            OwnerName = "Test Eier",
+            SecondOwnerName = "Test Medeier",
+            SectionNumber = 12
+        });
         await Service.RegisterAsync("Storgata 2A");
 
         var cut = Render<HousingUnitList>();
@@ -42,28 +33,117 @@ public class HousingUnitListTests : HousingUnitUiTestBase
         var rows = cut.FindAll("tbody tr");
         Assert.Contains("Storgata 2A", rows[0].TextContent);
         Assert.Contains("Storgata 10B", rows[1].TextContent);
+        Assert.Contains("Test Eier og Test Medeier", rows[1].TextContent);
+        Assert.Contains("12", rows[1].TextContent);
+        Assert.Contains("Aktiv", rows[1].TextContent);
     }
 
     [Fact]
-    public async Task Render_StoredUnits_ShowsCount()
+    public async Task Render_OneOwner_ShowsOnlyThatName()
     {
-        await Service.RegisterAsync("Storgata 1A");
-        await Service.RegisterAsync("Storgata 1B");
+        await Service.RegisterAsync(new HousingUnitDetails { Address = "Storgata 1A", OwnerName = "Test Eier" });
 
         var cut = Render<HousingUnitList>();
 
-        cut.WaitForAssertion(() => Assert.Equal("2 boenheter registrert", cut.Find(".summary").TextContent));
+        cut.WaitForAssertion(() => Assert.Equal("Test Eier", cut.Find(".owner-cell").TextContent));
     }
 
     [Fact]
-    public async Task Render_StoredUnits_LinksToEditPageOfEachUnit()
+    public async Task Render_StoredUnits_ShowsCountsForRegisteredActiveAndInactive()
+    {
+        await Service.RegisterAsync("Storgata 1A");
+        await Service.RegisterAsync("Storgata 1B");
+        var inactive = await Service.RegisterAsync("Storgata 1C");
+        await Service.DeactivateAsync(inactive.Id);
+
+        var cut = Render<HousingUnitList>();
+
+        cut.WaitForAssertion(() =>
+        {
+            var values = cut.FindAll(".stat-value").Select(element => element.TextContent).ToList();
+            Assert.Equal(["3", "2", "1"], values);
+        });
+    }
+
+    [Fact]
+    public async Task Render_Default_ShowsOnlyActiveUnits()
+    {
+        await Service.RegisterAsync("Storgata 1A");
+        var inactive = await Service.RegisterAsync("Storgata 1B");
+        await Service.DeactivateAsync(inactive.Id);
+
+        var cut = Render<HousingUnitList>();
+
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll("tbody tr")));
+        Assert.Contains("Storgata 1A", cut.Find("tbody").TextContent);
+    }
+
+    [Fact]
+    public async Task StatusFilter_AllAndInactive_ChangeWhichUnitsAreShown()
+    {
+        await Service.RegisterAsync("Storgata 1A");
+        var inactive = await Service.RegisterAsync("Storgata 1B");
+        await Service.DeactivateAsync(inactive.Id);
+        var cut = Render<HousingUnitList>();
+        cut.WaitForElement("tbody tr");
+
+        ClickFilter(cut, "Alle");
+        Assert.Equal(2, cut.FindAll("tbody tr").Count);
+
+        ClickFilter(cut, "Inaktive");
+        var row = Assert.Single(cut.FindAll("tbody tr"));
+        Assert.Contains("Storgata 1B", row.TextContent);
+        Assert.Contains("Inaktiv", row.TextContent);
+    }
+
+    [Theory]
+    [InlineData("kari")]
+    [InlineData("OLA")]
+    [InlineData("h0101")]
+    public async Task Search_FindsUnitByFirstOwnerSecondOwnerOrUnitNumber(string searchText)
+    {
+        await Service.RegisterAsync(new HousingUnitDetails
+        {
+            Address = "Storgata 1A",
+            UnitNumber = "H0101",
+            OwnerName = "Kari Testesen",
+            SecondOwnerName = "Ola Prøvesen"
+        });
+        await Service.RegisterAsync("Parkveien 5");
+        var cut = Render<HousingUnitList>();
+        cut.WaitForElement("tbody tr");
+
+        cut.Find("input[type=search]").Input(searchText);
+
+        var row = Assert.Single(cut.FindAll("tbody tr"));
+        Assert.Contains("Storgata 1A", row.TextContent);
+    }
+
+    [Fact]
+    public async Task Search_NoMatch_ShowsMessageAndResetShowsUnitsAgain()
+    {
+        await Service.RegisterAsync("Storgata 1A");
+        var cut = Render<HousingUnitList>();
+        cut.WaitForElement("tbody tr");
+
+        cut.Find("input[type=search]").Input("finnes-ikke");
+
+        Assert.Contains("Ingen boenheter funnet", cut.Markup);
+        cut.Find(".empty-state button").Click();
+        Assert.Single(cut.FindAll("tbody tr"));
+    }
+
+    [Fact]
+    public async Task Render_StoredUnits_LinksToDetailAndEditPages()
     {
         var unit = await Service.RegisterAsync("Storgata 1A");
 
         var cut = Render<HousingUnitList>();
 
-        cut.WaitForAssertion(() =>
-            Assert.Equal($"/boenheter/{unit.Id}/rediger", cut.Find("tbody a").GetAttribute("href")));
+        cut.WaitForElement("tbody tr");
+        var hrefs = cut.FindAll("tbody a").Select(link => link.GetAttribute("href")).ToList();
+        Assert.Contains($"/boenheter/{unit.Id}", hrefs);
+        Assert.Contains($"/boenheter/{unit.Id}/rediger", hrefs);
     }
 
     [Fact]
@@ -77,5 +157,10 @@ public class HousingUnitListTests : HousingUnitUiTestBase
         cut.Find("button").Click();
 
         cut.WaitForAssertion(() => Assert.Contains("Ingen boenheter registrert ennå", cut.Markup));
+    }
+
+    private static void ClickFilter(IRenderedComponent<HousingUnitList> cut, string text)
+    {
+        cut.FindAll(".btn-group button").First(button => button.TextContent.Trim() == text).Click();
     }
 }

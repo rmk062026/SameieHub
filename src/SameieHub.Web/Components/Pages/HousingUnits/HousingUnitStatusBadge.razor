@@ -1,0 +1,6 @@
+<span class="status-badge @(IsActive ? "is-active" : "is-inactive")">@(IsActive ? "Aktiv" : "Inaktiv")</span>
+
+@code {
+    [Parameter]
+    public bool IsActive { get; set; }
+}
