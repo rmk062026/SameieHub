@@ -89,3 +89,23 @@ graph LR
 | **`AssignId(int)` på `HousingUnit`, kalt av repository** | Valgt. Eksplisitt, ingen omveier. Beskyttet: Id må være positiv og kan bare settes én gang. |
 
 `AddAsync` er derfor `Task` (ikke `Task<int>`), og `RegisterAsync` returnerer den lagrede `HousingUnit` med Id. EF Core fyller `Id` selv ved `SaveChanges`, slik at kontrakten er lik. Ulempen er at `AssignId` er offentlig; den er dokumentert som beregnet på repositories.
+
+## Lagring med EF Core og SQLite (M1C)
+
+- **`SameieHubDbContext`** (Infrastructure/Persistence) konfigurerer `HousingUnit` med Fluent API: `Id` er primærnøkkel (autoinkrement i SQLite) og `Address` er påkrevd. Domain har ingen EF-attributter. EF fyller `private set`-properties og bruker konstruktøren `HousingUnit(string address)` ved lesing.
+- **`EfHousingUnitRepository`** implementerer `IHousingUnitRepository`. Hver metode lager en kortlevd `DbContext` fra `IDbContextFactory`. Lesing bruker `AsNoTracking`. `UpdateAsync` bruker `Update()` fordi enheten kommer fra en annen kontekst.
+- **Plassering:** `%LocalAppData%\SameieHub\sameiehub.db` (`DatabaseLocation`). Mappen opprettes ved oppstart. Plasseringen er fast, slik at backup og gjenoppretting (M5) vet hvor filen ligger. Filen ligger utenfor repoet, og `.gitignore` utelukker `*.db`.
+- **Oppstart:** `Program.cs` kaller `MigrateSameieHubDatabaseAsync()`, som kjører `Database.MigrateAsync()`. Migreringene er eneste måte skjemaet opprettes på; `EnsureCreated()` brukes ikke.
+- **Skjemaendring:** `dotnet ef migrations add <Navn> --project src/SameieHub.Infrastructure --output-dir Persistence/Migrations` (verktøyet er pinnet i `dotnet-tools.json`).
+
+### Beslutning: DbContext og levetid
+| Alternativ | Vurdering |
+|---|---|
+| `AddDbContext` (scoped) | I Blazor Server varer en scope hele brukerøkten (kretsen). Én langlevd kontekst gir utdaterte data og samtidighetsproblemer. Forkastet. |
+| **`AddDbContextFactory` + kortlevd kontekst per repository-kall** | Valgt. Trygt og enkelt. Repository og `HousingUnitService` er scoped, men holder bare fabrikken. |
+
+### Beslutning: Id og EF Core
+EF Core tildeler `Id` ved `SaveChangesAsync` og setter den på objektet (verifisert i `EfHousingUnitRepositoryTests`). `EfHousingUnitRepository` kaller derfor ikke `AssignId()`; den brukes bare av fake-repoet. Svakheter: `AssignId` er offentlig, og EF og fake setter Id på ulike måter, men begge oppfyller kontrakten «Id er satt etter `AddAsync`», som begge er testet.
+
+### Beslutning: adresselengde
+Ingen maksimal lengde i databasen: domenet har ingen slik regel, og SQLite håndhever ikke lengde. Hvis en grense innføres, skal den innføres i `HousingUnit` først og deretter i modellen.

@@ -16,6 +16,10 @@ dotnet run --project src/SameieHub.Web
 - Før push: `git status`, `git remote -v`, `git config user.name` / `user.email`, `gh api user --jq .login`.
 - Conventional Commits; ingen force-push; ingen databasefiler eller backuper i repo.
 
+## Database
+- Lokal fil: `%LocalAppData%\SameieHub\sameiehub.db`, opprettet og migrert ved oppstart. Slett filen for å starte med tom database.
+- Ny migrering: `dotnet tool restore`, deretter `dotnet ef migrations add <Navn> --project src/SameieHub.Infrastructure --output-dir Persistence/Migrations`.
+
 ## Pakkeversjoner
 EF Core-pakker pinnes til 10.0.x så lenge prosjektet målretter `net10.0`.
 
