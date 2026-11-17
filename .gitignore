@@ -370,13 +370,3 @@ FodyWeavers.xsd
 *.bak
 /backups/
 /data/
-
-# SameieHub: local data must never be committed (may contain personal data)
-*.db
-*.db-shm
-*.db-wal
-*.sqlite
-*.sqlite3
-*.bak
-/backups/
-/data/
