@@ -11,6 +11,21 @@ public class HousingUnit
         Address = NormalizeAddress(address);
     }
 
+    /// <summary>
+    /// Called by a repository when the unit is stored. The Id can only be assigned once.
+    /// </summary>
+    public void AssignId(int id)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(id);
+
+        if (Id != 0)
+        {
+            throw new InvalidOperationException($"Housing unit already has Id {Id}.");
+        }
+
+        Id = id;
+    }
+
     public void ChangeAddress(string newAddress)
     {
         Address = NormalizeAddress(newAddress);
