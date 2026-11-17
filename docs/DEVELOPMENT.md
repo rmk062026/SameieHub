@@ -18,6 +18,7 @@ dotnet run --project src/SameieHub.Web
 
 ## Database
 - Lokal fil: `%LocalAppData%\SameieHub\sameiehub.db`, opprettet og migrert ved oppstart. Slett filen for å starte med tom database.
+- Isolert database for manuell testing: sett miljøvariabelen `Database__Path` til en egen fil, f.eks. i PowerShell `$env:Database__Path = "$env:TEMP\sameiehub-test.db"; dotnet run --project src/SameieHub.Web`.
 - Ny migrering: `dotnet tool restore`, deretter `dotnet ef migrations add <Navn> --project src/SameieHub.Infrastructure --output-dir Persistence/Migrations`.
 
 ## Pakkeversjoner

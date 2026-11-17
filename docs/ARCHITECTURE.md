@@ -109,3 +109,11 @@ EF Core tildeler `Id` ved `SaveChangesAsync` og setter den på objektet (verifis
 
 ### Beslutning: adresselengde
 Ingen maksimal lengde i databasen: domenet har ingen slik regel, og SQLite håndhever ikke lengde. Hvis en grense innføres, skal den innføres i `HousingUnit` først og deretter i modellen.
+
+## Brukergrensesnitt (M1D)
+
+- Blazor-komponentene bruker `HousingUnitService` via `@inject`. De kjenner verken `DbContext` eller repository.
+- Rendermodus: Interactive Server uten prerendering (`App.razor`). Alternativet, prerendering, ville kjørt `OnInitializedAsync` og dermed databasespørringen to ganger per sidevisning. For en lokal app uten søkemotorer gir prerendering ingen nytte.
+- Feilhåndtering ved UI-grensen: `HousingUnitForm` og sidene fanger feil, logger dem (`ILogger`) og viser en norsk melding. `ArgumentException` (domeneregel) og `KeyNotFoundException` (enhet fjernet) får egne meldinger; andre feil logges med full detalj.
+- Skjemavalidering: `[Required]` i `HousingUnitFormModel` gir en vennlig melding ved feltet. Domenet validerer fortsatt alt og er siste forsvar.
+- Databasesti kan overstyres med konfigurasjonsnøkkelen `Database:Path` (miljøvariabel `Database__Path`). Brukes til isolert testing; standard er AppData.
