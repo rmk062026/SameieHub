@@ -5,6 +5,7 @@ namespace SameieHub.Tests.Domain;
 public class BoardCaseTests
 {
     private static readonly DateTime CreatedAt = new(2026, 11, 18, 10, 30, 0, DateTimeKind.Utc);
+    private static readonly DateTime Later = CreatedAt.AddHours(1);
 
     private static BoardCaseDetails FullDetails() => new()
     {
@@ -111,7 +112,7 @@ public class BoardCaseTests
     {
         var boardCase = NewCase();
 
-        boardCase.UpdateDetails(FullDetails() with { Description = empty, Notes = empty });
+        boardCase.UpdateDetails(FullDetails() with { Description = empty, Notes = empty }, Later);
 
         Assert.Null(boardCase.Description);
         Assert.Null(boardCase.Notes);
@@ -131,8 +132,8 @@ public class BoardCaseTests
             Notes = new string('n', BoardCase.MaxNotesLength),
             MeetingDate = BoardCase.MinMeetingDate,
             HousingUnitId = 1
-        });
-        boardCase.UpdateDetails(FullDetails() with { MeetingDate = BoardCase.MaxMeetingDate });
+        }, Later);
+        boardCase.UpdateDetails(FullDetails() with { MeetingDate = BoardCase.MaxMeetingDate }, Later);
 
         Assert.Equal(BoardCase.MaxMeetingDate, boardCase.MeetingDate);
     }
@@ -151,8 +152,8 @@ public class BoardCaseTests
     public void UpdateDetails_NewValues_ReplacesAllDetailsAndKeepsStatusAndCreatedAt()
     {
         var boardCase = NewCase();
-        boardCase.RegisterDecision("Fiktivt vedtak.");
-        boardCase.ChangeStatus(BoardCaseStatus.Decided);
+        boardCase.RegisterDecision("Fiktivt vedtak.", Later);
+        boardCase.ChangeStatus(BoardCaseStatus.Decided, Later);
         var changed = new BoardCaseDetails
         {
             Title = "Ny tittel",
@@ -160,7 +161,7 @@ public class BoardCaseTests
             MeetingDate = new DateOnly(2027, 1, 15)
         };
 
-        boardCase.UpdateDetails(changed);
+        boardCase.UpdateDetails(changed, Later);
 
         AssertHasDetails(boardCase, changed);
         Assert.Null(boardCase.Description);
@@ -204,7 +205,7 @@ public class BoardCaseTests
     {
         var boardCase = NewCase();
 
-        boardCase.UpdateDetails(FullDetails() with { MeetingDate = null, HousingUnitId = null });
+        boardCase.UpdateDetails(FullDetails() with { MeetingDate = null, HousingUnitId = null }, Later);
 
         Assert.Null(boardCase.MeetingDate);
         Assert.Null(boardCase.HousingUnitId);
@@ -217,7 +218,7 @@ public class BoardCaseTests
     {
         var boardCase = NewCase();
 
-        boardCase.ChangeStatus(BoardCaseStatus.InProgress);
+        boardCase.ChangeStatus(BoardCaseStatus.InProgress, Later);
 
         Assert.Equal(BoardCaseStatus.InProgress, boardCase.Status);
     }
@@ -227,7 +228,7 @@ public class BoardCaseTests
     {
         var boardCase = NewCase();
 
-        Assert.Throws<InvalidOperationException>(() => boardCase.ChangeStatus(BoardCaseStatus.Decided));
+        Assert.Throws<InvalidOperationException>(() => boardCase.ChangeStatus(BoardCaseStatus.Decided, Later));
 
         Assert.Equal(BoardCaseStatus.New, boardCase.Status);
     }
@@ -236,9 +237,9 @@ public class BoardCaseTests
     public void ChangeStatus_ToDecidedWithDecision_BecomesDecidedButNotClosed()
     {
         var boardCase = NewCase();
-        boardCase.RegisterDecision("Fiktivt vedtak.");
+        boardCase.RegisterDecision("Fiktivt vedtak.", Later);
 
-        boardCase.ChangeStatus(BoardCaseStatus.Decided);
+        boardCase.ChangeStatus(BoardCaseStatus.Decided, Later);
 
         Assert.Equal(BoardCaseStatus.Decided, boardCase.Status);
     }
@@ -253,10 +254,10 @@ public class BoardCaseTests
         foreach (var to in Enum.GetValues<BoardCaseStatus>())
         {
             var boardCase = NewCase();
-            boardCase.RegisterDecision("Fiktivt vedtak.");
-            boardCase.ChangeStatus(from);
+            boardCase.RegisterDecision("Fiktivt vedtak.", Later);
+            boardCase.ChangeStatus(from, Later);
 
-            boardCase.ChangeStatus(to);
+            boardCase.ChangeStatus(to, Later);
 
             Assert.Equal(to, boardCase.Status);
         }
@@ -266,10 +267,10 @@ public class BoardCaseTests
     public void ChangeStatus_ReopeningClosedCase_IsAllowedAndKeepsDecision()
     {
         var boardCase = NewCase();
-        boardCase.RegisterDecision("Fiktivt vedtak.");
-        boardCase.ChangeStatus(BoardCaseStatus.Closed);
+        boardCase.RegisterDecision("Fiktivt vedtak.", Later);
+        boardCase.ChangeStatus(BoardCaseStatus.Closed, Later);
 
-        boardCase.ChangeStatus(BoardCaseStatus.InProgress);
+        boardCase.ChangeStatus(BoardCaseStatus.InProgress, Later);
 
         Assert.Equal(BoardCaseStatus.InProgress, boardCase.Status);
         Assert.Equal("Fiktivt vedtak.", boardCase.Decision);
@@ -280,7 +281,7 @@ public class BoardCaseTests
     {
         var boardCase = NewCase();
 
-        boardCase.ChangeStatus(BoardCaseStatus.Closed);
+        boardCase.ChangeStatus(BoardCaseStatus.Closed, Later);
 
         Assert.Equal(BoardCaseStatus.Closed, boardCase.Status);
     }
@@ -292,7 +293,7 @@ public class BoardCaseTests
     {
         var boardCase = NewCase();
 
-        Assert.Throws<ArgumentOutOfRangeException>(() => boardCase.ChangeStatus((BoardCaseStatus)status));
+        Assert.Throws<ArgumentOutOfRangeException>(() => boardCase.ChangeStatus((BoardCaseStatus)status, Later));
 
         Assert.Equal(BoardCaseStatus.New, boardCase.Status);
     }
@@ -304,7 +305,7 @@ public class BoardCaseTests
     {
         var boardCase = NewCase();
 
-        boardCase.RegisterDecision("  Fiktivt vedtak.  ");
+        boardCase.RegisterDecision("  Fiktivt vedtak.  ", Later);
 
         Assert.Equal("Fiktivt vedtak.", boardCase.Decision);
         Assert.Equal(BoardCaseStatus.New, boardCase.Status);
@@ -314,10 +315,10 @@ public class BoardCaseTests
     public void RegisterDecision_ExistingDecision_IsCorrected()
     {
         var boardCase = NewCase();
-        boardCase.RegisterDecision("Feil vedtak.");
-        boardCase.ChangeStatus(BoardCaseStatus.Decided);
+        boardCase.RegisterDecision("Feil vedtak.", Later);
+        boardCase.ChangeStatus(BoardCaseStatus.Decided, Later);
 
-        boardCase.RegisterDecision("Riktig vedtak.");
+        boardCase.RegisterDecision("Riktig vedtak.", Later);
 
         Assert.Equal("Riktig vedtak.", boardCase.Decision);
         Assert.Equal(BoardCaseStatus.Decided, boardCase.Status);
@@ -330,9 +331,9 @@ public class BoardCaseTests
     public void RegisterDecision_Blank_ThrowsAndKeepsExistingDecision(string? blank)
     {
         var boardCase = NewCase();
-        boardCase.RegisterDecision("Fiktivt vedtak.");
+        boardCase.RegisterDecision("Fiktivt vedtak.", Later);
 
-        var exception = Assert.Throws<ArgumentException>(() => boardCase.RegisterDecision(blank!));
+        var exception = Assert.Throws<ArgumentException>(() => boardCase.RegisterDecision(blank!, Later));
 
         Assert.Equal("Decision", exception.ParamName);
         Assert.Equal("Fiktivt vedtak.", boardCase.Decision);
@@ -342,9 +343,9 @@ public class BoardCaseTests
     public void RegisterDecision_TextAtAndOverTheLimit_IsAcceptedAndRejected()
     {
         var boardCase = NewCase();
-        boardCase.RegisterDecision(new string('v', BoardCase.MaxDecisionLength));
+        boardCase.RegisterDecision(new string('v', BoardCase.MaxDecisionLength), Later);
 
-        Assert.Throws<ArgumentException>(() => boardCase.RegisterDecision(new string('x', BoardCase.MaxDecisionLength + 1)));
+        Assert.Throws<ArgumentException>(() => boardCase.RegisterDecision(new string('x', BoardCase.MaxDecisionLength + 1), Later));
 
         Assert.Equal(new string('v', BoardCase.MaxDecisionLength), boardCase.Decision);
     }
@@ -353,9 +354,9 @@ public class BoardCaseTests
     public void ClearDecision_CaseNotDecided_RemovesDecision()
     {
         var boardCase = NewCase();
-        boardCase.RegisterDecision("Registrert ved en feil.");
+        boardCase.RegisterDecision("Registrert ved en feil.", Later);
 
-        boardCase.ClearDecision();
+        boardCase.ClearDecision(Later);
 
         Assert.Null(boardCase.Decision);
     }
@@ -365,7 +366,7 @@ public class BoardCaseTests
     {
         var boardCase = NewCase();
 
-        boardCase.ClearDecision();
+        boardCase.ClearDecision(Later);
 
         Assert.Null(boardCase.Decision);
     }
@@ -374,10 +375,10 @@ public class BoardCaseTests
     public void ClearDecision_CaseIsDecided_ThrowsAndKeepsDecision()
     {
         var boardCase = NewCase();
-        boardCase.RegisterDecision("Fiktivt vedtak.");
-        boardCase.ChangeStatus(BoardCaseStatus.Decided);
+        boardCase.RegisterDecision("Fiktivt vedtak.", Later);
+        boardCase.ChangeStatus(BoardCaseStatus.Decided, Later);
 
-        Assert.Throws<InvalidOperationException>(() => boardCase.ClearDecision());
+        Assert.Throws<InvalidOperationException>(() => boardCase.ClearDecision(Later));
 
         Assert.Equal("Fiktivt vedtak.", boardCase.Decision);
     }
@@ -386,11 +387,11 @@ public class BoardCaseTests
     public void ClearDecision_AfterChangingStatusBackFromDecided_Works()
     {
         var boardCase = NewCase();
-        boardCase.RegisterDecision("Fiktivt vedtak.");
-        boardCase.ChangeStatus(BoardCaseStatus.Decided);
-        boardCase.ChangeStatus(BoardCaseStatus.InProgress);
+        boardCase.RegisterDecision("Fiktivt vedtak.", Later);
+        boardCase.ChangeStatus(BoardCaseStatus.Decided, Later);
+        boardCase.ChangeStatus(BoardCaseStatus.InProgress, Later);
 
-        boardCase.ClearDecision();
+        boardCase.ClearDecision(Later);
 
         Assert.Null(boardCase.Decision);
     }
@@ -426,14 +427,193 @@ public class BoardCaseTests
         Assert.Equal(5, boardCase.Id);
     }
 
+    // UpdatedAt
+
+    [Fact]
+    public void Constructor_SetsUpdatedAtToCreatedAt()
+    {
+        Assert.Equal(CreatedAt, NewCase().UpdatedAt);
+    }
+
+    [Fact]
+    public void UpdateDetails_RealChange_SetsUpdatedAtAndKeepsCreatedAt()
+    {
+        var boardCase = NewCase();
+
+        boardCase.UpdateDetails(FullDetails() with { Title = "Ny tittel" }, Later);
+
+        Assert.Equal(Later, boardCase.UpdatedAt);
+        Assert.Equal(CreatedAt, boardCase.CreatedAt);
+    }
+
+    [Fact]
+    public void UpdateDetails_SameValues_DoesNotChangeUpdatedAt()
+    {
+        var boardCase = NewCase();
+
+        boardCase.UpdateDetails(FullDetails(), Later);
+
+        Assert.Equal(CreatedAt, boardCase.UpdatedAt);
+    }
+
+    [Fact]
+    public void UpdateDetails_SameValuesWithExtraSpaces_DoesNotChangeUpdatedAt()
+    {
+        var boardCase = NewCase();
+
+        boardCase.UpdateDetails(FullDetails() with { Title = "  Maling av fellesarealer  " }, Later);
+
+        Assert.Equal(CreatedAt, boardCase.UpdatedAt);
+    }
+
+    [Fact]
+    public void UpdateDetails_InvalidValue_DoesNotChangeUpdatedAt()
+    {
+        var boardCase = NewCase();
+
+        Assert.Throws<ArgumentException>(() => boardCase.UpdateDetails(FullDetails() with { Title = " " }, Later));
+
+        Assert.Equal(CreatedAt, boardCase.UpdatedAt);
+    }
+
+    [Fact]
+    public void ChangeStatus_RealChange_SetsUpdatedAt()
+    {
+        var boardCase = NewCase();
+
+        boardCase.ChangeStatus(BoardCaseStatus.InProgress, Later);
+
+        Assert.Equal(Later, boardCase.UpdatedAt);
+    }
+
+    [Fact]
+    public void ChangeStatus_SameStatus_DoesNotChangeUpdatedAt()
+    {
+        var boardCase = NewCase();
+
+        boardCase.ChangeStatus(BoardCaseStatus.New, Later);
+
+        Assert.Equal(CreatedAt, boardCase.UpdatedAt);
+    }
+
+    [Fact]
+    public void ChangeStatus_Rejected_DoesNotChangeUpdatedAt()
+    {
+        var boardCase = NewCase();
+
+        Assert.Throws<InvalidOperationException>(() => boardCase.ChangeStatus(BoardCaseStatus.Decided, Later));
+
+        Assert.Equal(CreatedAt, boardCase.UpdatedAt);
+    }
+
+    [Fact]
+    public void RegisterDecision_NewText_SetsUpdatedAt()
+    {
+        var boardCase = NewCase();
+
+        boardCase.RegisterDecision("Fiktivt vedtak.", Later);
+
+        Assert.Equal(Later, boardCase.UpdatedAt);
+    }
+
+    [Fact]
+    public void RegisterDecision_SameText_DoesNotChangeUpdatedAt()
+    {
+        var boardCase = NewCase();
+        boardCase.RegisterDecision("Fiktivt vedtak.", Later);
+
+        boardCase.RegisterDecision("  Fiktivt vedtak.  ", Later.AddHours(1));
+
+        Assert.Equal(Later, boardCase.UpdatedAt);
+    }
+
+    [Fact]
+    public void RegisterDecision_Blank_DoesNotChangeUpdatedAt()
+    {
+        var boardCase = NewCase();
+
+        Assert.Throws<ArgumentException>(() => boardCase.RegisterDecision("  ", Later));
+
+        Assert.Equal(CreatedAt, boardCase.UpdatedAt);
+    }
+
+    [Fact]
+    public void ClearDecision_ExistingDecision_SetsUpdatedAt()
+    {
+        var boardCase = NewCase();
+        boardCase.RegisterDecision("Fiktivt vedtak.", Later);
+
+        boardCase.ClearDecision(Later.AddHours(1));
+
+        Assert.Equal(Later.AddHours(1), boardCase.UpdatedAt);
+    }
+
+    [Fact]
+    public void ClearDecision_NoDecision_DoesNotChangeUpdatedAt()
+    {
+        var boardCase = NewCase();
+
+        boardCase.ClearDecision(Later);
+
+        Assert.Equal(CreatedAt, boardCase.UpdatedAt);
+    }
+
+    [Fact]
+    public void ClearDecision_CaseIsDecided_DoesNotChangeUpdatedAt()
+    {
+        var boardCase = NewCase();
+        boardCase.RegisterDecision("Fiktivt vedtak.", Later);
+        boardCase.ChangeStatus(BoardCaseStatus.Decided, Later.AddHours(1));
+
+        Assert.Throws<InvalidOperationException>(() => boardCase.ClearDecision(Later.AddHours(2)));
+
+        Assert.Equal(Later.AddHours(1), boardCase.UpdatedAt);
+    }
+
+    [Theory]
+    [InlineData(DateTimeKind.Local)]
+    [InlineData(DateTimeKind.Unspecified)]
+    public void Changes_TimeNotUtc_Throws(DateTimeKind kind)
+    {
+        var boardCase = NewCase();
+        var notUtc = new DateTime(2026, 11, 19, 10, 0, 0, kind);
+
+        Assert.Equal("now", Assert.Throws<ArgumentException>(() => boardCase.UpdateDetails(FullDetails() with { Title = "Ny" }, notUtc)).ParamName);
+        Assert.Equal("now", Assert.Throws<ArgumentException>(() => boardCase.ChangeStatus(BoardCaseStatus.InProgress, notUtc)).ParamName);
+        Assert.Equal("now", Assert.Throws<ArgumentException>(() => boardCase.RegisterDecision("Vedtak", notUtc)).ParamName);
+        Assert.Equal("now", Assert.Throws<ArgumentException>(() => boardCase.ClearDecision(notUtc)).ParamName);
+        Assert.Equal(CreatedAt, boardCase.UpdatedAt);
+    }
+
+    // ToDetails
+
+    [Fact]
+    public void ToDetails_ReturnsCurrentValues()
+    {
+        var boardCase = NewCase();
+
+        Assert.Equal(FullDetails(), boardCase.ToDetails());
+    }
+
+    [Fact]
+    public void ToDetails_UsedForUpdate_ChangesNothing()
+    {
+        var boardCase = NewCase();
+
+        boardCase.UpdateDetails(boardCase.ToDetails(), Later);
+
+        Assert.Equal(CreatedAt, boardCase.UpdatedAt);
+    }
+
     private static void AssertRejectedAndUnchanged(BoardCaseDetails invalid, string expectedField)
     {
         var boardCase = NewCase();
 
-        var exception = Assert.ThrowsAny<ArgumentException>(() => boardCase.UpdateDetails(invalid));
+        var exception = Assert.ThrowsAny<ArgumentException>(() => boardCase.UpdateDetails(invalid, Later));
 
         Assert.Equal(expectedField, exception.ParamName);
         AssertHasDetails(boardCase, FullDetails());
+        Assert.Equal(CreatedAt, boardCase.UpdatedAt);
     }
 
     private static void AssertHasDetails(BoardCase boardCase, BoardCaseDetails expected)

@@ -22,6 +22,9 @@ public class BoardCase
     /// <summary>Always a UTC time.</summary>
     public DateTime CreatedAt { get; private set; }
 
+    /// <summary>Always a UTC time. Equal to <see cref="CreatedAt"/> until the case is changed.</summary>
+    public DateTime UpdatedAt { get; private set; }
+
     public DateOnly? MeetingDate { get; private set; }
 
     public string? Decision { get; private set; }
@@ -43,7 +46,8 @@ public class BoardCase
         }
 
         CreatedAt = createdAt;
-        UpdateDetails(details);
+        UpdatedAt = createdAt;
+        UpdateDetails(details, createdAt);
     }
 
     /// <summary>
@@ -63,13 +67,17 @@ public class BoardCase
 
     /// <summary>
     /// Replaces title, description, priority, meeting date, housing unit link and notes.
-    /// Either every value is valid and applied, or nothing changes.
+    /// Either every value is valid and applied, or nothing changes. <see cref="UpdatedAt"/> is set to
+    /// <paramref name="now"/> only when a value actually changes.
     /// </summary>
+    /// <param name="now">The time of the change. Must be UTC.</param>
     /// <exception cref="ArgumentException">
     /// A value is invalid. <see cref="ArgumentException.ParamName"/> is the name of the property in <see cref="BoardCaseDetails"/>.
     /// </exception>
-    public void UpdateDetails(BoardCaseDetails details)
+    public void UpdateDetails(BoardCaseDetails details, DateTime now)
     {
+        EnsureUtc(now);
+
         var title = NormalizeTitle(details.Title);
         var description = NormalizeOptionalText(details.Description, MaxDescriptionLength, nameof(details.Description));
         var priority = ValidatePriority(details.Priority);
@@ -77,12 +85,24 @@ public class BoardCase
         var housingUnitId = ValidateHousingUnitId(details.HousingUnitId);
         var notes = NormalizeOptionalText(details.Notes, MaxNotesLength, nameof(details.Notes));
 
+        var isUnchanged = title == Title
+            && description == Description
+            && priority == Priority
+            && meetingDate == MeetingDate
+            && housingUnitId == HousingUnitId
+            && notes == Notes;
+        if (isUnchanged)
+        {
+            return;
+        }
+
         Title = title;
         Description = description;
         Priority = priority;
         MeetingDate = meetingDate;
         HousingUnitId = housingUnitId;
         Notes = notes;
+        UpdatedAt = now;
     }
 
     /// <summary>
@@ -90,11 +110,18 @@ public class BoardCase
     /// a case can be marked as decided only when it has a decision.
     /// </summary>
     /// <exception cref="InvalidOperationException">The case is changed to decided without a decision.</exception>
-    public void ChangeStatus(BoardCaseStatus newStatus)
+    public void ChangeStatus(BoardCaseStatus newStatus, DateTime now)
     {
+        EnsureUtc(now);
+
         if (!Enum.IsDefined(newStatus))
         {
             throw new ArgumentOutOfRangeException(nameof(newStatus), "Status is not valid.");
+        }
+
+        if (newStatus == Status)
+        {
+            return;
         }
 
         if (newStatus == BoardCaseStatus.Decided && Decision == null)
@@ -103,34 +130,72 @@ public class BoardCase
         }
 
         Status = newStatus;
+        UpdatedAt = now;
     }
 
     /// <summary>
     /// Registers or corrects the decision. The status is not changed; use <see cref="ChangeStatus"/> for that.
     /// </summary>
-    public void RegisterDecision(string decision)
+    public void RegisterDecision(string decision, DateTime now)
     {
+        EnsureUtc(now);
+
         var normalizedDecision = NormalizeOptionalText(decision, MaxDecisionLength, nameof(Decision));
         if (normalizedDecision == null)
         {
             throw new ArgumentException("Decision is required.", nameof(Decision));
         }
 
+        if (normalizedDecision == Decision)
+        {
+            return;
+        }
+
         Decision = normalizedDecision;
+        UpdatedAt = now;
     }
 
     /// <summary>
     /// Removes a decision that was registered by mistake.
     /// </summary>
     /// <exception cref="InvalidOperationException">The case is decided. Change the status first.</exception>
-    public void ClearDecision()
+    public void ClearDecision(DateTime now)
     {
+        EnsureUtc(now);
+
         if (Status == BoardCaseStatus.Decided)
         {
             throw new InvalidOperationException("A decided case must keep its decision. Change the status first.");
         }
 
+        if (Decision == null)
+        {
+            return;
+        }
+
         Decision = null;
+        UpdatedAt = now;
+    }
+
+    public BoardCaseDetails ToDetails()
+    {
+        return new BoardCaseDetails
+        {
+            Title = Title,
+            Description = Description,
+            Priority = Priority,
+            MeetingDate = MeetingDate,
+            HousingUnitId = HousingUnitId,
+            Notes = Notes
+        };
+    }
+
+    private static void EnsureUtc(DateTime now)
+    {
+        if (now.Kind != DateTimeKind.Utc)
+        {
+            throw new ArgumentException("The time of the change must be a UTC time.", nameof(now));
+        }
     }
 
     private static string NormalizeTitle(string? title)
