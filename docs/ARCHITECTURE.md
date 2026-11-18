@@ -56,6 +56,7 @@ erDiagram
         datetime CreatedAt
         date MeetingDate
         string Decision
+        date DecisionDate
         int HousingUnitId
     }
     TaskItem {
@@ -109,12 +110,13 @@ Relasjonene er hypoteser; endelige felter og regler besluttes i M1–M3 før kod
 | `UpdatedAt` | `DateTime` | UTC. Lik `CreatedAt` til saken endres. Settes bare ved en reell endring (M2B) |
 | `MeetingDate` | `DateOnly?` | Valgfri kalenderdato mellom 2000-01-01 og 2100-12-31 |
 | `Decision` | `string?` | Valgfri, maks 4000 tegn |
+| `DecisionDate` | `DateOnly?` | Valgfri. Når styret fattet vedtaket (M2E). Bare mulig sammen med et vedtak |
 | `HousingUnitId` | `int?` | Valgfri; `null` betyr hele sameiet; ellers positiv Id |
 | `Notes` | `string?` | Valgfri, maks 2000 tegn |
 
 Alle felt har `private set`. Valgfri tekst trimmes, og tom tekst blir `null`. Feil gir `ArgumentException` der `ParamName` er feltnavnet (samme mønster som `HousingUnit`, slik at UI senere kan vise melding ved riktig felt).
 
-**Metoder:** `new BoardCase(details, createdAt)`, `UpdateDetails(details, now)`, `ChangeStatus(status, now)`, `RegisterDecision(text, now)`, `ClearDecision(now)`, `ToDetails()` og `AssignId(id)`. Parameteren `now` er tidspunktet for endringen (må være UTC); den brukes bare til `UpdatedAt` (se M2B).
+**Metoder:** `new BoardCase(details, createdAt)`, `UpdateDetails(details, now)`, `ChangeStatus(status, now)`, `RegisterDecision(text, decisionDate, now)`, `ClearDecision(now)`, `ToDetails()` og `AssignId(id)`. Parameteren `now` er tidspunktet for endringen (må være UTC); den brukes bare til `UpdatedAt` (se M2B).
 `UpdateDetails` tar en `BoardCaseDetails`-record (tittel, beskrivelse, prioritet, møtedato, boenhet og merknader) og er alt-eller-ingenting: alt valideres først. Den dekker dermed «endre tittel og beskrivelse», «endre prioritet», «endre møtedato» og «knytte til eller fjerne kobling til boenhet» (`HousingUnitId = null` fjerner koblingen). Status og vedtak har egne metoder fordi de har regler.
 
 ### Statusendringer
@@ -230,7 +232,7 @@ Kontrollen skjer før domenemetoden endrer noe, og domenemetoden er alt-eller-in
 - `CreatedAt` settes ved opprettelse og endres aldri. `UpdatedAt` er lik `CreatedAt` til første endring.
 - `UpdatedAt` settes **bare når noe faktisk endres**. Ingenting skjer ved: ugyldig input (kaster før noe tilordnes), uendrede verdier (sammenlignes etter normalisering, så «  Tittel » mot «Tittel» er uendret), samme status, samme vedtak, og `ClearDecision` uten vedtak.
 - En `now` som ikke er UTC avvises (`ArgumentException`, `ParamName = "now"`).
-- Det finnes ingen hendelseslogg (se «Ikke implementert» under M2C).
+- Det finnes ingen hendelseslogg. `CreatedAt` og `UpdatedAt` forteller bare når saken ble opprettet og sist endret, ikke hva som ble endret eller av hvem (se M2E).
 
 ### Sletting (foreløpig)
 - `DeleteAsync(id)` i tjenesten: `KeyNotFoundException` for ukjent Id, ellers sletter den og lar `BoardCaseInUseException` boble opp hvis repoet melder at andre poster refererer til saken.
@@ -307,11 +309,33 @@ Nøkkelpunkt: RESTRICT rapporteres som 1811, ikke 787. Forventningen om bare 787
 - **Feil ved feltet:** `ParamName` fra domenet/tjenesten (`Title`, `Description`, `Priority`, `MeetingDate`, `HousingUnitId`, `Notes`) slås opp i `BoardCaseFieldMessages` for en norsk melding ved riktig felt, som for boenheter. Bare tittel har `[Required]` i skjemamodellen.
 - **Norsk dato og tid:** `NorwegianDateFormat` viser UTC-tider i norsk tid (`Europe/Oslo`, reservevei `W. Europe Standard Time`) som `dd.MM.yyyy HH:mm`, og datoer som `dd.MM.yyyy`. Lagring er uendret (UTC).
 - **Boenhetens detaljside** henter alle saker og viser de som har `HousingUnitId` lik boenhetens Id (nyeste først). Beskyttelsen mot sletting av boenheter med styresaker er uendret (fremmednøkkel, M2C).
-- Ikke i M2D: endringshistorikk, oppgavekobling (M3).
+- Ikke i M2D: endringshistorikk, oppgavekobling (M3). Vedtaksdato og snarvei fra boenhet kom i M2E.
 
-### Gjenstår før M2 er komplett
-1. **Beslutning:** er `CreatedAt`/`UpdatedAt` nok, eller skal statusendringer og vedtak logges (egen tabell og visning)? Foreslått: vent til behovet er tydelig.
-2. **Oppgavekobling (M3):** fremmednøkkel fra `TaskItem` til `BoardCase` med `Restrict`, og tester av `BoardCaseInUseException` mot ekte referanse.
-3. **Dashboard (M4):** antall åpne saker og kommende møter (data finnes allerede).
-4. **Mulig forbedring:** en snarvei «Registrer styresak» på boenhetens side som forhåndsvelger boenheten.
-5. **Gjennomgang av M2:** kodegjennomgang og eventuell opprydding før M3.
+## Vedtaksdato og snarvei fra boenhet (M2E)
+
+### Vedtaksdato
+- `BoardCase.DecisionDate` (`DateOnly?`) er datoen styret fattet vedtaket. Den er ikke opprettelsesdatoen, endringsdatoen eller møtedatoen, og den gjettes aldri ut fra dem. Eksisterende saker har `NULL`.
+- **Regler:**
+  - Datoen finnes bare sammen med et vedtak. `RegisterDecision(text, decisionDate, now)` krever vedtakstekst og er det eneste stedet datoen settes.
+  - Datoen kan stå tom selv om vedtak er registrert, og den kan korrigeres (samme metode, ny dato). Én metode registrerer og korrigerer både tekst og dato, så ugyldig input aldri gir delvis oppdatering (alt valideres før noe tilordnes).
+  - `null` som dato tømmer datoen. Kalleren sender derfor alltid med den ønskede datoen; det finnes ingen standardverdi som kunne slette en dato ved et uhell.
+  - `ClearDecision(now)` fjerner vedtaket **og** datoen. Den er fortsatt ikke tillatt mens saken er `Decided`.
+  - `Decided` krever fortsatt vedtakstekst, men ikke dato.
+  - Gyldig område er 01.01.2000–31.12.2100 (som møtedato). Det finnes ingen sammenheng med opprettelsestidspunktet, fordi et vedtak kan ha blitt fattet før saken ble registrert; heller ingen regel mot fremtidige datoer.
+  - `UpdatedAt` settes bare ved en reell endring (ny tekst eller ny dato), via `TimeProvider` i tjenesten. Samme tekst og dato gir ingen endring.
+- **Database:** migreringen `AddBoardCaseDecisionDate` legger til én nullable `TEXT`-kolonne (`yyyy-MM-dd`). Eksisterende saker beholdes uendret (testet fra `AddBoardCases`-skjemaet med saker, vedtak og tider).
+- **UI:** vedtakskortet på styresakens detaljside viser vedtaksteksten og «Vedtaksdato: dd.MM.yyyy» (eller «Ikke registrert») i en tydelig boks, og har et datofelt ved siden av vedtaksteksten. Ugyldig dato gir «Vedtaksdatoen må være mellom 01.01.2000 og 31.12.2100.» uten å endre noe lagret.
+
+### Snarvei «Registrer styresak» fra boenhet
+- Boenhetens detaljside har knappen «Registrer styresak» i seksjonen «Styresaker», som åpner `/styresaker/ny?boenhet={id}`. Knappen vises **ikke** for inaktive boenheter.
+- Registreringssiden stoler ikke på ID-en i adressen: den forhåndsvelger boenheten bare hvis den finnes i listen over **aktive** boenheter. Ellers vises «Boenheten fra lenken finnes ikke eller er inaktiv, så den er ikke valgt …» og skjemaet starter på «Hele sameiet».
+- Forhåndsvalget er bare et startforslag. Ved lagring gjelder tjenestens og domenets validering som før (ny kobling krever aktiv boenhet), så en manipulert adresse kan ikke omgå reglene.
+- Eksisterende saker knyttet til inaktive boenheter fungerer som før (kobling beholdes, vises som «(inaktiv)», kan redigeres).
+
+### Endringshistorikk (ikke implementert)
+`CreatedAt` og `UpdatedAt` forteller **ikke** hvilke endringer som ble gjort eller av hvem; de kan ikke brukes som protokoll. Hvis SameieHub skal brukes til formell protokollføring kan en hendelseshistorikk (egen tabell med tidspunkt, type endring og gamle/nye verdier) vurderes senere. Den er bevisst ikke laget nå.
+
+### Gjenstår før M2 er godkjent
+1. **Oppgavekobling (M3):** fremmednøkkel fra `TaskItem` til `BoardCase` med `Restrict`, og test av `BoardCaseInUseException` mot ekte referanse (så langt bare klassifiseringen og UI-håndteringen er testet).
+2. **Dashboard (M4):** åpne saker og kommende møter (data finnes).
+3. **Beslutning:** er `CreatedAt`/`UpdatedAt` nok til v1.0, eller skal historikk lages senere?
