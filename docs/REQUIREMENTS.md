@@ -31,10 +31,10 @@ Registrere, vise, redigere, søke etter og deaktivere/reaktivere boenheter. Bare
 
 **Personvern.** Eiernavn, telefon og e-post er personopplysninger. De lagres bare i den lokale databasen, sendes ikke til eksterne tjenester, skrives ikke i logger, og testene bruker bare fiktive data. SameieHub er et lokalt register; praktisk bruk må følge gjeldende personvernkrav (f.eks. formål, tilgang og sletting av opplysninger som ikke lenger trengs).
 
-**Gjenstår (senere):** eksport av data og backup/gjenoppretting (M5). Blokkeringen ved sletting er så langt testet med en simulert referanse; den skal testes mot ekte styresaker og oppgaver når de lagres (M2C og M3).
+**Gjenstår (senere):** eksport av data og backup/gjenoppretting (M5). Blokkeringen ved sletting av boenhet er testet mot styresaker (ekte fremmednøkkel). Mot oppgaver testes den når `TaskItem` finnes (M3).
 
 ### Styresaker (M2A: domenemodell)
-En styresak har tittel (obligatorisk), beskrivelse, status (Ny, Under behandling, Vedtatt, Avsluttet), prioritet (Lav, Normal, Høy), opprettelsestidspunkt, møtedato, vedtak, merknader og en valgfri kobling til én boenhet (ingen kobling = gjelder hele sameiet). Regler og begrunnelser står i [ARCHITECTURE.md](ARCHITECTURE.md). Repository og tjeneste (M2B) er på plass: styresaker kan registreres, endres, få status og vedtak, kobles til en aktiv boenhet og slettes (sletting blokkeres senere når oppgaver refererer til saken). `UpdatedAt` viser når saken sist ble endret. Database og brukergrensesnitt kommer i M2C og M2D.
+En styresak har tittel (obligatorisk), beskrivelse, status (Ny, Under behandling, Vedtatt, Avsluttet), prioritet (Lav, Normal, Høy), opprettelsestidspunkt, møtedato, vedtak, merknader og en valgfri kobling til én boenhet (ingen kobling = gjelder hele sameiet). Regler og begrunnelser står i [ARCHITECTURE.md](ARCHITECTURE.md). Repository og tjeneste (M2B) er på plass: styresaker kan registreres, endres, få status og vedtak, kobles til en aktiv boenhet og slettes (sletting blokkeres senere når oppgaver refererer til saken). `UpdatedAt` viser når saken sist ble endret. Styresaker lagres i SQLite (M2C) med en fremmednøkkel til boenheter som aldri sletter eller nullstiller noe automatisk. Full endringshistorikk er ikke implementert; bare opprettelses- og endringstidspunkt. Brukergrensesnitt kommer i M2D.
 
 ## Ikke-funksjonelle krav
 - Kjører lokalt på Windows uten Visual Studio, .NET SDK eller internett (selvstendig publisering, M5).

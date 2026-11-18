@@ -96,7 +96,7 @@ Relasjonene er hypoteser; endelige felter og regler besluttes i M1–M3 før kod
 
 ## Domenemodell: BoardCase (M2A)
 
-`BoardCase` er en styresak. Domeneklassen (M2A), repository-kontrakt og tjeneste (M2B) finnes; database og UI kommer i M2C og M2D.
+`BoardCase` er en styresak. Domeneklassen (M2A), repository-kontrakt og tjeneste (M2B) og lagring i SQLite (M2C) finnes; UI kommer i M2D.
 
 | Felt | Type | Regel |
 |---|---|---|
@@ -136,7 +136,7 @@ Diagrammet viser den vanlige veien. Reglene er bevisst enkle:
 - **Eneste regel:** en sak kan bare settes til `Decided` når den har et vedtak.
 - En sak kan være vedtatt uten å være avsluttet. `RegisterDecision` endrer ikke status; det gjør `ChangeStatus`.
 - `ClearDecision` (for et vedtak registrert ved en feil) er ikke tillatt mens saken er `Decided`; endre status først. Da får en vedtatt sak aldri mangle vedtak.
-- Statusendringer logges ikke foreløpig (se «Avklaringer før M2C»).
+- Statusendringer logges ikke foreløpig (se «Ikke implementert» under M2C).
 
 ### Beslutninger (M2A)
 | Beslutning | Alternativer | Begrunnelse |
@@ -183,9 +183,9 @@ Ingen maksimal lengde i databasen: SQLite håndhever ikke lengde, og grensene h�
 
 - **Kontrakt:** `IHousingUnitRepository.DeleteAsync(int id)` returnerer `true` hvis en boenhet ble slettet og `false` hvis Id-en ikke finnes. `HousingUnitService.DeleteAsync(id)` kaster `KeyNotFoundException` for ukjent Id (som de andre tjenestemetodene) og `HousingUnitInUseException` (Domain) hvis andre poster refererer til boenheten. Deaktivering og reaktivering er uendret.
 - **Hva som slettes:** raden i `HousingUnits`. Eier- og kontaktopplysningene er kolonner i samme rad og forsvinner dermed med den (testet).
-- **Referanseintegritet:** tilkoblingen bruker `Foreign Keys=True`, slik at SQLite alltid håndhever fremmednøkler. Når `BoardCase` (M2C) og `TaskItem` (M3) lagres, skal fremmednøkkelen til `HousingUnits` konfigureres med `OnDelete(DeleteBehavior.Restrict)`: **aldri cascade**. Sletting av en refert boenhet gir da SQLite-feil 19 («FOREIGN KEY constraint failed»), og `EfHousingUnitRepository` oversetter den til `HousingUnitInUseException`. `try/catch` er her berettiget fordi feilen kan håndteres (UI viser en forståelig melding).
+- **Referanseintegritet:** tilkoblingen bruker `Foreign Keys=True`, slik at SQLite alltid håndhever fremmednøkler. Fremmednøkler konfigureres med `OnDelete(DeleteBehavior.Restrict)`: **aldri cascade**. Sletting av en refert boenhet gir SQLite-feil 19, og `EfHousingUnitRepository` oversetter den til `HousingUnitInUseException`. Hvordan feilen kjennes igjen er beskrevet under «Fremmednøkkelfeil» i M2C-avsnittet. `try/catch` er her berettiget fordi feilen kan håndteres (UI viser en forståelig melding).
 - **Id-er gjenbrukes ikke:** `Id` er `INTEGER PRIMARY KEY AUTOINCREMENT`, så SQLite husker høyeste brukte Id selv om den siste raden slettes (testet). Koden setter aldri Id-er manuelt.
-- **Begrensning (viktig):** `BoardCase` og `TaskItem` lagres ennå ikke. Blokkeringen er derfor testet mot en tabell som kun opprettes i testen, med samme fremmednøkkel (`ON DELETE RESTRICT`) som de ekte tabellene skal ha. Det beviser at SQLite håndhever regelen og at oversettelsen til `HousingUnitInUseException` virker, men ikke at de ekte tabellene er konfigurert riktig. Disse testene skal erstattes av tester mot de ekte tabellene i M2C og M3.
+- **Blokkering testet mot ekte relasjon (M2C):** `BoardCases.HousingUnitId` er en ekte fremmednøkkel, og `BoardCaseRelationTests` viser at sletting av en boenhet med styresaker blokkeres. De simulerte testene fra M1F er erstattet. Relasjonen fra `TaskItem` (M3) er ikke testet ennå, fordi `TaskItem` ikke finnes.
 - **Personvern:** logger inneholder bare Id-en til boenheten, aldri adresse eller eierinformasjon.
 
 | Beslutning | Alternativer | Begrunnelse |
@@ -209,7 +209,7 @@ graph LR
 - **`IBoardCaseRepository`** er lite: `AddAsync`, `GetByIdAsync`, `GetAllAsync`, `UpdateAsync` og `DeleteAsync(id)` (returnerer `false` for ukjent Id). Ingen generisk repository.
 - **`BoardCaseService`** (konstruktør: begge repositoryene og `TimeProvider`):
   `RegisterAsync`, `GetByIdAsync`, `GetAllAsync`, `UpdateDetailsAsync`, `ChangeHousingUnitAsync`, `ChangeStatusAsync`, `RegisterDecisionAsync`, `ClearDecisionAsync` og `DeleteAsync`. Domeneklassen eier reglene; tjenesten henter saken, kaller domenemetoden med tidspunktet og lagrer. Ukjent sak gir `KeyNotFoundException`.
-- **Tjenesten er ikke registrert i DI ennå.** Det gjøres i M2C/M2D sammen med EF-repositoryet (og `TimeProvider.System`).
+- **DI (M2C):** `IBoardCaseRepository` registreres i `AddSameieHubInfrastructure`, og `BoardCaseService` og `TimeProvider.System` i `Program.cs`, som `HousingUnitService`.
 
 ### Kobling til boenhet
 Domain kjenner bare `int? HousingUnitId`. Tjenesten kontrollerer referansen via `IHousingUnitRepository`:
@@ -230,13 +230,13 @@ Kontrollen skjer før domenemetoden endrer noe, og domenemetoden er alt-eller-in
 - `CreatedAt` settes ved opprettelse og endres aldri. `UpdatedAt` er lik `CreatedAt` til første endring.
 - `UpdatedAt` settes **bare når noe faktisk endres**. Ingenting skjer ved: ugyldig input (kaster før noe tilordnes), uendrede verdier (sammenlignes etter normalisering, så «  Tittel » mot «Tittel» er uendret), samme status, samme vedtak, og `ClearDecision` uten vedtak.
 - En `now` som ikke er UTC avvises (`ArgumentException`, `ParamName = "now"`).
-- Det finnes ingen hendelseslogg (se «Avklaringer før M2C»).
+- Det finnes ingen hendelseslogg (se «Ikke implementert» under M2C).
 
 ### Sletting (foreløpig)
 - `DeleteAsync(id)` i tjenesten: `KeyNotFoundException` for ukjent Id, ellers sletter den og lar `BoardCaseInUseException` boble opp hvis repoet melder at andre poster refererer til saken.
-- Kontrakten er klar for M2C/M2D. Det er ingen cascade. I M3 skal fremmednøkkelen fra `TaskItem` til `BoardCase` konfigureres med `DeleteBehavior.Restrict`, og EF-repoet skal oversette SQLite-feil 19 («FOREIGN KEY») til `BoardCaseInUseException`, akkurat som for boenheter (`HousingUnitDeletionTests` viser mønsteret).
+- Kontrakten er implementert i `EfBoardCaseRepository` (M2C). Det er ingen cascade. I M3 skal fremmednøkkelen fra `TaskItem` til `BoardCase` konfigureres med `DeleteBehavior.Restrict`. `EfBoardCaseRepository.DeleteAsync` oversetter allerede fremmednøkkelbrudd til `BoardCaseInUseException`, men det er ikke testet mot en ekte referanse før `TaskItem` finnes (kun klassifiseringen er enhetstestet).
 - Fake-repoet har `IsDeletionBlocked` for å teste at feilen når frem. `TaskItem` finnes ikke ennå, og er ikke laget for å teste dette.
-- Sletting av en **boenhet** som styresaker refererer til skal blokkeres av fremmednøkkelen fra `BoardCase.HousingUnitId` (`Restrict`, M2C). Det er ikke testet før M2C.
+- Sletting av en **boenhet** som styresaker refererer til blokkeres av fremmednøkkelen fra `BoardCase.HousingUnitId` (`Restrict`) og er testet i M2C.
 
 ### Beslutninger (M2B)
 | Beslutning | Alternativer | Begrunnelse |
@@ -245,15 +245,61 @@ Kontrollen skjer før domenemetoden endrer noe, og domenemetoden er alt-eller-in
 | Domenemetodene tar `now` som parameter | tjenesten setter `UpdatedAt` etter at metoden har returnert `bool`; `TimeProvider` i entiteten | Domenet avgjør selv hva som er en reell endring, og kan ikke glemme å oppdatere tidsstempelet. Ingen tidskilde i entiteten. |
 | `ChangeHousingUnitAsync` finnes ved siden av `UpdateDetailsAsync` | bare `UpdateDetailsAsync` | Enkelt kall for «knytt til/fjern boenhet», uten at kalleren må bygge hele `BoardCaseDetails`. Bruker `BoardCase.ToDetails()` og samme kontroll. |
 | Ny kobling krever aktiv boenhet; eksisterende kobling beholdes | alltid tillate inaktive; alltid kreve aktive | Historikk skal ikke gå tapt når en boenhet deaktiveres, men nye saker skal ikke knyttes til boenheter som ikke lenger er i bruk. |
-| Referansekontroll i tjenesten | fremmednøkkel alene | Gir en forståelig feil før lagring. Fremmednøkkelen (M2C) er likevel siste sikring. |
+| Referansekontroll i tjenesten | fremmednøkkel alene | Gir en forståelig feil før lagring. Fremmednøkkelen er likevel siste sikring (testet i M2C). |
 | `BoardCaseInUseException` finnes allerede | innføre den i M3 | Kontrakten er da ferdig, og UI (M2D) kan håndtere den. |
 
-## Avklaringer før M2C
-Besluttet i M2B: `UpdatedAt` finnes, `TimeProvider` brukes, kobling til boenhet kontrolleres i tjenesten (aktiv ved ny kobling, eksisterende beholdes), repository-kontrakten er liten, og `DeleteAsync` er forberedt.
+## Lagring av styresaker (M2C)
 
-Åpent:
-1. **Historikk:** er `CreatedAt` og `UpdatedAt` nok for v1.0, eller trengs en logg over statusendringer og vedtak (egen tabell)? Foreslått: nei for nå.
-2. **Persistens:** `DateTime` leses fra SQLite som `Unspecified`, så EF trenger en verdikonvertering til UTC for `CreatedAt` og `UpdatedAt`. Enum og `DateOnly` lagres som tekst. EF trenger en privat parameterløs konstruktør i `BoardCase`.
-3. **Fremmednøkkel:** `BoardCase.HousingUnitId` skal ha `Restrict` mot `HousingUnits`. Hvilken feilmelding vil vi vise i boenhetens slettedialog når styresaker refererer til den? (Den eksisterende teksten nevner allerede styresaker.)
-4. **Registrering i DI:** `TimeProvider.System`, `IBoardCaseRepository` og `BoardCaseService` (M2C/M2D).
-5. **Liste i UI (M2D):** filter på status, prioritet og boenhet, og sortering (forslag: nyeste først, eller på møtedato).
+### Tabellen `BoardCases`
+| Kolonne | SQLite-type | Mapping |
+|---|---|---|
+| `Id` | `INTEGER` | Primærnøkkel, `AUTOINCREMENT` (Id gjenbrukes ikke). Satt på objektet etter `SaveChangesAsync`. |
+| `Title` | `TEXT NOT NULL` | |
+| `Description`, `Decision`, `Notes` | `TEXT` | Valgfrie |
+| `Status`, `Priority` | `TEXT NOT NULL` | Enum som tekst (`HasConversion<string>`), f.eks. `InProgress`, `High` |
+| `CreatedAt`, `UpdatedAt` | `TEXT NOT NULL` | UTC, se under |
+| `MeetingDate` | `TEXT` | `DateOnly?` lagres av EF som `yyyy-MM-dd` |
+| `HousingUnitId` | `INTEGER` | Valgfri fremmednøkkel til `HousingUnits(Id)` |
+
+Mappingen ligger i `SameieHubDbContext` (Fluent API). `BoardCase` har ingen EF-attributter, beholder `private set`, og har en privat parameterløs konstruktør som bare EF bruker. Det er ingen navigasjonsegenskaper: relasjonen er konfigurert med `HasOne<HousingUnit>().WithMany().HasForeignKey(...)`, så `BoardCase` kjenner fortsatt bare `int? HousingUnitId`.
+
+### Fremmednøkkel til boenhet
+- `FK_BoardCases_HousingUnits_HousingUnitId` med `ON DELETE RESTRICT` og en indeks på kolonnen. Ingen cascade og ingen automatisk nullstilling.
+- `NULL` betyr at saken gjelder hele sameiet. Databasen krever ikke at en referert boenhet er aktiv; den regelen ligger i `BoardCaseService` (ny kobling).
+- Ugyldig referanse (ukjent boenhet) avvises av databasen med `DbUpdateException` (SQLite 787) også hvis tjenesten omgås. Dette oversettes ikke til noen annen feil.
+- En boenhet som har styresaker kan ikke slettes (`HousingUnitInUseException`). Den kan slettes når koblingen er fjernet eller styresaken slettet.
+
+### Fremmednøkkelfeil
+Feilen kjennes igjen på SQLites **utvidede feilkode**, ikke på meldingsteksten (`SqliteConstraintErrors.IsForeignKeyViolation`). Målt mot SQLite:
+
+| Situasjon | Utvidet kode |
+|---|---|
+| Sette inn/oppdatere rad med referanse til manglende rad | 787 (`SQLITE_CONSTRAINT_FOREIGNKEY`) |
+| Slette en rad som andre refererer til, med `ON DELETE RESTRICT` | **1811** (`SQLITE_CONSTRAINT_TRIGGER`) |
+| Unique / primærnøkkel / not null | 2067 / 1555 / 1299 (ikke fremmednøkkel) |
+
+Nøkkelpunkt: RESTRICT rapporteres som 1811, ikke 787. Forventningen om bare 787 var grunnen til at M1F først måtte bruke meldingsteksten. Sjekken godtar nå 787 og 1811 (med feilkode 19) og er felles for `EfHousingUnitRepository` og `EfBoardCaseRepository`. Databasen har ingen andre triggere, så 1811 betyr her alltid en begrenset fremmednøkkel. Andre databasefeil oversettes ikke til fremmednøkkelfeil (enhetstestet). Dermed erstatter den M1F-sjekken som brukte meldingsteksten.
+
+### UTC for tidsstempler
+- Domenet garanterer UTC (`DateTimeKind.Utc`, kontrollert i konstruktøren og i endringsmetodene).
+- SQLite lagrer `DateTime` som tekst uten tidssone (`2026-11-18 10:30:00`), og EF leser den tilbake som `Unspecified`. En enkel `ValueConverter` (`DateTime.SpecifyKind(value, Utc)` ved lesing) gjør at verdiene alltid får `Kind = Utc`. Ingen tidssonekonvertering skjer, så klokkeslettet endres aldri.
+- Presisjon: 7 desimaler (100 ns), og verdiene er identiske før og etter lagring (testet).
+- `CreatedAt` beholdes ved endring, og `UpdatedAt` endres ikke ved lesing (testet).
+
+### Repository
+`EfBoardCaseRepository` følger `EfHousingUnitRepository`: en kortlevd `DbContext` per operasjon fra `IDbContextFactory`, `AsNoTracking` ved lesing, `Update()` for frakoblede entiteter, og `DeleteAsync` som returnerer `false` for ukjent Id.
+
+### Migreringer
+`AddBoardCases` oppretter bare tabellen og indeksen; eksisterende tabeller og rader røres ikke. Testet fra en tom database og fra en database på `AddHousingUnitDetails`-skjemaet (M1F) med boenheter og personopplysninger, som er uendrede etter migreringen (`BoardCaseMigrationTests`). Eksisterende migreringer er ikke endret, og `EnsureCreated()` brukes ikke.
+
+### Ikke implementert
+- **Endringshistorikk:** det finnes bare `CreatedAt` og `UpdatedAt`. Ingen logg over statusendringer, vedtak eller hvem som endret hva.
+- Blazor-sider for styresaker (M2D).
+- Fremmednøkkel fra `TaskItem` (M3).
+
+## Avklaringer før M2D
+1. **Liste:** filter på status, prioritet og boenhet, og sortering. Forslag: nyeste først (`CreatedAt`), eller på møtedato.
+2. **Boenhetsvalg i skjemaet:** nedtrekksliste med aktive boenheter. Ved redigering av en sak med en koblet, senere deaktivert boenhet må den boenheten fortsatt vises som valgt.
+3. **Feilmeldinger:** norske meldinger per felt for `Title`, `Description`, `Decision`, `MeetingDate`, `Notes` og `HousingUnitId` (ukjent/inaktiv boenhet), samt `InvalidOperationException` for status og vedtak.
+4. **Navigasjon og sletting:** detaljside for sak med bekreftelse før permanent sletting, tilsvarende boenheter.
+5. **Visning i boenhetens detaljside:** skal boenheten vise tilknyttede styresaker (liste/antall)?
