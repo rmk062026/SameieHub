@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using SameieHub.Domain;
 using SameieHub.Infrastructure;
 using SameieHub.Infrastructure.Persistence;
+using SameieHub.Tests.Fakes;
 
 namespace SameieHub.Tests.Infrastructure;
 
@@ -27,9 +28,16 @@ public sealed class SqliteTestDatabase : IAsyncDisposable
 
     public string DatabasePath { get; }
 
+    /// <summary>The clock used by the board case service. It only moves when the test moves it.</summary>
+    public ManualTimeProvider Clock { get; } = new(new DateTime(2026, 11, 18, 10, 30, 0, DateTimeKind.Utc));
+
     public HousingUnitService Service => _scope.ServiceProvider.GetRequiredService<HousingUnitService>();
 
     public IHousingUnitRepository Repository => _scope.ServiceProvider.GetRequiredService<IHousingUnitRepository>();
+
+    public BoardCaseService BoardCases => _scope.ServiceProvider.GetRequiredService<BoardCaseService>();
+
+    public IBoardCaseRepository BoardCaseRepository => _scope.ServiceProvider.GetRequiredService<IBoardCaseRepository>();
 
     public static async Task<SqliteTestDatabase> CreateAsync()
     {
@@ -49,11 +57,24 @@ public sealed class SqliteTestDatabase : IAsyncDisposable
 
     public async Task MigrateToFirstMigrationAsync()
     {
+        await MigrateToAsync(migrations => migrations.First());
+    }
+
+    /// <summary>
+    /// Applies migrations up to and including the one with the given name, for example "AddHousingUnitDetails".
+    /// </summary>
+    public async Task MigrateToMigrationAsync(string migrationName)
+    {
+        await MigrateToAsync(migrations => migrations.Single(id => id.EndsWith("_" + migrationName)));
+    }
+
+    private async Task MigrateToAsync(Func<IEnumerable<string>, string> chooseMigration)
+    {
         var factory = _provider.GetRequiredService<IDbContextFactory<SameieHubDbContext>>();
         await using var context = await factory.CreateDbContextAsync();
 
-        var firstMigration = context.Database.GetMigrations().First();
-        await context.GetService<IMigrator>().MigrateAsync(firstMigration);
+        var targetMigration = chooseMigration(context.Database.GetMigrations());
+        await context.GetService<IMigrator>().MigrateAsync(targetMigration);
     }
 
     public Task MigrateToLatestAsync()
@@ -115,6 +136,8 @@ public sealed class SqliteTestDatabase : IAsyncDisposable
         var services = new ServiceCollection();
         services.AddSameieHubInfrastructure(DatabasePath);
         services.AddScoped<HousingUnitService>();
+        services.AddScoped<BoardCaseService>();
+        services.AddSingleton<TimeProvider>(Clock);
 
         return services.BuildServiceProvider(validateScopes: true);
     }
