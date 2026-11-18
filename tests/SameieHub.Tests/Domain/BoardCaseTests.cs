@@ -152,7 +152,7 @@ public class BoardCaseTests
     public void UpdateDetails_NewValues_ReplacesAllDetailsAndKeepsStatusAndCreatedAt()
     {
         var boardCase = NewCase();
-        boardCase.RegisterDecision("Fiktivt vedtak.", Later);
+        boardCase.RegisterDecision("Fiktivt vedtak.", null, Later);
         boardCase.ChangeStatus(BoardCaseStatus.Decided, Later);
         var changed = new BoardCaseDetails
         {
@@ -237,7 +237,7 @@ public class BoardCaseTests
     public void ChangeStatus_ToDecidedWithDecision_BecomesDecidedButNotClosed()
     {
         var boardCase = NewCase();
-        boardCase.RegisterDecision("Fiktivt vedtak.", Later);
+        boardCase.RegisterDecision("Fiktivt vedtak.", null, Later);
 
         boardCase.ChangeStatus(BoardCaseStatus.Decided, Later);
 
@@ -254,7 +254,7 @@ public class BoardCaseTests
         foreach (var to in Enum.GetValues<BoardCaseStatus>())
         {
             var boardCase = NewCase();
-            boardCase.RegisterDecision("Fiktivt vedtak.", Later);
+            boardCase.RegisterDecision("Fiktivt vedtak.", null, Later);
             boardCase.ChangeStatus(from, Later);
 
             boardCase.ChangeStatus(to, Later);
@@ -267,7 +267,7 @@ public class BoardCaseTests
     public void ChangeStatus_ReopeningClosedCase_IsAllowedAndKeepsDecision()
     {
         var boardCase = NewCase();
-        boardCase.RegisterDecision("Fiktivt vedtak.", Later);
+        boardCase.RegisterDecision("Fiktivt vedtak.", null, Later);
         boardCase.ChangeStatus(BoardCaseStatus.Closed, Later);
 
         boardCase.ChangeStatus(BoardCaseStatus.InProgress, Later);
@@ -305,7 +305,7 @@ public class BoardCaseTests
     {
         var boardCase = NewCase();
 
-        boardCase.RegisterDecision("  Fiktivt vedtak.  ", Later);
+        boardCase.RegisterDecision("  Fiktivt vedtak.  ", null, Later);
 
         Assert.Equal("Fiktivt vedtak.", boardCase.Decision);
         Assert.Equal(BoardCaseStatus.New, boardCase.Status);
@@ -315,10 +315,10 @@ public class BoardCaseTests
     public void RegisterDecision_ExistingDecision_IsCorrected()
     {
         var boardCase = NewCase();
-        boardCase.RegisterDecision("Feil vedtak.", Later);
+        boardCase.RegisterDecision("Feil vedtak.", null, Later);
         boardCase.ChangeStatus(BoardCaseStatus.Decided, Later);
 
-        boardCase.RegisterDecision("Riktig vedtak.", Later);
+        boardCase.RegisterDecision("Riktig vedtak.", null, Later);
 
         Assert.Equal("Riktig vedtak.", boardCase.Decision);
         Assert.Equal(BoardCaseStatus.Decided, boardCase.Status);
@@ -331,9 +331,9 @@ public class BoardCaseTests
     public void RegisterDecision_Blank_ThrowsAndKeepsExistingDecision(string? blank)
     {
         var boardCase = NewCase();
-        boardCase.RegisterDecision("Fiktivt vedtak.", Later);
+        boardCase.RegisterDecision("Fiktivt vedtak.", null, Later);
 
-        var exception = Assert.Throws<ArgumentException>(() => boardCase.RegisterDecision(blank!, Later));
+        var exception = Assert.Throws<ArgumentException>(() => boardCase.RegisterDecision(blank!, null, Later));
 
         Assert.Equal("Decision", exception.ParamName);
         Assert.Equal("Fiktivt vedtak.", boardCase.Decision);
@@ -343,9 +343,9 @@ public class BoardCaseTests
     public void RegisterDecision_TextAtAndOverTheLimit_IsAcceptedAndRejected()
     {
         var boardCase = NewCase();
-        boardCase.RegisterDecision(new string('v', BoardCase.MaxDecisionLength), Later);
+        boardCase.RegisterDecision(new string('v', BoardCase.MaxDecisionLength), null, Later);
 
-        Assert.Throws<ArgumentException>(() => boardCase.RegisterDecision(new string('x', BoardCase.MaxDecisionLength + 1), Later));
+        Assert.Throws<ArgumentException>(() => boardCase.RegisterDecision(new string('x', BoardCase.MaxDecisionLength + 1), null, Later));
 
         Assert.Equal(new string('v', BoardCase.MaxDecisionLength), boardCase.Decision);
     }
@@ -354,7 +354,7 @@ public class BoardCaseTests
     public void ClearDecision_CaseNotDecided_RemovesDecision()
     {
         var boardCase = NewCase();
-        boardCase.RegisterDecision("Registrert ved en feil.", Later);
+        boardCase.RegisterDecision("Registrert ved en feil.", null, Later);
 
         boardCase.ClearDecision(Later);
 
@@ -375,7 +375,7 @@ public class BoardCaseTests
     public void ClearDecision_CaseIsDecided_ThrowsAndKeepsDecision()
     {
         var boardCase = NewCase();
-        boardCase.RegisterDecision("Fiktivt vedtak.", Later);
+        boardCase.RegisterDecision("Fiktivt vedtak.", null, Later);
         boardCase.ChangeStatus(BoardCaseStatus.Decided, Later);
 
         Assert.Throws<InvalidOperationException>(() => boardCase.ClearDecision(Later));
@@ -387,13 +387,201 @@ public class BoardCaseTests
     public void ClearDecision_AfterChangingStatusBackFromDecided_Works()
     {
         var boardCase = NewCase();
-        boardCase.RegisterDecision("Fiktivt vedtak.", Later);
+        boardCase.RegisterDecision("Fiktivt vedtak.", null, Later);
         boardCase.ChangeStatus(BoardCaseStatus.Decided, Later);
         boardCase.ChangeStatus(BoardCaseStatus.InProgress, Later);
 
         boardCase.ClearDecision(Later);
 
         Assert.Null(boardCase.Decision);
+    }
+
+    // Decision date
+
+    private static readonly DateOnly DecisionDay = new(2026, 12, 3);
+
+    [Fact]
+    public void DecisionDate_NewCase_IsNull()
+    {
+        Assert.Null(NewCase().DecisionDate);
+    }
+
+    [Fact]
+    public void RegisterDecision_WithDate_SetsDecisionAndDate()
+    {
+        var boardCase = NewCase();
+
+        boardCase.RegisterDecision("Fiktivt vedtak.", DecisionDay, Later);
+
+        Assert.Equal("Fiktivt vedtak.", boardCase.Decision);
+        Assert.Equal(DecisionDay, boardCase.DecisionDate);
+        Assert.Equal(Later, boardCase.UpdatedAt);
+    }
+
+    [Fact]
+    public void RegisterDecision_WithoutDate_LeavesTheDateEmpty()
+    {
+        var boardCase = NewCase();
+
+        boardCase.RegisterDecision("Fiktivt vedtak.", null, Later);
+
+        Assert.Equal("Fiktivt vedtak.", boardCase.Decision);
+        Assert.Null(boardCase.DecisionDate);
+    }
+
+    [Fact]
+    public void RegisterDecision_OnlyTheDateChanges_UpdatesTheDateAndUpdatedAt()
+    {
+        var boardCase = NewCase();
+        boardCase.RegisterDecision("Fiktivt vedtak.", DecisionDay, Later);
+
+        boardCase.RegisterDecision("Fiktivt vedtak.", DecisionDay.AddDays(1), Later.AddHours(1));
+
+        Assert.Equal(DecisionDay.AddDays(1), boardCase.DecisionDate);
+        Assert.Equal(Later.AddHours(1), boardCase.UpdatedAt);
+    }
+
+    [Fact]
+    public void RegisterDecision_DateAddedToExistingDecision_IsStored()
+    {
+        var boardCase = NewCase();
+        boardCase.RegisterDecision("Fiktivt vedtak.", null, Later);
+
+        boardCase.RegisterDecision("Fiktivt vedtak.", DecisionDay, Later.AddHours(1));
+
+        Assert.Equal(DecisionDay, boardCase.DecisionDate);
+        Assert.Equal(Later.AddHours(1), boardCase.UpdatedAt);
+    }
+
+    [Fact]
+    public void RegisterDecision_DateRemovedWhileKeepingTheText_ClearsOnlyTheDate()
+    {
+        var boardCase = NewCase();
+        boardCase.RegisterDecision("Fiktivt vedtak.", DecisionDay, Later);
+
+        boardCase.RegisterDecision("Fiktivt vedtak.", null, Later.AddHours(1));
+
+        Assert.Equal("Fiktivt vedtak.", boardCase.Decision);
+        Assert.Null(boardCase.DecisionDate);
+        Assert.Equal(Later.AddHours(1), boardCase.UpdatedAt);
+    }
+
+    [Fact]
+    public void RegisterDecision_SameTextAndDate_DoesNotChangeUpdatedAt()
+    {
+        var boardCase = NewCase();
+        boardCase.RegisterDecision("Fiktivt vedtak.", DecisionDay, Later);
+
+        boardCase.RegisterDecision("  Fiktivt vedtak.  ", DecisionDay, Later.AddHours(5));
+
+        Assert.Equal(Later, boardCase.UpdatedAt);
+    }
+
+    [Fact]
+    public void RegisterDecision_DateOutsideAllowedRange_ThrowsAndChangesNothing()
+    {
+        var boardCase = NewCase();
+        boardCase.RegisterDecision("Gammelt vedtak.", DecisionDay, Later);
+
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
+            boardCase.RegisterDecision("Nytt vedtak.", BoardCase.MinDecisionDate.AddDays(-1), Later.AddHours(1)));
+
+        Assert.Equal("DecisionDate", exception.ParamName);
+        Assert.Equal("Gammelt vedtak.", boardCase.Decision);
+        Assert.Equal(DecisionDay, boardCase.DecisionDate);
+        Assert.Equal(Later, boardCase.UpdatedAt);
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            boardCase.RegisterDecision("Nytt vedtak.", BoardCase.MaxDecisionDate.AddDays(1), Later.AddHours(1)));
+    }
+
+    [Fact]
+    public void RegisterDecision_DatesAtTheLimits_AreAccepted()
+    {
+        var boardCase = NewCase();
+
+        boardCase.RegisterDecision("Vedtak", BoardCase.MinDecisionDate, Later);
+        boardCase.RegisterDecision("Vedtak", BoardCase.MaxDecisionDate, Later.AddHours(1));
+
+        Assert.Equal(BoardCase.MaxDecisionDate, boardCase.DecisionDate);
+    }
+
+    [Fact]
+    public void RegisterDecision_DateBeforeTheCaseWasCreated_IsAccepted()
+    {
+        var boardCase = NewCase();
+
+        boardCase.RegisterDecision("Vedtak fattet før saken ble registrert.", new DateOnly(2026, 1, 15), Later);
+
+        Assert.Equal(new DateOnly(2026, 1, 15), boardCase.DecisionDate);
+    }
+
+    [Fact]
+    public void RegisterDecision_BlankTextWithDate_ThrowsAndKeepsTheExistingDecisionAndDate()
+    {
+        var boardCase = NewCase();
+        boardCase.RegisterDecision("Fiktivt vedtak.", DecisionDay, Later);
+
+        var exception = Assert.Throws<ArgumentException>(() => boardCase.RegisterDecision("  ", DecisionDay.AddDays(1), Later.AddHours(1)));
+
+        Assert.Equal("Decision", exception.ParamName);
+        Assert.Equal("Fiktivt vedtak.", boardCase.Decision);
+        Assert.Equal(DecisionDay, boardCase.DecisionDate);
+    }
+
+    [Fact]
+    public void ClearDecision_RemovesTheDecisionDateToo()
+    {
+        var boardCase = NewCase();
+        boardCase.RegisterDecision("Registrert ved en feil.", DecisionDay, Later);
+
+        boardCase.ClearDecision(Later.AddHours(1));
+
+        Assert.Null(boardCase.Decision);
+        Assert.Null(boardCase.DecisionDate);
+        Assert.Equal(Later.AddHours(1), boardCase.UpdatedAt);
+    }
+
+    [Fact]
+    public void ClearDecision_CaseIsDecided_KeepsDecisionAndDate()
+    {
+        var boardCase = NewCase();
+        boardCase.RegisterDecision("Fiktivt vedtak.", DecisionDay, Later);
+        boardCase.ChangeStatus(BoardCaseStatus.Decided, Later.AddHours(1));
+
+        Assert.Throws<InvalidOperationException>(() => boardCase.ClearDecision(Later.AddHours(2)));
+
+        Assert.Equal("Fiktivt vedtak.", boardCase.Decision);
+        Assert.Equal(DecisionDay, boardCase.DecisionDate);
+    }
+
+    [Fact]
+    public void ChangeStatus_DecidedWithDecisionButNoDate_IsAllowed()
+    {
+        var boardCase = NewCase();
+        boardCase.RegisterDecision("Fiktivt vedtak.", null, Later);
+
+        boardCase.ChangeStatus(BoardCaseStatus.Decided, Later.AddHours(1));
+
+        Assert.Equal(BoardCaseStatus.Decided, boardCase.Status);
+    }
+
+    [Fact]
+    public void ChangeStatus_DecidedWithoutDecisionText_IsStillRejected()
+    {
+        var boardCase = NewCase();
+
+        Assert.Throws<InvalidOperationException>(() => boardCase.ChangeStatus(BoardCaseStatus.Decided, Later));
+    }
+
+    [Fact]
+    public void UpdateDetails_DoesNotTouchTheDecisionDate()
+    {
+        var boardCase = NewCase();
+        boardCase.RegisterDecision("Fiktivt vedtak.", DecisionDay, Later);
+
+        boardCase.UpdateDetails(FullDetails() with { Title = "Ny tittel" }, Later.AddHours(1));
+
+        Assert.Equal(DecisionDay, boardCase.DecisionDate);
     }
 
     // Id
@@ -511,7 +699,7 @@ public class BoardCaseTests
     {
         var boardCase = NewCase();
 
-        boardCase.RegisterDecision("Fiktivt vedtak.", Later);
+        boardCase.RegisterDecision("Fiktivt vedtak.", null, Later);
 
         Assert.Equal(Later, boardCase.UpdatedAt);
     }
@@ -520,9 +708,9 @@ public class BoardCaseTests
     public void RegisterDecision_SameText_DoesNotChangeUpdatedAt()
     {
         var boardCase = NewCase();
-        boardCase.RegisterDecision("Fiktivt vedtak.", Later);
+        boardCase.RegisterDecision("Fiktivt vedtak.", null, Later);
 
-        boardCase.RegisterDecision("  Fiktivt vedtak.  ", Later.AddHours(1));
+        boardCase.RegisterDecision("  Fiktivt vedtak.  ", null, Later.AddHours(1));
 
         Assert.Equal(Later, boardCase.UpdatedAt);
     }
@@ -532,7 +720,7 @@ public class BoardCaseTests
     {
         var boardCase = NewCase();
 
-        Assert.Throws<ArgumentException>(() => boardCase.RegisterDecision("  ", Later));
+        Assert.Throws<ArgumentException>(() => boardCase.RegisterDecision("  ", null, Later));
 
         Assert.Equal(CreatedAt, boardCase.UpdatedAt);
     }
@@ -541,7 +729,7 @@ public class BoardCaseTests
     public void ClearDecision_ExistingDecision_SetsUpdatedAt()
     {
         var boardCase = NewCase();
-        boardCase.RegisterDecision("Fiktivt vedtak.", Later);
+        boardCase.RegisterDecision("Fiktivt vedtak.", null, Later);
 
         boardCase.ClearDecision(Later.AddHours(1));
 
@@ -562,7 +750,7 @@ public class BoardCaseTests
     public void ClearDecision_CaseIsDecided_DoesNotChangeUpdatedAt()
     {
         var boardCase = NewCase();
-        boardCase.RegisterDecision("Fiktivt vedtak.", Later);
+        boardCase.RegisterDecision("Fiktivt vedtak.", null, Later);
         boardCase.ChangeStatus(BoardCaseStatus.Decided, Later.AddHours(1));
 
         Assert.Throws<InvalidOperationException>(() => boardCase.ClearDecision(Later.AddHours(2)));
@@ -580,7 +768,7 @@ public class BoardCaseTests
 
         Assert.Equal("now", Assert.Throws<ArgumentException>(() => boardCase.UpdateDetails(FullDetails() with { Title = "Ny" }, notUtc)).ParamName);
         Assert.Equal("now", Assert.Throws<ArgumentException>(() => boardCase.ChangeStatus(BoardCaseStatus.InProgress, notUtc)).ParamName);
-        Assert.Equal("now", Assert.Throws<ArgumentException>(() => boardCase.RegisterDecision("Vedtak", notUtc)).ParamName);
+        Assert.Equal("now", Assert.Throws<ArgumentException>(() => boardCase.RegisterDecision("Vedtak", null, notUtc)).ParamName);
         Assert.Equal("now", Assert.Throws<ArgumentException>(() => boardCase.ClearDecision(notUtc)).ParamName);
         Assert.Equal(CreatedAt, boardCase.UpdatedAt);
     }

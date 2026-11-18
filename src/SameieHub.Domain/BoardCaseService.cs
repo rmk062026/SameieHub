@@ -82,12 +82,17 @@ public class BoardCaseService
         await _boardCaseRepository.UpdateAsync(boardCase);
     }
 
+    /// <summary>
+    /// Registers or corrects the decision and the date the board made it. The date replaces the earlier
+    /// date, and null leaves the date empty.
+    /// </summary>
     /// <exception cref="KeyNotFoundException">No case has the given Id.</exception>
-    public async Task RegisterDecisionAsync(int id, string decision)
+    /// <exception cref="ArgumentException">The text or the date is invalid. The stored case is not changed.</exception>
+    public async Task RegisterDecisionAsync(int id, string decision, DateOnly? decisionDate)
     {
         var boardCase = await GetExistingCaseAsync(id);
 
-        boardCase.RegisterDecision(decision, GetUtcNow());
+        boardCase.RegisterDecision(decision, decisionDate, GetUtcNow());
 
         await _boardCaseRepository.UpdateAsync(boardCase);
     }

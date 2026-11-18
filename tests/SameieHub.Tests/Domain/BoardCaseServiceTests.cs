@@ -381,7 +381,7 @@ public class BoardCaseServiceTests
     public async Task ChangeStatusAsync_DecidedWithDecision_IsDecidedButNotClosed()
     {
         var boardCase = await RegisterCaseAsync();
-        await _service.RegisterDecisionAsync(boardCase.Id, "Fiktivt vedtak.");
+        await _service.RegisterDecisionAsync(boardCase.Id, "Fiktivt vedtak.", null);
 
         await _service.ChangeStatusAsync(boardCase.Id, BoardCaseStatus.Decided);
 
@@ -413,7 +413,7 @@ public class BoardCaseServiceTests
         var boardCase = await RegisterCaseAsync();
         MoveClockForward();
 
-        await _service.RegisterDecisionAsync(boardCase.Id, "  Fiktivt vedtak.  ");
+        await _service.RegisterDecisionAsync(boardCase.Id, "  Fiktivt vedtak.  ", null);
 
         var stored = await _service.GetByIdAsync(boardCase.Id);
         Assert.Equal("Fiktivt vedtak.", stored!.Decision);
@@ -425,10 +425,10 @@ public class BoardCaseServiceTests
     public async Task RegisterDecisionAsync_ExistingDecision_IsCorrected()
     {
         var boardCase = await RegisterCaseAsync();
-        await _service.RegisterDecisionAsync(boardCase.Id, "Feil vedtak.");
+        await _service.RegisterDecisionAsync(boardCase.Id, "Feil vedtak.", null);
         await _service.ChangeStatusAsync(boardCase.Id, BoardCaseStatus.Decided);
 
-        await _service.RegisterDecisionAsync(boardCase.Id, "Riktig vedtak.");
+        await _service.RegisterDecisionAsync(boardCase.Id, "Riktig vedtak.", null);
 
         var stored = await _service.GetByIdAsync(boardCase.Id);
         Assert.Equal("Riktig vedtak.", stored!.Decision);
@@ -439,9 +439,9 @@ public class BoardCaseServiceTests
     public async Task RegisterDecisionAsync_Blank_ThrowsAndKeepsExistingDecision()
     {
         var boardCase = await RegisterCaseAsync();
-        await _service.RegisterDecisionAsync(boardCase.Id, "Fiktivt vedtak.");
+        await _service.RegisterDecisionAsync(boardCase.Id, "Fiktivt vedtak.", null);
 
-        await Assert.ThrowsAsync<ArgumentException>(() => _service.RegisterDecisionAsync(boardCase.Id, "   "));
+        await Assert.ThrowsAsync<ArgumentException>(() => _service.RegisterDecisionAsync(boardCase.Id, "   ", null));
 
         Assert.Equal("Fiktivt vedtak.", (await _service.GetByIdAsync(boardCase.Id))!.Decision);
     }
@@ -450,7 +450,7 @@ public class BoardCaseServiceTests
     public async Task ClearDecisionAsync_CaseNotDecided_RemovesDecision()
     {
         var boardCase = await RegisterCaseAsync();
-        await _service.RegisterDecisionAsync(boardCase.Id, "Registrert ved en feil.");
+        await _service.RegisterDecisionAsync(boardCase.Id, "Registrert ved en feil.", null);
 
         await _service.ClearDecisionAsync(boardCase.Id);
 
@@ -461,7 +461,7 @@ public class BoardCaseServiceTests
     public async Task ClearDecisionAsync_CaseIsDecided_ThrowsAndKeepsDecision()
     {
         var boardCase = await RegisterCaseAsync();
-        await _service.RegisterDecisionAsync(boardCase.Id, "Fiktivt vedtak.");
+        await _service.RegisterDecisionAsync(boardCase.Id, "Fiktivt vedtak.", null);
         await _service.ChangeStatusAsync(boardCase.Id, BoardCaseStatus.Decided);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => _service.ClearDecisionAsync(boardCase.Id));
@@ -473,7 +473,7 @@ public class BoardCaseServiceTests
     public async Task ClearDecisionAsync_AfterStatusIsChangedBackFromDecided_Works()
     {
         var boardCase = await RegisterCaseAsync();
-        await _service.RegisterDecisionAsync(boardCase.Id, "Fiktivt vedtak.");
+        await _service.RegisterDecisionAsync(boardCase.Id, "Fiktivt vedtak.", null);
         await _service.ChangeStatusAsync(boardCase.Id, BoardCaseStatus.Decided);
         await _service.ChangeStatusAsync(boardCase.Id, BoardCaseStatus.InProgress);
 
@@ -485,7 +485,7 @@ public class BoardCaseServiceTests
     [Fact]
     public async Task DecisionMethods_UnknownCase_ThrowKeyNotFoundException()
     {
-        await Assert.ThrowsAsync<KeyNotFoundException>(() => _service.RegisterDecisionAsync(999, "Vedtak"));
+        await Assert.ThrowsAsync<KeyNotFoundException>(() => _service.RegisterDecisionAsync(999, "Vedtak", null));
         await Assert.ThrowsAsync<KeyNotFoundException>(() => _service.ClearDecisionAsync(999));
     }
 
@@ -519,5 +519,98 @@ public class BoardCaseServiceTests
 
         _boardCaseRepository.IsDeletionBlocked = false;
         Assert.NotNull(await _service.GetByIdAsync(boardCase.Id));
+    }
+
+    // Decision date
+
+    [Fact]
+    public async Task RegisterDecisionAsync_WithDate_StoresDateAndSetsUpdatedAt()
+    {
+        var boardCase = await RegisterCaseAsync();
+        MoveClockForward();
+
+        await _service.RegisterDecisionAsync(boardCase.Id, "Fiktivt vedtak.", new DateOnly(2026, 12, 3));
+
+        var stored = await _service.GetByIdAsync(boardCase.Id);
+        Assert.Equal(new DateOnly(2026, 12, 3), stored!.DecisionDate);
+        Assert.Equal(StartTime.AddHours(2), stored.UpdatedAt);
+    }
+
+    [Fact]
+    public async Task RegisterDecisionAsync_WithoutDate_StoresNoDate()
+    {
+        var boardCase = await RegisterCaseAsync();
+
+        await _service.RegisterDecisionAsync(boardCase.Id, "Fiktivt vedtak.", null);
+
+        Assert.Null((await _service.GetByIdAsync(boardCase.Id))!.DecisionDate);
+    }
+
+    [Fact]
+    public async Task RegisterDecisionAsync_CorrectingTheDate_ChangesOnlyTheDate()
+    {
+        var boardCase = await RegisterCaseAsync();
+        await _service.RegisterDecisionAsync(boardCase.Id, "Fiktivt vedtak.", new DateOnly(2026, 12, 3));
+        MoveClockForward();
+
+        await _service.RegisterDecisionAsync(boardCase.Id, "Fiktivt vedtak.", new DateOnly(2026, 12, 10));
+
+        var stored = await _service.GetByIdAsync(boardCase.Id);
+        Assert.Equal("Fiktivt vedtak.", stored!.Decision);
+        Assert.Equal(new DateOnly(2026, 12, 10), stored.DecisionDate);
+        Assert.Equal(StartTime.AddHours(2), stored.UpdatedAt);
+    }
+
+    [Fact]
+    public async Task RegisterDecisionAsync_SameTextAndDate_DoesNotChangeUpdatedAt()
+    {
+        var boardCase = await RegisterCaseAsync();
+        await _service.RegisterDecisionAsync(boardCase.Id, "Fiktivt vedtak.", new DateOnly(2026, 12, 3));
+        MoveClockForward();
+
+        await _service.RegisterDecisionAsync(boardCase.Id, "Fiktivt vedtak.", new DateOnly(2026, 12, 3));
+
+        Assert.Equal(StartTime, (await _service.GetByIdAsync(boardCase.Id))!.UpdatedAt);
+    }
+
+    [Fact]
+    public async Task RegisterDecisionAsync_InvalidDate_ThrowsAndKeepsEverything()
+    {
+        var boardCase = await RegisterCaseAsync();
+        await _service.RegisterDecisionAsync(boardCase.Id, "Fiktivt vedtak.", new DateOnly(2026, 12, 3));
+        MoveClockForward();
+
+        var exception = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+            _service.RegisterDecisionAsync(boardCase.Id, "Nytt vedtak.", new DateOnly(1999, 1, 1)));
+
+        Assert.Equal("DecisionDate", exception.ParamName);
+        var stored = await _service.GetByIdAsync(boardCase.Id);
+        Assert.Equal("Fiktivt vedtak.", stored!.Decision);
+        Assert.Equal(new DateOnly(2026, 12, 3), stored.DecisionDate);
+        Assert.Equal(StartTime, stored.UpdatedAt);
+    }
+
+    [Fact]
+    public async Task ClearDecisionAsync_RemovesTheDecisionDate()
+    {
+        var boardCase = await RegisterCaseAsync();
+        await _service.RegisterDecisionAsync(boardCase.Id, "Registrert ved en feil.", new DateOnly(2026, 12, 3));
+
+        await _service.ClearDecisionAsync(boardCase.Id);
+
+        var stored = await _service.GetByIdAsync(boardCase.Id);
+        Assert.Null(stored!.Decision);
+        Assert.Null(stored.DecisionDate);
+    }
+
+    [Fact]
+    public async Task ChangeStatusAsync_DecidedWithDecisionButNoDate_IsAllowed()
+    {
+        var boardCase = await RegisterCaseAsync();
+        await _service.RegisterDecisionAsync(boardCase.Id, "Fiktivt vedtak.", null);
+
+        await _service.ChangeStatusAsync(boardCase.Id, BoardCaseStatus.Decided);
+
+        Assert.Equal(BoardCaseStatus.Decided, (await _service.GetByIdAsync(boardCase.Id))!.Status);
     }
 }

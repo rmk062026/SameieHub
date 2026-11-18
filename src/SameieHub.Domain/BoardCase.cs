@@ -8,6 +8,8 @@ public class BoardCase
     public const int MaxNotesLength = 2000;
     public static readonly DateOnly MinMeetingDate = new(2000, 1, 1);
     public static readonly DateOnly MaxMeetingDate = new(2100, 12, 31);
+    public static readonly DateOnly MinDecisionDate = MinMeetingDate;
+    public static readonly DateOnly MaxDecisionDate = MaxMeetingDate;
 
     public int Id { get; private set; }
 
@@ -28,6 +30,9 @@ public class BoardCase
     public DateOnly? MeetingDate { get; private set; }
 
     public string? Decision { get; private set; }
+
+    /// <summary>When the board made the decision. Optional, and only set together with a decision.</summary>
+    public DateOnly? DecisionDate { get; private set; }
 
     /// <summary>Null means the case concerns the whole housing cooperative.</summary>
     public int? HousingUnitId { get; private set; }
@@ -139,9 +144,14 @@ public class BoardCase
     }
 
     /// <summary>
-    /// Registers or corrects the decision. The status is not changed; use <see cref="ChangeStatus"/> for that.
+    /// Registers or corrects the decision text and the date the board made the decision. The date is optional
+    /// and replaces the earlier date, so pass the existing date to keep it. The status is not changed;
+    /// use <see cref="ChangeStatus"/> for that.
     /// </summary>
-    public void RegisterDecision(string decision, DateTime now)
+    /// <exception cref="ArgumentException">
+    /// The text is blank or too long (ParamName "Decision"), or the date is outside the allowed range (ParamName "DecisionDate").
+    /// </exception>
+    public void RegisterDecision(string decision, DateOnly? decisionDate, DateTime now)
     {
         EnsureUtc(now);
 
@@ -151,17 +161,20 @@ public class BoardCase
             throw new ArgumentException("Decision is required.", nameof(Decision));
         }
 
-        if (normalizedDecision == Decision)
+        var validatedDate = ValidateDecisionDate(decisionDate);
+
+        if (normalizedDecision == Decision && validatedDate == DecisionDate)
         {
             return;
         }
 
         Decision = normalizedDecision;
+        DecisionDate = validatedDate;
         UpdatedAt = now;
     }
 
     /// <summary>
-    /// Removes a decision that was registered by mistake.
+    /// Removes a decision, and its date, that was registered by mistake.
     /// </summary>
     /// <exception cref="InvalidOperationException">The case is decided. Change the status first.</exception>
     public void ClearDecision(DateTime now)
@@ -179,6 +192,7 @@ public class BoardCase
         }
 
         Decision = null;
+        DecisionDate = null;
         UpdatedAt = now;
     }
 
@@ -254,6 +268,17 @@ public class BoardCase
         }
 
         return meetingDate;
+    }
+
+    private static DateOnly? ValidateDecisionDate(DateOnly? decisionDate)
+    {
+        if (decisionDate < MinDecisionDate || decisionDate > MaxDecisionDate)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(DecisionDate), $"DecisionDate must be between {MinDecisionDate} and {MaxDecisionDate}.");
+        }
+
+        return decisionDate;
     }
 
     private static int? ValidateHousingUnitId(int? housingUnitId)
