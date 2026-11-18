@@ -65,4 +65,48 @@ public class BoardCaseMigrationTests
         Assert.Single(await database.Service.GetAllAsync());
         Assert.Single(await database.BoardCases.GetAllAsync());
     }
+
+    private const string BoardCaseSnapshotSql =
+        "SELECT group_concat(row, ';') FROM (" +
+        "SELECT Id || '|' || Title || '|' || IFNULL(Description, '') || '|' || Status || '|' || Priority || '|' || " +
+        "CreatedAt || '|' || UpdatedAt || '|' || IFNULL(MeetingDate, '') || '|' || IFNULL(Decision, '') || '|' || " +
+        "IFNULL(HousingUnitId, '') || '|' || IFNULL(Notes, '') AS row FROM BoardCases ORDER BY Id)";
+
+    [Fact]
+    public async Task Migrate_FromBoardCaseSchemaWithData_KeepsCasesUnchangedAndDecisionDateIsNull()
+    {
+        await using var database = await SqliteTestDatabase.CreateUnmigratedAsync();
+        await database.MigrateToMigrationAsync("AddBoardCases");
+        await database.ExecuteSqlAsync("INSERT INTO HousingUnits (Address, IsActive) VALUES ('Storgata 1A', 1)");
+        await database.ExecuteSqlAsync(
+            "INSERT INTO BoardCases (Title, Description, Status, Priority, CreatedAt, UpdatedAt, MeetingDate, Decision, HousingUnitId, Notes) VALUES " +
+            "('Maling av porter', 'Fiktiv beskrivelse.', 'Decided', 'High', '2026-11-18 10:30:00', '2026-11-19 08:00:00', '2026-12-03', 'Fiktivt vedtak.', 1, 'Fiktive merknader.'), " +
+            "('Vedtekter', NULL, 'New', 'Normal', '2026-11-18 11:00:00', '2026-11-18 11:00:00', NULL, NULL, NULL, NULL)");
+        var before = await database.QueryTextAsync(BoardCaseSnapshotSql);
+
+        await database.MigrateToLatestAsync();
+
+        Assert.Equal(before, await database.QueryTextAsync(BoardCaseSnapshotSql));
+        Assert.Equal("2", await database.QueryTextAsync("SELECT COUNT(*) FROM BoardCases WHERE DecisionDate IS NULL"));
+        var cases = await database.BoardCases.GetAllAsync();
+        Assert.All(cases, boardCase => Assert.Null(boardCase.DecisionDate));
+        Assert.Equal("Fiktivt vedtak.", cases[0].Decision);
+        Assert.Equal(DateTimeKind.Utc, cases[0].CreatedAt.Kind);
+    }
+
+    [Fact]
+    public async Task Migrate_FromBoardCaseSchemaWithData_ExistingDecisionCanGetADate()
+    {
+        await using var database = await SqliteTestDatabase.CreateUnmigratedAsync();
+        await database.MigrateToMigrationAsync("AddBoardCases");
+        await database.ExecuteSqlAsync(
+            "INSERT INTO BoardCases (Title, Status, Priority, CreatedAt, UpdatedAt, Decision) VALUES " +
+            "('Vedtekter', 'New', 'Normal', '2026-11-18 11:00:00', '2026-11-18 11:00:00', 'Fiktivt vedtak.')");
+        await database.MigrateToLatestAsync();
+        var boardCase = (await database.BoardCases.GetAllAsync()).Single();
+
+        await database.BoardCases.RegisterDecisionAsync(boardCase.Id, "Fiktivt vedtak.", new DateOnly(2026, 12, 3));
+
+        Assert.Equal(new DateOnly(2026, 12, 3), (await database.BoardCases.GetByIdAsync(boardCase.Id))!.DecisionDate);
+    }
 }

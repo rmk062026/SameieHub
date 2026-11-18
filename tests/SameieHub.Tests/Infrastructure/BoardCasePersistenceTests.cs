@@ -159,9 +159,9 @@ public class BoardCasePersistenceTests : IAsyncLifetime
     {
         var registered = await _database.BoardCases.RegisterAsync(FullDetails());
 
-        await _database.BoardCases.RegisterDecisionAsync(registered.Id, "Feil vedtak.");
+        await _database.BoardCases.RegisterDecisionAsync(registered.Id, "Feil vedtak.", null);
         await _database.BoardCases.ChangeStatusAsync(registered.Id, BoardCaseStatus.Decided);
-        await _database.BoardCases.RegisterDecisionAsync(registered.Id, "Riktig vedtak.");
+        await _database.BoardCases.RegisterDecisionAsync(registered.Id, "Riktig vedtak.", null);
         await _database.RestartAsync();
         var corrected = await _database.BoardCases.GetByIdAsync(registered.Id);
 
@@ -175,6 +175,69 @@ public class BoardCasePersistenceTests : IAsyncLifetime
         Assert.Equal(BoardCaseStatus.Decided, corrected.Status);
         Assert.Null(cleared!.Decision);
         Assert.Equal(BoardCaseStatus.InProgress, cleared.Status);
+    }
+
+    // Decision date
+
+    [Fact]
+    public async Task DecisionDate_RegisteredWithDecision_IsReadBackAfterRestartAndStoredAsDate()
+    {
+        var registered = await _database.BoardCases.RegisterAsync(FullDetails());
+        await _database.BoardCases.RegisterDecisionAsync(registered.Id, "Fiktivt vedtak.", new DateOnly(2026, 12, 3));
+
+        await _database.RestartAsync();
+
+        var found = await _database.BoardCases.GetByIdAsync(registered.Id);
+        Assert.Equal("Fiktivt vedtak.", found!.Decision);
+        Assert.Equal(new DateOnly(2026, 12, 3), found.DecisionDate);
+        Assert.Equal("2026-12-03", await _database.QueryTextAsync("SELECT DecisionDate FROM BoardCases"));
+    }
+
+    [Fact]
+    public async Task DecisionDate_DecisionWithoutDate_IsStoredAsNull()
+    {
+        var registered = await _database.BoardCases.RegisterAsync(FullDetails());
+        await _database.BoardCases.RegisterDecisionAsync(registered.Id, "Fiktivt vedtak.", null);
+
+        await _database.RestartAsync();
+
+        Assert.Null((await _database.BoardCases.GetByIdAsync(registered.Id))!.DecisionDate);
+        Assert.Equal("1", await _database.QueryTextAsync("SELECT COUNT(*) FROM BoardCases WHERE DecisionDate IS NULL"));
+    }
+
+    [Fact]
+    public async Task DecisionDate_CorrectedAndThenRemovedWithTheDecision_IsStored()
+    {
+        var registered = await _database.BoardCases.RegisterAsync(FullDetails());
+        await _database.BoardCases.RegisterDecisionAsync(registered.Id, "Fiktivt vedtak.", new DateOnly(2026, 12, 3));
+        _database.Clock.Advance(TimeSpan.FromHours(1));
+        await _database.BoardCases.RegisterDecisionAsync(registered.Id, "Fiktivt vedtak.", new DateOnly(2026, 12, 10));
+        await _database.RestartAsync();
+        var corrected = await _database.BoardCases.GetByIdAsync(registered.Id);
+
+        await _database.BoardCases.ClearDecisionAsync(registered.Id);
+        await _database.RestartAsync();
+        var cleared = await _database.BoardCases.GetByIdAsync(registered.Id);
+
+        Assert.Equal(new DateOnly(2026, 12, 10), corrected!.DecisionDate);
+        Assert.Equal(registered.CreatedAt.AddHours(1), corrected.UpdatedAt);
+        Assert.Null(cleared!.Decision);
+        Assert.Null(cleared.DecisionDate);
+    }
+
+    [Fact]
+    public async Task DecisionDate_InvalidDate_KeepsStoredDecisionAndDate()
+    {
+        var registered = await _database.BoardCases.RegisterAsync(FullDetails());
+        await _database.BoardCases.RegisterDecisionAsync(registered.Id, "Fiktivt vedtak.", new DateOnly(2026, 12, 3));
+
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+            _database.BoardCases.RegisterDecisionAsync(registered.Id, "Nytt vedtak.", new DateOnly(2200, 1, 1)));
+        await _database.RestartAsync();
+
+        var found = await _database.BoardCases.GetByIdAsync(registered.Id);
+        Assert.Equal("Fiktivt vedtak.", found!.Decision);
+        Assert.Equal(new DateOnly(2026, 12, 3), found.DecisionDate);
     }
 
     // Time and dates

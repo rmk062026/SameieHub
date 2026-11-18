@@ -29,6 +29,9 @@ namespace SameieHub.Infrastructure.Persistence.Migrations
                     b.Property<string>("Decision")
                         .HasColumnType("TEXT");
 
+                    b.Property<DateOnly?>("DecisionDate")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Description")
                         .HasColumnType("TEXT");
 
