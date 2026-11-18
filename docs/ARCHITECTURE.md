@@ -35,6 +35,7 @@ Hvorfor Web refererer Infrastructure: composition root (`Program.cs`) registrere
 ```mermaid
 erDiagram
     HousingUnit ||--o{ TaskItem : "kan ha"
+    HousingUnit |o--o{ BoardCase : "gjelder (valgfri)"
     BoardCase ||--o{ TaskItem : "kan gi"
     HousingUnit {
         int Id
@@ -51,6 +52,11 @@ erDiagram
         int Id
         string Title
         string Status
+        string Priority
+        datetime CreatedAt
+        date MeetingDate
+        string Decision
+        int HousingUnitId
     }
     TaskItem {
         int Id
@@ -88,6 +94,58 @@ Relasjonene er hypoteser; endelige felter og regler besluttes i M1–M3 før kod
 | Ingen lengdegrenser i databasen | `HasMaxLength` | Som i M1C: SQLite håndhever ikke lengde, og grensene håndheves i domenet. |
 | `IsActive` med migreringsstandard `true` | `false`/modellstandard | Eksisterende boenheter skal forbli aktive. Standarden er satt i migreringen, ikke i modellen (`HasDefaultValue(true)` ville gjort at EF overstyrte `false`). |
 
+## Domenemodell: BoardCase (M2A)
+
+`BoardCase` er en styresak. Foreløpig finnes bare domeneklassen og testene (ingen repository, database eller UI; det kommer i M2B–M2D).
+
+| Felt | Type | Regel |
+|---|---|---|
+| `Id` | `int` | Satt av lagringen via `AssignId` (som `HousingUnit`) |
+| `Title` | `string` | Obligatorisk, trimmes, maks 200 tegn |
+| `Description` | `string?` | Valgfri, maks 4000 tegn |
+| `Status` | `BoardCaseStatus` | `New` ved opprettelse |
+| `Priority` | `BoardCasePriority` | `Normal` som standard |
+| `CreatedAt` | `DateTime` | UTC, satt ved opprettelse, endres aldri |
+| `MeetingDate` | `DateOnly?` | Valgfri kalenderdato mellom 2000-01-01 og 2100-12-31 |
+| `Decision` | `string?` | Valgfri, maks 4000 tegn |
+| `HousingUnitId` | `int?` | Valgfri; `null` betyr hele sameiet; ellers positiv Id |
+| `Notes` | `string?` | Valgfri, maks 2000 tegn |
+
+Alle felt har `private set`. Valgfri tekst trimmes, og tom tekst blir `null`. Feil gir `ArgumentException` der `ParamName` er feltnavnet (samme mønster som `HousingUnit`, slik at UI senere kan vise melding ved riktig felt).
+
+**Metoder:** `new BoardCase(details, createdAt)`, `UpdateDetails(details)`, `ChangeStatus(status)`, `RegisterDecision(text)`, `ClearDecision()` og `AssignId(id)`.
+`UpdateDetails` tar en `BoardCaseDetails`-record (tittel, beskrivelse, prioritet, møtedato, boenhet og merknader) og er alt-eller-ingenting: alt valideres først. Den dekker dermed «endre tittel og beskrivelse», «endre prioritet», «endre møtedato» og «knytte til eller fjerne kobling til boenhet» (`HousingUnitId = null` fjerner koblingen). Status og vedtak har egne metoder fordi de har regler.
+
+### Statusendringer
+
+```mermaid
+stateDiagram-v2
+    [*] --> New
+    New --> InProgress
+    InProgress --> Decided : krever vedtak
+    New --> Decided : krever vedtak
+    Decided --> Closed
+    Decided --> InProgress : korrigering
+    Closed --> InProgress : gjenåpning
+    InProgress --> Closed
+```
+
+Diagrammet viser den vanlige veien. Reglene er bevisst enkle:
+- Alle statuser kan endres til alle andre, slik at registreringsfeil kan rettes (inkludert å gjenåpne en avsluttet sak).
+- **Eneste regel:** en sak kan bare settes til `Decided` når den har et vedtak.
+- En sak kan være vedtatt uten å være avsluttet. `RegisterDecision` endrer ikke status; det gjør `ChangeStatus`.
+- `ClearDecision` (for et vedtak registrert ved en feil) er ikke tillatt mens saken er `Decided`; endre status først. Da får en vedtatt sak aldri mangle vedtak.
+- Statusendringer logges ikke foreløpig (se «Avklaringer før M2B»).
+
+### Beslutninger (M2A)
+| Beslutning | Alternativer | Begrunnelse |
+|---|---|---|
+| Enum-verdier starter på 1 | starter på 0 | `default` (0) blir en ugyldig verdi som fanges, i stedet for å bli «Low»/«New» ved en feil. |
+| `DateTime` i UTC for `CreatedAt`, `DateOnly` for møtedato | `DateTimeOffset`; `DateTime` for begge | Tidsstempler er UTC, kalenderdatoer har ikke klokkeslett og kan ikke få tidssoneproblemer. |
+| Tidspunktet sendes inn i konstruktøren | `DateTime.UtcNow` inni klassen | Gjør klassen testbar. Tjenesten (M2B) leverer tiden, helst via `TimeProvider`. |
+| Én `UpdateDetails` + egne metoder for status og vedtak | én metode per felt | Én validering og ingen delvis oppdatering når skjemaet endrer flere felt. Færre metoder å vedlikeholde. |
+| Kobling med `int? HousingUnitId` | navigasjonsegenskap `HousingUnit`; mange-til-mange | Enklest. BoardCase kjenner ikke HousingUnit-klassen. Eksistens kontrolleres i tjenesten (M2B). |
+
 ## Lagring med EF Core og SQLite (M1C)
 
 - **`SameieHubDbContext`** (Infrastructure/Persistence) konfigurerer `HousingUnit` med Fluent API: `Id` er primærnøkkel (autoinkrement i SQLite), `Address` er påkrevd og `HousingType` lagres som tekst. Domain har ingen EF-attributter. EF fyller `private set`-properties og bruker konstruktøren `HousingUnit(string address)` ved lesing.
@@ -119,3 +177,10 @@ Ingen maksimal lengde i databasen: SQLite håndhever ikke lengde, og grensene h�
 ### Migreringer
 - `InitialCreate` (M1C): tabellen `HousingUnits` med `Id` og `Address`.
 - `AddHousingUnitDetails` (M1E): legger til de nye kolonnene (alle valgfrie, unntatt `IsActive` som er `NOT NULL` med standard `true`). Eksisterende rader beholdes, og får `IsActive = true`. Migreringen er testet fra `InitialCreate`-skjemaet med rader satt inn før oppgraderingen (`HousingUnitMigrationTests`). Eksisterende migreringer endres aldri.
+
+## Avklaringer før M2B
+1. **Historikk:** nå finnes bare `CreatedAt`. Trengs `UpdatedAt` eller en logg over statusendringer og vedtak (og i så fall egen tabell)?
+2. **Kontroll av boenhet:** `BoardCaseService` bør sjekke at `HousingUnitId` finnes via `IHousingUnitRepository`. Kan en sak knyttes til en inaktiv boenhet? (Forslag: ja, men UI tilbyr bare aktive i nedtrekkslisten.)
+3. **Repository-kontrakt:** `AddAsync`, `GetByIdAsync`, `GetAllAsync`, `UpdateAsync` som for boenheter, pluss et filter på boenhet?
+4. **Tid:** `TimeProvider` injiseres i tjenesten og leverer `CreatedAt` (fake i tester).
+5. **Persistens (M2C):** `DateTime` leses fra SQLite som `Unspecified`, så EF trenger en verdikonvertering til UTC. Enum og `DateOnly` lagres som tekst. EF trenger også en privat parameterløs konstruktør i `BoardCase`.

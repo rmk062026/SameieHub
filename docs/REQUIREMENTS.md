@@ -33,6 +33,9 @@ Registrere, vise, redigere, søke etter og deaktivere/reaktivere boenheter. Bare
 
 **Gjenstår (senere):** hard sletting (hvis det blir nødvendig, krever egen avklaring), eksport av data og backup/gjenoppretting (M5).
 
+### Styresaker (M2A: domenemodell)
+En styresak har tittel (obligatorisk), beskrivelse, status (Ny, Under behandling, Vedtatt, Avsluttet), prioritet (Lav, Normal, Høy), opprettelsestidspunkt, møtedato, vedtak, merknader og en valgfri kobling til én boenhet (ingen kobling = gjelder hele sameiet). Regler og begrunnelser står i [ARCHITECTURE.md](ARCHITECTURE.md). Repository, database og brukergrensesnitt kommer i M2B–M2D.
+
 ## Ikke-funksjonelle krav
 - Kjører lokalt på Windows uten Visual Studio, .NET SDK eller internett (selvstendig publisering, M5).
 - Én lokal bruker; ingen innlogging.
