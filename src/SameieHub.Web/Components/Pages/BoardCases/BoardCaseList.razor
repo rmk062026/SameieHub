@@ -1,0 +1,224 @@
+@page "/styresaker"
+@inject BoardCaseService BoardCaseService
+@inject HousingUnitService HousingUnitService
+@inject ILogger<BoardCaseList> Logger
+
+<PageTitle>Styresaker – SameieHub</PageTitle>
+
+<PageHeader Title="Styresaker" Description="Saker som styret behandler, med status og vedtak.">
+    <a class="btn btn-primary" href="/styresaker/ny">Registrer styresak</a>
+</PageHeader>
+
+@if (StatusMessage != null)
+{
+    <div class="alert alert-success" role="status">@StatusMessage</div>
+}
+
+@if (_isLoading)
+{
+    <div class="surface-card" role="status">
+        <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Laster styresaker …
+    </div>
+}
+else if (_loadError != null)
+{
+    <div class="alert alert-danger" role="alert">
+        <p>@_loadError</p>
+        <button type="button" class="btn btn-outline-danger btn-sm" @onclick="LoadAsync">Prøv igjen</button>
+    </div>
+}
+else if (_allCases.Count == 0)
+{
+    <section class="surface-card empty-state">
+        <h2>Ingen styresaker registrert ennå</h2>
+        <p>Registrer den første styresaken for å komme i gang.</p>
+        <a class="btn btn-primary" href="/styresaker/ny">Registrer styresak</a>
+    </section>
+}
+else
+{
+    <div class="stat-row">
+        <div class="stat-card"><span class="stat-value">@_allCases.Count</span><span class="stat-label">Totalt</span></div>
+        @foreach (var status in BoardCaseText.AllStatuses)
+        {
+            <div class="stat-card">
+                <span class="stat-value">@CountWithStatus(status)</span>
+                <span class="stat-label">@BoardCaseText.StatusText(status)</span>
+            </div>
+        }
+    </div>
+
+    <div class="toolbar">
+        <input type="search" class="form-control" aria-label="Søk i styresaker"
+               placeholder="Søk på saksnummer, tittel eller beskrivelse"
+               @bind="_searchText" @bind:event="oninput" />
+        <select class="form-select" aria-label="Filtrer på status" @bind="_statusValue">
+            <option value="">Alle statuser</option>
+            @foreach (var status in BoardCaseText.AllStatuses)
+            {
+                <option value="@status">@BoardCaseText.StatusText(status)</option>
+            }
+        </select>
+        <select class="form-select" aria-label="Filtrer på prioritet" @bind="_priorityValue">
+            <option value="">Alle prioriteter</option>
+            @foreach (var priority in BoardCaseText.AllPriorities)
+            {
+                <option value="@priority">@BoardCaseText.PriorityText(priority)</option>
+            }
+        </select>
+        <select class="form-select" aria-label="Filtrer på boenhet" @bind="_housingUnitValue">
+            <option value="">Alle boenheter</option>
+            <option value="@WholeCooperativeValue">Hele sameiet (ingen boenhet)</option>
+            @foreach (var unit in _housingUnits)
+            {
+                <option value="@unit.Id">@unit.Address@(unit.IsActive ? "" : " (inaktiv)")</option>
+            }
+        </select>
+        <select class="form-select" aria-label="Sorter" @bind="_sortOrder">
+            @foreach (var order in Enum.GetValues<BoardCaseSortOrder>())
+            {
+                <option value="@order">@BoardCaseText.SortOrderText(order)</option>
+            }
+        </select>
+    </div>
+
+    var visibleCases = GetVisibleCases();
+
+    @if (visibleCases.Count == 0)
+    {
+        <section class="surface-card empty-state">
+            <h2>Ingen styresaker funnet</h2>
+            <p>Ingen saker passer med søket og filtrene dine.</p>
+            <button type="button" class="btn btn-outline-primary" @onclick="ResetFilters">Nullstill søk og filtre</button>
+        </section>
+    }
+    else
+    {
+        <p class="summary" role="status">Viser <strong>@visibleCases.Count</strong> av @_allCases.Count @(_allCases.Count == 1 ? "styresak" : "styresaker")</p>
+
+        <div class="data-table-card table-responsive">
+            <table class="table data-table">
+                <caption class="visually-hidden">Registrerte styresaker</caption>
+                <thead>
+                    <tr>
+                        <th scope="col" class="col-id">Sak</th>
+                        <th scope="col">Tittel</th>
+                        <th scope="col">Status</th>
+                        <th scope="col" class="d-none d-md-table-cell">Prioritet</th>
+                        <th scope="col" class="d-none d-lg-table-cell">Opprettet</th>
+                        <th scope="col" class="d-none d-lg-table-cell">Sist oppdatert</th>
+                        <th scope="col" class="col-actions"><span class="visually-hidden">Handlinger</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var boardCase in visibleCases)
+                    {
+                        <tr>
+                            <td class="col-id">#@boardCase.Id</td>
+                            <td>
+                                <a class="unit-link" href="/styresaker/@boardCase.Id">@boardCase.Title</a>
+                                <div class="unit-sub">@HousingUnitText(boardCase)</div>
+                            </td>
+                            <td><BoardCaseStatusBadge Status="boardCase.Status" /></td>
+                            <td class="d-none d-md-table-cell"><BoardCasePriorityBadge Priority="boardCase.Priority" /></td>
+                            <td class="d-none d-lg-table-cell">@NorwegianDateFormat.DateTime(boardCase.CreatedAt)</td>
+                            <td class="d-none d-lg-table-cell">@NorwegianDateFormat.DateTime(boardCase.UpdatedAt)</td>
+                            <td class="col-actions">
+                                <a class="btn btn-outline-primary btn-sm" href="/styresaker/@boardCase.Id"
+                                   aria-label="Åpne sak @boardCase.Id">Åpne</a>
+                                <a class="btn btn-link btn-sm" href="/styresaker/@boardCase.Id/rediger"
+                                   aria-label="Rediger sak @boardCase.Id">Rediger</a>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+}
+
+@code {
+    private const string WholeCooperativeValue = "none";
+
+    private IReadOnlyList<BoardCase> _allCases = [];
+    private IReadOnlyList<HousingUnit> _housingUnits = [];
+    private string _searchText = string.Empty;
+    private string _statusValue = string.Empty;
+    private string _priorityValue = string.Empty;
+    private string _housingUnitValue = string.Empty;
+    private BoardCaseSortOrder _sortOrder = BoardCaseSortOrder.Newest;
+    private bool _isLoading = true;
+    private string? _loadError;
+
+    [SupplyParameterFromQuery(Name = "status")]
+    public string? Status { get; set; }
+
+    private string? StatusMessage => Status == "slettet" ? "Styresaken er slettet permanent." : null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _isLoading = true;
+        _loadError = null;
+
+        try
+        {
+            _allCases = await BoardCaseService.GetAllAsync();
+
+            var units = await HousingUnitService.GetAllAsync();
+            _housingUnits = units.OrderBy(unit => unit.Address).ToList();
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Could not load board cases.");
+            _loadError = "Kunne ikke hente styresakene. Kontroller at databasen er tilgjengelig og prøv igjen.";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private int CountWithStatus(BoardCaseStatus status)
+    {
+        return _allCases.Count(boardCase => boardCase.Status == status);
+    }
+
+    private List<BoardCase> GetVisibleCases()
+    {
+        var criteria = new BoardCaseFilterCriteria
+        {
+            SearchText = _searchText,
+            Status = Enum.TryParse<BoardCaseStatus>(_statusValue, out var status) ? status : null,
+            Priority = Enum.TryParse<BoardCasePriority>(_priorityValue, out var priority) ? priority : null,
+            HousingUnitId = int.TryParse(_housingUnitValue, out var housingUnitId) ? housingUnitId : null,
+            WholeCooperativeOnly = _housingUnitValue == WholeCooperativeValue
+        };
+
+        return BoardCaseSorting.Sort(BoardCaseFilter.Apply(_allCases, criteria), _sortOrder);
+    }
+
+    private string HousingUnitText(BoardCase boardCase)
+    {
+        if (boardCase.HousingUnitId == null)
+        {
+            return "Hele sameiet";
+        }
+
+        var unit = _housingUnits.FirstOrDefault(existing => existing.Id == boardCase.HousingUnitId);
+
+        return unit == null ? $"Boenhet {boardCase.HousingUnitId}" : unit.Address;
+    }
+
+    private void ResetFilters()
+    {
+        _searchText = string.Empty;
+        _statusValue = string.Empty;
+        _priorityValue = string.Empty;
+        _housingUnitValue = string.Empty;
+    }
+}

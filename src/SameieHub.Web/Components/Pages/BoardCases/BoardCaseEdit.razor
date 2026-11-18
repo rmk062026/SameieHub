@@ -1,0 +1,88 @@
+@page "/styresaker/{Id:int}/rediger"
+@inject BoardCaseService BoardCaseService
+@inject HousingUnitService HousingUnitService
+@inject NavigationManager Navigation
+@inject ILogger<BoardCaseEdit> Logger
+
+<PageTitle>Rediger styresak – SameieHub</PageTitle>
+
+<PageHeader Title="Rediger styresak" Description="Endre opplysningene om saken."
+            BackHref="@($"/styresaker/{Id}")" BackText="Tilbake til saken" />
+
+@if (_isLoading)
+{
+    <div class="surface-card" role="status">
+        <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Laster styresak …
+    </div>
+}
+else if (_loadError != null)
+{
+    <div class="alert alert-danger" role="alert">
+        <p>@_loadError</p>
+        <button type="button" class="btn btn-outline-danger btn-sm" @onclick="LoadAsync">Prøv igjen</button>
+    </div>
+}
+else if (_boardCase == null)
+{
+    <div class="surface-card empty-state">
+        <h2>Fant ikke styresaken</h2>
+        <p>Styresaken finnes ikke, eller den er slettet.</p>
+        <a class="btn btn-primary" href="/styresaker">Tilbake til styresaker</a>
+    </div>
+}
+else
+{
+    <BoardCaseForm Existing="_boardCase" AvailableHousingUnits="_availableHousingUnits" SubmitText="Lagre endringer"
+                   CancelHref="@($"/styresaker/{Id}")" OnSave="UpdateAsync" />
+}
+
+@code {
+    private BoardCase? _boardCase;
+    private IReadOnlyList<HousingUnit> _availableHousingUnits = [];
+    private bool _isLoading = true;
+    private string? _loadError;
+
+    [Parameter]
+    public int Id { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _isLoading = true;
+        _loadError = null;
+
+        try
+        {
+            _boardCase = await BoardCaseService.GetByIdAsync(Id);
+
+            var units = await HousingUnitService.GetAllAsync();
+
+            // The linked housing unit stays selectable even if it has been deactivated since.
+            // Other inactive units are not offered as new links.
+            _availableHousingUnits = units
+                .Where(unit => unit.IsActive || unit.Id == _boardCase?.HousingUnitId)
+                .OrderBy(unit => unit.Address)
+                .ToList();
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Could not load board case {Id}.", Id);
+            _loadError = "Kunne ikke hente styresaken. Kontroller at databasen er tilgjengelig og prøv igjen.";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task UpdateAsync(BoardCaseDetails details)
+    {
+        await BoardCaseService.UpdateDetailsAsync(Id, details);
+
+        Navigation.NavigateTo($"/styresaker/{Id}?status=endret");
+    }
+}

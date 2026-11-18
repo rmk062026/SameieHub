@@ -1,0 +1,68 @@
+@page "/styresaker/ny"
+@inject BoardCaseService BoardCaseService
+@inject HousingUnitService HousingUnitService
+@inject NavigationManager Navigation
+@inject ILogger<BoardCaseCreate> Logger
+
+<PageTitle>Registrer styresak – SameieHub</PageTitle>
+
+<PageHeader Title="Registrer styresak" Description="Bare tittelen er obligatorisk. Resten kan du fylle inn senere."
+            BackHref="/styresaker" BackText="Styresaker" />
+
+@if (_isLoading)
+{
+    <div class="surface-card" role="status">
+        <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Laster skjema …
+    </div>
+}
+else if (_loadError != null)
+{
+    <div class="alert alert-danger" role="alert">
+        <p>@_loadError</p>
+        <button type="button" class="btn btn-outline-danger btn-sm" @onclick="LoadAsync">Prøv igjen</button>
+    </div>
+}
+else
+{
+    <BoardCaseForm AvailableHousingUnits="_activeHousingUnits" SubmitText="Registrer styresak" OnSave="RegisterAsync" />
+}
+
+@code {
+    private IReadOnlyList<HousingUnit> _activeHousingUnits = [];
+    private bool _isLoading = true;
+    private string? _loadError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _isLoading = true;
+        _loadError = null;
+
+        try
+        {
+            var units = await HousingUnitService.GetAllAsync();
+
+            _activeHousingUnits = units.Where(unit => unit.IsActive).OrderBy(unit => unit.Address).ToList();
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Could not load housing units for the board case form.");
+            _loadError = "Kunne ikke hente boenhetene. Kontroller at databasen er tilgjengelig og prøv igjen.";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task RegisterAsync(BoardCaseDetails details)
+    {
+        var boardCase = await BoardCaseService.RegisterAsync(details);
+
+        Navigation.NavigateTo($"/styresaker/{boardCase.Id}?status=opprettet");
+    }
+}
