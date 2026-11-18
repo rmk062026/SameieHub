@@ -178,6 +178,22 @@ Ingen maksimal lengde i databasen: SQLite håndhever ikke lengde, og grensene h�
 - `InitialCreate` (M1C): tabellen `HousingUnits` med `Id` og `Address`.
 - `AddHousingUnitDetails` (M1E): legger til de nye kolonnene (alle valgfrie, unntatt `IsActive` som er `NOT NULL` med standard `true`). Eksisterende rader beholdes, og får `IsActive = true`. Migreringen er testet fra `InitialCreate`-skjemaet med rader satt inn før oppgraderingen (`HousingUnitMigrationTests`). Eksisterende migreringer endres aldri.
 
+## Permanent sletting av boenheter (M1F)
+
+- **Kontrakt:** `IHousingUnitRepository.DeleteAsync(int id)` returnerer `true` hvis en boenhet ble slettet og `false` hvis Id-en ikke finnes. `HousingUnitService.DeleteAsync(id)` kaster `KeyNotFoundException` for ukjent Id (som de andre tjenestemetodene) og `HousingUnitInUseException` (Domain) hvis andre poster refererer til boenheten. Deaktivering og reaktivering er uendret.
+- **Hva som slettes:** raden i `HousingUnits`. Eier- og kontaktopplysningene er kolonner i samme rad og forsvinner dermed med den (testet).
+- **Referanseintegritet:** tilkoblingen bruker `Foreign Keys=True`, slik at SQLite alltid håndhever fremmednøkler. Når `BoardCase` (M2C) og `TaskItem` (M3) lagres, skal fremmednøkkelen til `HousingUnits` konfigureres med `OnDelete(DeleteBehavior.Restrict)`: **aldri cascade**. Sletting av en refert boenhet gir da SQLite-feil 19 («FOREIGN KEY constraint failed»), og `EfHousingUnitRepository` oversetter den til `HousingUnitInUseException`. `try/catch` er her berettiget fordi feilen kan håndteres (UI viser en forståelig melding).
+- **Id-er gjenbrukes ikke:** `Id` er `INTEGER PRIMARY KEY AUTOINCREMENT`, så SQLite husker høyeste brukte Id selv om den siste raden slettes (testet). Koden setter aldri Id-er manuelt.
+- **Begrensning (viktig):** `BoardCase` og `TaskItem` lagres ennå ikke. Blokkeringen er derfor testet mot en tabell som kun opprettes i testen, med samme fremmednøkkel (`ON DELETE RESTRICT`) som de ekte tabellene skal ha. Det beviser at SQLite håndhever regelen og at oversettelsen til `HousingUnitInUseException` virker, men ikke at de ekte tabellene er konfigurert riktig. Disse testene skal erstattes av tester mot de ekte tabellene i M2C og M3.
+- **Personvern:** logger inneholder bare Id-en til boenheten, aldri adresse eller eierinformasjon.
+
+| Beslutning | Alternativer | Begrunnelse |
+|---|---|---|
+| `DeleteAsync` returnerer `bool` | kaste unntak for ukjent Id i repository; ta imot entitet | Repository melder bare fakta; tjenesten bestemmer at ukjent Id er en feil. Ingen ekstra spørring først i tjenesten. |
+| Blokkering via databasens fremmednøkkel | sjekke i tjenesten før sletting | Databasen er den eneste som garantert vet om alle referanser, også ved samtidige endringer. Ingen duplisert regel som må vedlikeholdes for hver ny tabell. |
+| Ingen cascade delete | cascade | Styresaker og oppgaver er historikk og skal aldri forsvinne som bivirkning. |
+| Aktive og inaktive kan slettes | bare inaktive | Feilregistrerte enheter er ofte aktive; bekreftelsen i UI beskytter mot uhell. |
+
 ## Avklaringer før M2B
 1. **Historikk:** nå finnes bare `CreatedAt`. Trengs `UpdatedAt` eller en logg over statusendringer og vedtak (og i så fall egen tabell)?
 2. **Kontroll av boenhet:** `BoardCaseService` bør sjekke at `HousingUnitId` finnes via `IHousingUnitRepository`. Kan en sak knyttes til en inaktiv boenhet? (Forslag: ja, men UI tilbyr bare aktive i nedtrekkslisten.)

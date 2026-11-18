@@ -36,3 +36,9 @@ Eksempel: `ParkingSpace` (tekst). Følg rekkefølgen, og skriv testen først (TD
 5. **UI:** egenskap i `HousingUnitFormModel` (`From` og `ToDetails`), felt i `HousingUnitForm.razor`, melding i `HousingUnitFieldMessages`, og visning i `HousingUnitDetail.razor` (`DetailItem`).
 6. **Tester:** persistenstest og bUnit-test for skjema og detaljside. Kjør `dotnet test`.
 7. **Dokumentasjon:** `REQUIREMENTS.md` (regler) og `ARCHITECTURE.md` (beslutning).
+
+## Legge til en tabell som refererer til boenheter
+Gjelder `BoardCase` (M2C) og `TaskItem` (M3).
+1. Konfigurer fremmednøkkelen med `HasOne<HousingUnit>().WithMany().HasForeignKey(...).OnDelete(DeleteBehavior.Restrict)`. Ikke bruk cascade.
+2. Sjekk at den genererte migreringen har `onDelete: ReferentialAction.Restrict`.
+3. Erstatt de simulerte testene (`TestReferences`) i `HousingUnitDeletionTests` med tester mot den ekte tabellen: sletting av en boenhet med en tilknyttet post skal gi `HousingUnitInUseException`, og boenheten skal bestå.

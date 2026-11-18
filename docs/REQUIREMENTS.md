@@ -27,11 +27,11 @@ Registrere, vise, redigere, søke etter og deaktivere/reaktivere boenheter. Bare
 
 **Begrensninger**
 - En boenhet har **maksimalt to eiere**, som to enkle sett med felter. Det finnes ikke noe personregister, eierandeler eller eierskifter. Ved eierskifte endres feltene.
-- Det finnes **ingen hard sletting**. Deaktivering beholder alle data og kan angres, slik at fremtidige koblinger fra styresaker og oppgaver ikke ødelegges.
+- **Deaktivering** beholder alle data og kan angres. **Permanent sletting** (M1F) fjerner boenheten og alle opplysninger om den, inkludert eier- og kontaktinformasjon, og kan ikke angres. Den krever bekreftelse, og blokkeres hvis styresaker eller oppgaver refererer til boenheten. Brukes for feilregistrerte boenheter.
 
 **Personvern.** Eiernavn, telefon og e-post er personopplysninger. De lagres bare i den lokale databasen, sendes ikke til eksterne tjenester, skrives ikke i logger, og testene bruker bare fiktive data. SameieHub er et lokalt register; praktisk bruk må følge gjeldende personvernkrav (f.eks. formål, tilgang og sletting av opplysninger som ikke lenger trengs).
 
-**Gjenstår (senere):** hard sletting (hvis det blir nødvendig, krever egen avklaring), eksport av data og backup/gjenoppretting (M5).
+**Gjenstår (senere):** eksport av data og backup/gjenoppretting (M5). Blokkeringen ved sletting er så langt testet med en simulert referanse; den skal testes mot ekte styresaker og oppgaver når de lagres (M2C og M3).
 
 ### Styresaker (M2A: domenemodell)
 En styresak har tittel (obligatorisk), beskrivelse, status (Ny, Under behandling, Vedtatt, Avsluttet), prioritet (Lav, Normal, Høy), opprettelsestidspunkt, møtedato, vedtak, merknader og en valgfri kobling til én boenhet (ingen kobling = gjelder hele sameiet). Regler og begrunnelser står i [ARCHITECTURE.md](ARCHITECTURE.md). Repository, database og brukergrensesnitt kommer i M2B–M2D.
