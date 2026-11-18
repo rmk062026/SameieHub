@@ -1,4 +1,3 @@
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using SameieHub.Domain;
 
@@ -68,21 +67,11 @@ public class EfHousingUnitRepository : IHousingUnitRepository
         {
             await context.SaveChangesAsync();
         }
-        catch (DbUpdateException exception) when (IsForeignKeyViolation(exception))
+        catch (DbUpdateException exception) when (SqliteConstraintErrors.IsForeignKeyViolation(exception))
         {
             throw new HousingUnitInUseException(id, exception);
         }
 
         return true;
-    }
-
-    private static bool IsForeignKeyViolation(DbUpdateException exception)
-    {
-        // SQLite reports all constraint errors as code 19, so the message tells foreign keys from other constraints.
-        const int SqliteConstraintErrorCode = 19;
-
-        return exception.InnerException is SqliteException sqliteException
-            && sqliteException.SqliteErrorCode == SqliteConstraintErrorCode
-            && sqliteException.Message.Contains("FOREIGN KEY", StringComparison.OrdinalIgnoreCase);
     }
 }

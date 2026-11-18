@@ -34,6 +34,11 @@ public class BoardCase
 
     public string? Notes { get; private set; }
 
+    // Used by EF Core when it reads a case from the database.
+    private BoardCase()
+    {
+    }
+
     /// <param name="createdAt">Must be a UTC time (<see cref="DateTimeKind.Utc"/>).</param>
     /// <exception cref="ArgumentException">
     /// A value is invalid. <see cref="ArgumentException.ParamName"/> names the invalid property.
