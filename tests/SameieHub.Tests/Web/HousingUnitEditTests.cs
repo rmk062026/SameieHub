@@ -4,7 +4,7 @@ using SameieHub.Web.Components.Pages.HousingUnits;
 
 namespace SameieHub.Tests.Web;
 
-public class HousingUnitEditTests : HousingUnitUiTestBase
+public class HousingUnitEditTests : UiTestBase
 {
     private static HousingUnitDetails FullDetails() => new()
     {

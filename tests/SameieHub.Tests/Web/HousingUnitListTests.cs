@@ -4,7 +4,7 @@ using SameieHub.Web.Components.Pages.HousingUnits;
 
 namespace SameieHub.Tests.Web;
 
-public class HousingUnitListTests : HousingUnitUiTestBase
+public class HousingUnitListTests : UiTestBase
 {
     [Fact]
     public void Render_NoUnits_ShowsEmptyState()

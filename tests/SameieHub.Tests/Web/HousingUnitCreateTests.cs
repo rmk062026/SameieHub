@@ -4,7 +4,7 @@ using SameieHub.Web.Components.Pages.HousingUnits;
 
 namespace SameieHub.Tests.Web;
 
-public class HousingUnitCreateTests : HousingUnitUiTestBase
+public class HousingUnitCreateTests : UiTestBase
 {
     [Fact]
     public async Task Submit_OnlyAddress_StoresTrimmedUnitAndGoesToDetailPage()

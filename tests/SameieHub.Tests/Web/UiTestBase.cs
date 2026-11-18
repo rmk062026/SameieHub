@@ -5,20 +5,29 @@ using SameieHub.Tests.Fakes;
 
 namespace SameieHub.Tests.Web;
 
-public abstract class HousingUnitUiTestBase : BunitContext
+public abstract class UiTestBase : BunitContext
 {
-    protected HousingUnitUiTestBase()
+    protected UiTestBase()
     {
         JSInterop.Mode = JSRuntimeMode.Loose;
 
         Services.AddLogging();
         Services.AddSingleton<IHousingUnitRepository>(Repository);
         Services.AddSingleton<HousingUnitService>();
+        Services.AddSingleton<IBoardCaseRepository>(BoardCaseRepository);
+        Services.AddSingleton<TimeProvider>(Clock);
+        Services.AddSingleton<BoardCaseService>();
     }
 
     protected FailableHousingUnitRepository Repository { get; } = new();
 
+    protected FakeBoardCaseRepository BoardCaseRepository { get; } = new();
+
+    protected ManualTimeProvider Clock { get; } = new(new DateTime(2026, 11, 18, 10, 30, 0, DateTimeKind.Utc));
+
     protected HousingUnitService Service => Services.GetRequiredService<HousingUnitService>();
+
+    protected BoardCaseService BoardCases => Services.GetRequiredService<BoardCaseService>();
 
     protected string CurrentPath => new Uri(Services.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>().Uri).PathAndQuery;
 }

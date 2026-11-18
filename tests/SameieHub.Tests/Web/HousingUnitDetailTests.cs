@@ -4,7 +4,7 @@ using SameieHub.Web.Components.Pages.HousingUnits;
 
 namespace SameieHub.Tests.Web;
 
-public class HousingUnitDetailTests : HousingUnitUiTestBase
+public class HousingUnitDetailTests : UiTestBase
 {
     [Fact]
     public async Task Render_FullyRegisteredUnit_ShowsAllInformationAndBothOwners()
@@ -219,6 +219,37 @@ public class HousingUnitDetailTests : HousingUnitUiTestBase
         ClickButton(cut, "Ja, slett permanent");
 
         cut.WaitForAssertion(() => Assert.Contains("finnes ikke lenger", cut.Find("[role=alert]").TextContent));
+    }
+
+    [Fact]
+    public async Task Render_UnitWithBoardCases_ListsThemWithStatusAndLinkAndOmitsOtherUnitsCases()
+    {
+        var unit = await Service.RegisterAsync("Storgata 1A");
+        var otherUnit = await Service.RegisterAsync("Storgata 1B");
+        var linked = await BoardCases.RegisterAsync(new BoardCaseDetails { Title = "Maling av porter", HousingUnitId = unit.Id });
+        await BoardCases.ChangeStatusAsync(linked.Id, BoardCaseStatus.InProgress);
+        await BoardCases.RegisterAsync(new BoardCaseDetails { Title = "Sak for annen boenhet", HousingUnitId = otherUnit.Id });
+        await BoardCases.RegisterAsync(new BoardCaseDetails { Title = "Sak for hele sameiet" });
+
+        var cut = Render<HousingUnitDetail>(parameters => parameters.Add(page => page.Id, unit.Id));
+
+        cut.WaitForElement("tbody tr");
+        var row = Assert.Single(cut.FindAll("tbody tr"));
+        Assert.Contains($"#{linked.Id}", row.TextContent);
+        Assert.Contains("Maling av porter", row.TextContent);
+        Assert.Contains("Under behandling", row.TextContent);
+        Assert.Equal($"/styresaker/{linked.Id}", row.QuerySelector("a")!.GetAttribute("href"));
+        Assert.DoesNotContain("Sak for annen boenhet", cut.Markup);
+    }
+
+    [Fact]
+    public async Task Render_UnitWithoutBoardCases_ShowsShortEmptyState()
+    {
+        var unit = await Service.RegisterAsync("Storgata 1A");
+
+        var cut = Render<HousingUnitDetail>(parameters => parameters.Add(page => page.Id, unit.Id));
+
+        cut.WaitForAssertion(() => Assert.Contains("Ingen styresaker er knyttet til denne boenheten.", cut.Markup));
     }
 
     private static void ClickButton(IRenderedComponent<HousingUnitDetail> cut, string text)
