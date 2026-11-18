@@ -115,6 +115,112 @@ public class HousingUnitDetailTests : HousingUnitUiTestBase
         cut.WaitForAssertion(() => Assert.Contains("Fant ikke boenheten", cut.Markup));
     }
 
+    [Fact]
+    public async Task Render_Unit_ShowsDeleteButtonButNoConfirmationAndDeletesNothing()
+    {
+        var unit = await Service.RegisterAsync("Storgata 1A");
+
+        var cut = Render<HousingUnitDetail>(parameters => parameters.Add(page => page.Id, unit.Id));
+
+        cut.WaitForElement(".danger-zone");
+        Assert.Empty(cut.FindAll("[role=alertdialog]"));
+        Assert.NotNull(await Service.GetByIdAsync(unit.Id));
+    }
+
+    [Fact]
+    public async Task Delete_ClickingDelete_AsksForConfirmationWithAddressAndWarningAndDeletesNothing()
+    {
+        var unit = await Service.RegisterAsync("Storgata 1A");
+        var cut = Render<HousingUnitDetail>(parameters => parameters.Add(page => page.Id, unit.Id));
+        cut.WaitForElement(".danger-zone");
+
+        ClickButton(cut, "Slett boenheten …");
+
+        var dialog = cut.Find("[role=alertdialog]");
+        Assert.Contains("Storgata 1A", dialog.TextContent);
+        Assert.Contains("Dette kan ikke angres", dialog.TextContent);
+        Assert.NotNull(await Service.GetByIdAsync(unit.Id));
+    }
+
+    [Fact]
+    public async Task Delete_Cancel_ClosesConfirmationAndDeletesNothing()
+    {
+        var unit = await Service.RegisterAsync("Storgata 1A");
+        var cut = Render<HousingUnitDetail>(parameters => parameters.Add(page => page.Id, unit.Id));
+        cut.WaitForElement(".danger-zone");
+        ClickButton(cut, "Slett boenheten …");
+
+        ClickButton(cut, "Avbryt");
+
+        Assert.Empty(cut.FindAll("[role=alertdialog]"));
+        Assert.NotNull(await Service.GetByIdAsync(unit.Id));
+        Assert.DoesNotContain("status=slettet", CurrentPath);
+    }
+
+    [Fact]
+    public async Task Delete_Confirm_DeletesUnitAndGoesToListWithMessage()
+    {
+        var unit = await Service.RegisterAsync("Storgata 1A");
+        var other = await Service.RegisterAsync("Storgata 1B");
+        var cut = Render<HousingUnitDetail>(parameters => parameters.Add(page => page.Id, unit.Id));
+        cut.WaitForElement(".danger-zone");
+        ClickButton(cut, "Slett boenheten …");
+
+        ClickButton(cut, "Ja, slett permanent");
+
+        cut.WaitForAssertion(() => Assert.Equal("/boenheter?status=slettet", CurrentPath));
+        Assert.Null(await Service.GetByIdAsync(unit.Id));
+        Assert.NotNull(await Service.GetByIdAsync(other.Id));
+    }
+
+    [Fact]
+    public async Task Delete_UnitInUse_ShowsUnderstandableMessageAndKeepsUnit()
+    {
+        var unit = await Service.RegisterAsync("Storgata 1A");
+        var cut = Render<HousingUnitDetail>(parameters => parameters.Add(page => page.Id, unit.Id));
+        cut.WaitForElement(".danger-zone");
+        Repository.IsDeletionBlocked = true;
+        ClickButton(cut, "Slett boenheten …");
+
+        ClickButton(cut, "Ja, slett permanent");
+
+        cut.WaitForAssertion(() => Assert.Contains("knyttet til styresaker eller oppgaver", cut.Find("[role=alert]").TextContent));
+        Assert.Empty(cut.FindAll("[role=alertdialog]"));
+        Assert.DoesNotContain("status=slettet", CurrentPath);
+        Repository.IsDeletionBlocked = false;
+        Assert.NotNull(await Service.GetByIdAsync(unit.Id));
+    }
+
+    [Fact]
+    public async Task Delete_DatabaseUnavailable_ShowsErrorAndKeepsUnit()
+    {
+        var unit = await Service.RegisterAsync("Storgata 1A");
+        var cut = Render<HousingUnitDetail>(parameters => parameters.Add(page => page.Id, unit.Id));
+        cut.WaitForElement(".danger-zone");
+        ClickButton(cut, "Slett boenheten …");
+        Repository.IsFailing = true;
+
+        ClickButton(cut, "Ja, slett permanent");
+
+        cut.WaitForAssertion(() => Assert.Contains("Kunne ikke slette boenheten", cut.Find("[role=alert]").TextContent));
+        Repository.IsFailing = false;
+        Assert.NotNull(await Service.GetByIdAsync(unit.Id));
+    }
+
+    [Fact]
+    public async Task Delete_UnitAlreadyDeleted_ShowsNotFoundMessage()
+    {
+        var unit = await Service.RegisterAsync("Storgata 1A");
+        var cut = Render<HousingUnitDetail>(parameters => parameters.Add(page => page.Id, unit.Id));
+        cut.WaitForElement(".danger-zone");
+        ClickButton(cut, "Slett boenheten …");
+        await Service.DeleteAsync(unit.Id);
+
+        ClickButton(cut, "Ja, slett permanent");
+
+        cut.WaitForAssertion(() => Assert.Contains("finnes ikke lenger", cut.Find("[role=alert]").TextContent));
+    }
+
     private static void ClickButton(IRenderedComponent<HousingUnitDetail> cut, string text)
     {
         cut.FindAll("button").First(button => button.TextContent.Trim() == text).Click();

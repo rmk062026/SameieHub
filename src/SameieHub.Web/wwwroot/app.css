@@ -405,3 +405,22 @@ a:focus-visible,
         font-size: 1.3rem;
     }
 }
+
+/* Dangerous actions (permanent deletion) */
+.danger-zone {
+    margin-top: 1.5rem;
+    border-color: #f3c0bb;
+}
+
+    .danger-zone h2 {
+        font-size: 1.05rem;
+        margin-bottom: 0.35rem;
+    }
+
+.danger-zone-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}

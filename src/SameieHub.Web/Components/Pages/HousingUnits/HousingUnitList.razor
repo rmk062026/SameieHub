@@ -8,6 +8,11 @@
     <a class="btn btn-primary" href="/boenheter/ny">Registrer boenhet</a>
 </PageHeader>
 
+@if (StatusMessage != null)
+{
+    <div class="alert alert-success" role="status">@StatusMessage</div>
+}
+
 @if (_isLoading)
 {
     <div class="surface-card" role="status">
@@ -129,6 +134,11 @@ else
     private HousingUnitStatusFilter _statusFilter = HousingUnitStatusFilter.Active;
     private bool _isLoading = true;
     private string? _loadError;
+
+    [SupplyParameterFromQuery(Name = "status")]
+    public string? Status { get; set; }
+
+    private string? StatusMessage => Status == "slettet" ? "Boenheten er slettet permanent." : null;
 
     private int ActiveCount => _allUnits.Count(unit => unit.IsActive);
 

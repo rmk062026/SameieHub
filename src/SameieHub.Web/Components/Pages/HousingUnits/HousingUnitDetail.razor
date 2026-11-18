@@ -1,5 +1,6 @@
 @page "/boenheter/{Id:int}"
 @inject HousingUnitService HousingUnitService
+@inject NavigationManager Navigation
 @inject ILogger<HousingUnitDetail> Logger
 
 <PageTitle>@(_unit?.Address ?? "Boenhet") – SameieHub</PageTitle>
@@ -106,12 +107,49 @@ else
             }
         </section>
     </div>
+
+    <section class="surface-card danger-zone">
+        @if (_deleteError != null)
+        {
+            <div class="alert alert-danger" role="alert">@_deleteError</div>
+        }
+
+        @if (!_confirmingDelete)
+        {
+            <div class="danger-zone-row">
+                <div>
+                    <h2>Slett boenhet</h2>
+                    <p class="text-muted mb-0">Fjerner boenheten og alle opplysninger permanent. Bruk Deaktiver hvis du bare vil skjule den.</p>
+                </div>
+                <button type="button" class="btn btn-outline-danger" @onclick="AskForDeleteConfirmation">Slett boenheten …</button>
+            </div>
+        }
+        else
+        {
+            <div role="alertdialog" aria-labelledby="delete-title" aria-describedby="delete-text">
+                <h2 id="delete-title">Slette «@_unit.Address» permanent?</h2>
+                <p id="delete-text">
+                    <strong>Dette kan ikke angres.</strong> Boenheten og alle opplysninger om den, også eier- og kontaktinformasjon,
+                    blir slettet for alltid. Boenheter som er knyttet til styresaker eller oppgaver kan ikke slettes.
+                </p>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-danger" disabled="@_isDeleting" @onclick="DeleteAsync">
+                        @(_isDeleting ? "Sletter …" : "Ja, slett permanent")
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" disabled="@_isDeleting" @onclick="CancelDelete">Avbryt</button>
+                </div>
+            </div>
+        }
+    </section>
 }
 
 @code {
     private HousingUnit? _unit;
     private bool _isLoading = true;
     private bool _isChangingStatus;
+    private bool _confirmingDelete;
+    private bool _isDeleting;
+    private string? _deleteError;
     private string? _loadError;
     private string? _message;
     private string? _errorMessage;
@@ -166,6 +204,56 @@ else
     private async Task ActivateAsync()
     {
         await ChangeStatusAsync(() => HousingUnitService.ActivateAsync(Id), "Boenheten er reaktivert.");
+    }
+
+    private void AskForDeleteConfirmation()
+    {
+        _deleteError = null;
+        _confirmingDelete = true;
+    }
+
+    private void CancelDelete()
+    {
+        _confirmingDelete = false;
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (_isDeleting)
+        {
+            return;
+        }
+
+        _isDeleting = true;
+        _deleteError = null;
+
+        try
+        {
+            await HousingUnitService.DeleteAsync(Id);
+
+            Navigation.NavigateTo("/boenheter?status=slettet");
+        }
+        catch (HousingUnitInUseException)
+        {
+            _deleteError = "Boenheten kan ikke slettes fordi den er knyttet til styresaker eller oppgaver. "
+                + "Fjern koblingene først, eller deaktiver boenheten i stedet.";
+            _confirmingDelete = false;
+        }
+        catch (KeyNotFoundException)
+        {
+            _deleteError = "Boenheten finnes ikke lenger. Gå tilbake til oversikten.";
+            _confirmingDelete = false;
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Could not delete housing unit {Id}.", Id);
+            _deleteError = "Kunne ikke slette boenheten. Kontroller at databasen er tilgjengelig og prøv på nytt.";
+            _confirmingDelete = false;
+        }
+        finally
+        {
+            _isDeleting = false;
+        }
     }
 
     private async Task ChangeStatusAsync(Func<Task> change, string successMessage)
