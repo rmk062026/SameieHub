@@ -297,9 +297,21 @@ Nøkkelpunkt: RESTRICT rapporteres som 1811, ikke 787. Forventningen om bare 787
 - Blazor-sider for styresaker (M2D).
 - Fremmednøkkel fra `TaskItem` (M3).
 
-## Avklaringer før M2D
-1. **Liste:** filter på status, prioritet og boenhet, og sortering. Forslag: nyeste først (`CreatedAt`), eller på møtedato.
-2. **Boenhetsvalg i skjemaet:** nedtrekksliste med aktive boenheter. Ved redigering av en sak med en koblet, senere deaktivert boenhet må den boenheten fortsatt vises som valgt.
-3. **Feilmeldinger:** norske meldinger per felt for `Title`, `Description`, `Decision`, `MeetingDate`, `Notes` og `HousingUnitId` (ukjent/inaktiv boenhet), samt `InvalidOperationException` for status og vedtak.
-4. **Navigasjon og sletting:** detaljside for sak med bekreftelse før permanent sletting, tilsvarende boenheter.
-5. **Visning i boenhetens detaljside:** skal boenheten vise tilknyttede styresaker (liste/antall)?
+## Brukergrensesnitt for styresaker (M2D)
+
+- **Sider** (`Components/Pages/BoardCases/`): `BoardCaseList`, `BoardCaseDetail`, `BoardCaseCreate`, `BoardCaseEdit` og det delte `BoardCaseForm`. Alle bruker `BoardCaseService` og (for boenhetsvalg og visning) `HousingUnitService`; ingen bruker `DbContext` eller repository direkte.
+- **Filter og sortering ligger i Domain** (`BoardCaseFilter`, `BoardCaseFilterCriteria`, `BoardCaseSorting`, `BoardCaseSortOrder`), som `HousingUnitFilter`. Alle saker leses og filtreres i minnet, fordi antallet saker i et lite sameie er lite. Dette gir testbar logikk uten UI og uten spørrelag.
+- **Saksnummer** er `Id`. Søk på tall matcher saksnummeret eksakt (så «2» ikke finner sak 12); ellers søkes tittel og beskrivelse.
+- **Status og vedtak** håndheves av domenet; UI omgår aldri reglene. Hver handling på detaljsiden (`RunActionAsync`) fanger `ArgumentException` og `InvalidOperationException` (regelbrudd) og viser en norsk melding som er skrevet for akkurat den handlingen. `KeyNotFoundException` gir «finnes ikke lenger», og alle andre feil logges (kun unntaket, aldri vedtaksteksten) og gir en generell databasemelding. `InvalidOperationException` brukes av domenet for regelbrudd; ekte databasefeil er `SqliteException`/`DbUpdateException` og blir derfor ikke feiltolket som regelbrudd.
+- **Boenhetsvalg i skjemaet:** siden bestemmer hvilke boenheter som tilbys (`BoardCaseCreate`: aktive; `BoardCaseEdit`: aktive pluss den koblede, selv om den er deaktivert). Skjemaet (`BoardCaseForm`) mottar bare listen. Tjenesten kontrollerer fortsatt at en ny kobling er aktiv.
+- **Feil ved feltet:** `ParamName` fra domenet/tjenesten (`Title`, `Description`, `Priority`, `MeetingDate`, `HousingUnitId`, `Notes`) slås opp i `BoardCaseFieldMessages` for en norsk melding ved riktig felt, som for boenheter. Bare tittel har `[Required]` i skjemamodellen.
+- **Norsk dato og tid:** `NorwegianDateFormat` viser UTC-tider i norsk tid (`Europe/Oslo`, reservevei `W. Europe Standard Time`) som `dd.MM.yyyy HH:mm`, og datoer som `dd.MM.yyyy`. Lagring er uendret (UTC).
+- **Boenhetens detaljside** henter alle saker og viser de som har `HousingUnitId` lik boenhetens Id (nyeste først). Beskyttelsen mot sletting av boenheter med styresaker er uendret (fremmednøkkel, M2C).
+- Ikke i M2D: endringshistorikk, oppgavekobling (M3).
+
+### Gjenstår før M2 er komplett
+1. **Beslutning:** er `CreatedAt`/`UpdatedAt` nok, eller skal statusendringer og vedtak logges (egen tabell og visning)? Foreslått: vent til behovet er tydelig.
+2. **Oppgavekobling (M3):** fremmednøkkel fra `TaskItem` til `BoardCase` med `Restrict`, og tester av `BoardCaseInUseException` mot ekte referanse.
+3. **Dashboard (M4):** antall åpne saker og kommende møter (data finnes allerede).
+4. **Mulig forbedring:** en snarvei «Registrer styresak» på boenhetens side som forhåndsvelger boenheten.
+5. **Gjennomgang av M2:** kodegjennomgang og eventuell opprydding før M3.
