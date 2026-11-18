@@ -96,7 +96,7 @@ Relasjonene er hypoteser; endelige felter og regler besluttes i M1–M3 før kod
 
 ## Domenemodell: BoardCase (M2A)
 
-`BoardCase` er en styresak. Foreløpig finnes bare domeneklassen og testene (ingen repository, database eller UI; det kommer i M2B–M2D).
+`BoardCase` er en styresak. Domeneklassen (M2A), repository-kontrakt og tjeneste (M2B) finnes; database og UI kommer i M2C og M2D.
 
 | Felt | Type | Regel |
 |---|---|---|
@@ -106,6 +106,7 @@ Relasjonene er hypoteser; endelige felter og regler besluttes i M1–M3 før kod
 | `Status` | `BoardCaseStatus` | `New` ved opprettelse |
 | `Priority` | `BoardCasePriority` | `Normal` som standard |
 | `CreatedAt` | `DateTime` | UTC, satt ved opprettelse, endres aldri |
+| `UpdatedAt` | `DateTime` | UTC. Lik `CreatedAt` til saken endres. Settes bare ved en reell endring (M2B) |
 | `MeetingDate` | `DateOnly?` | Valgfri kalenderdato mellom 2000-01-01 og 2100-12-31 |
 | `Decision` | `string?` | Valgfri, maks 4000 tegn |
 | `HousingUnitId` | `int?` | Valgfri; `null` betyr hele sameiet; ellers positiv Id |
@@ -113,7 +114,7 @@ Relasjonene er hypoteser; endelige felter og regler besluttes i M1–M3 før kod
 
 Alle felt har `private set`. Valgfri tekst trimmes, og tom tekst blir `null`. Feil gir `ArgumentException` der `ParamName` er feltnavnet (samme mønster som `HousingUnit`, slik at UI senere kan vise melding ved riktig felt).
 
-**Metoder:** `new BoardCase(details, createdAt)`, `UpdateDetails(details)`, `ChangeStatus(status)`, `RegisterDecision(text)`, `ClearDecision()` og `AssignId(id)`.
+**Metoder:** `new BoardCase(details, createdAt)`, `UpdateDetails(details, now)`, `ChangeStatus(status, now)`, `RegisterDecision(text, now)`, `ClearDecision(now)`, `ToDetails()` og `AssignId(id)`. Parameteren `now` er tidspunktet for endringen (må være UTC); den brukes bare til `UpdatedAt` (se M2B).
 `UpdateDetails` tar en `BoardCaseDetails`-record (tittel, beskrivelse, prioritet, møtedato, boenhet og merknader) og er alt-eller-ingenting: alt valideres først. Den dekker dermed «endre tittel og beskrivelse», «endre prioritet», «endre møtedato» og «knytte til eller fjerne kobling til boenhet» (`HousingUnitId = null` fjerner koblingen). Status og vedtak har egne metoder fordi de har regler.
 
 ### Statusendringer
@@ -135,14 +136,14 @@ Diagrammet viser den vanlige veien. Reglene er bevisst enkle:
 - **Eneste regel:** en sak kan bare settes til `Decided` når den har et vedtak.
 - En sak kan være vedtatt uten å være avsluttet. `RegisterDecision` endrer ikke status; det gjør `ChangeStatus`.
 - `ClearDecision` (for et vedtak registrert ved en feil) er ikke tillatt mens saken er `Decided`; endre status først. Da får en vedtatt sak aldri mangle vedtak.
-- Statusendringer logges ikke foreløpig (se «Avklaringer før M2B»).
+- Statusendringer logges ikke foreløpig (se «Avklaringer før M2C»).
 
 ### Beslutninger (M2A)
 | Beslutning | Alternativer | Begrunnelse |
 |---|---|---|
 | Enum-verdier starter på 1 | starter på 0 | `default` (0) blir en ugyldig verdi som fanges, i stedet for å bli «Low»/«New» ved en feil. |
 | `DateTime` i UTC for `CreatedAt`, `DateOnly` for møtedato | `DateTimeOffset`; `DateTime` for begge | Tidsstempler er UTC, kalenderdatoer har ikke klokkeslett og kan ikke få tidssoneproblemer. |
-| Tidspunktet sendes inn i konstruktøren | `DateTime.UtcNow` inni klassen | Gjør klassen testbar. Tjenesten (M2B) leverer tiden, helst via `TimeProvider`. |
+| Tidspunktet sendes inn i konstruktøren | `DateTime.UtcNow` inni klassen | Gjør klassen testbar. Tjenesten (M2B) leverer tiden via `TimeProvider`. |
 | Én `UpdateDetails` + egne metoder for status og vedtak | én metode per felt | Én validering og ingen delvis oppdatering når skjemaet endrer flere felt. Færre metoder å vedlikeholde. |
 | Kobling med `int? HousingUnitId` | navigasjonsegenskap `HousingUnit`; mange-til-mange | Enklest. BoardCase kjenner ikke HousingUnit-klassen. Eksistens kontrolleres i tjenesten (M2B). |
 
@@ -194,9 +195,65 @@ Ingen maksimal lengde i databasen: SQLite håndhever ikke lengde, og grensene h�
 | Ingen cascade delete | cascade | Styresaker og oppgaver er historikk og skal aldri forsvinne som bivirkning. |
 | Aktive og inaktive kan slettes | bare inaktive | Feilregistrerte enheter er ofte aktive; bekreftelsen i UI beskytter mot uhell. |
 
-## Avklaringer før M2B
-1. **Historikk:** nå finnes bare `CreatedAt`. Trengs `UpdatedAt` eller en logg over statusendringer og vedtak (og i så fall egen tabell)?
-2. **Kontroll av boenhet:** `BoardCaseService` bør sjekke at `HousingUnitId` finnes via `IHousingUnitRepository`. Kan en sak knyttes til en inaktiv boenhet? (Forslag: ja, men UI tilbyr bare aktive i nedtrekkslisten.)
-3. **Repository-kontrakt:** `AddAsync`, `GetByIdAsync`, `GetAllAsync`, `UpdateAsync` som for boenheter, pluss et filter på boenhet?
-4. **Tid:** `TimeProvider` injiseres i tjenesten og leverer `CreatedAt` (fake i tester).
-5. **Persistens (M2C):** `DateTime` leses fra SQLite som `Unspecified`, så EF trenger en verdikonvertering til UTC. Enum og `DateOnly` lagres som tekst. EF trenger også en privat parameterløs konstruktør i `BoardCase`.
+## Styresaktjeneste og repository (M2B)
+
+```mermaid
+graph LR
+    Service["BoardCaseService<br/>(Domain)"] --> BoardRepo["IBoardCaseRepository<br/>(Domain)"]
+    Service --> UnitRepo["IHousingUnitRepository<br/>(Domain)"]
+    Service --> Time["TimeProvider<br/>(.NET)"]
+    FakeRepo["FakeBoardCaseRepository<br/>(Tests)"] -.implementerer.-> BoardRepo
+    EfRepo["EF Core-repository<br/>(Infrastructure, M2C)"] -.implementerer.-> BoardRepo
+```
+
+- **`IBoardCaseRepository`** er lite: `AddAsync`, `GetByIdAsync`, `GetAllAsync`, `UpdateAsync` og `DeleteAsync(id)` (returnerer `false` for ukjent Id). Ingen generisk repository.
+- **`BoardCaseService`** (konstruktør: begge repositoryene og `TimeProvider`):
+  `RegisterAsync`, `GetByIdAsync`, `GetAllAsync`, `UpdateDetailsAsync`, `ChangeHousingUnitAsync`, `ChangeStatusAsync`, `RegisterDecisionAsync`, `ClearDecisionAsync` og `DeleteAsync`. Domeneklassen eier reglene; tjenesten henter saken, kaller domenemetoden med tidspunktet og lagrer. Ukjent sak gir `KeyNotFoundException`.
+- **Tjenesten er ikke registrert i DI ennå.** Det gjøres i M2C/M2D sammen med EF-repositoryet (og `TimeProvider.System`).
+
+### Kobling til boenhet
+Domain kjenner bare `int? HousingUnitId`. Tjenesten kontrollerer referansen via `IHousingUnitRepository`:
+
+| Situasjon | Resultat |
+|---|---|
+| `HousingUnitId = null` | OK. Saken gjelder hele sameiet. |
+| Ny kobling (ved registrering, eller en annen enn dagens) til en **eksisterende og aktiv** boenhet | OK |
+| Ny kobling til ukjent boenhet | `ArgumentException`, `ParamName = "HousingUnitId"`, ingenting endres |
+| Ny kobling til inaktiv boenhet | Samme feil |
+| Uendret kobling til en boenhet som senere er deaktivert | **Beholdes**, ingen kontroll. Andre felt kan redigeres som vanlig. |
+| Kobling fjernes (`null`) | Alltid tillatt |
+
+Kontrollen skjer før domenemetoden endrer noe, og domenemetoden er alt-eller-ingenting, så ugyldig input gir aldri delvis oppdatering. Feilen skiller ikke «finnes ikke» fra «inaktiv» i parameternavnet; meldingen (engelsk) gjør det. UI viser én norsk melding ved feltet (M2D).
+
+### Tidsstempler
+- Tjenesten henter tiden fra `TimeProvider` (`GetUtcNow().UtcDateTime`, alltid UTC) og sender den til domenet. `DateTime.UtcNow` brukes ikke i koden; tester styrer klokken med `ManualTimeProvider`.
+- `CreatedAt` settes ved opprettelse og endres aldri. `UpdatedAt` er lik `CreatedAt` til første endring.
+- `UpdatedAt` settes **bare når noe faktisk endres**. Ingenting skjer ved: ugyldig input (kaster før noe tilordnes), uendrede verdier (sammenlignes etter normalisering, så «  Tittel » mot «Tittel» er uendret), samme status, samme vedtak, og `ClearDecision` uten vedtak.
+- En `now` som ikke er UTC avvises (`ArgumentException`, `ParamName = "now"`).
+- Det finnes ingen hendelseslogg (se «Avklaringer før M2C»).
+
+### Sletting (foreløpig)
+- `DeleteAsync(id)` i tjenesten: `KeyNotFoundException` for ukjent Id, ellers sletter den og lar `BoardCaseInUseException` boble opp hvis repoet melder at andre poster refererer til saken.
+- Kontrakten er klar for M2C/M2D. Det er ingen cascade. I M3 skal fremmednøkkelen fra `TaskItem` til `BoardCase` konfigureres med `DeleteBehavior.Restrict`, og EF-repoet skal oversette SQLite-feil 19 («FOREIGN KEY») til `BoardCaseInUseException`, akkurat som for boenheter (`HousingUnitDeletionTests` viser mønsteret).
+- Fake-repoet har `IsDeletionBlocked` for å teste at feilen når frem. `TaskItem` finnes ikke ennå, og er ikke laget for å teste dette.
+- Sletting av en **boenhet** som styresaker refererer til skal blokkeres av fremmednøkkelen fra `BoardCase.HousingUnitId` (`Restrict`, M2C). Det er ikke testet før M2C.
+
+### Beslutninger (M2B)
+| Beslutning | Alternativer | Begrunnelse |
+|---|---|---|
+| `UpdatedAt` er ikke-null og lik `CreatedAt` ved opprettelse | `null` til første endring | Ingen nullhåndtering; kan sorteres på «sist endret» uten spesialtilfelle. |
+| Domenemetodene tar `now` som parameter | tjenesten setter `UpdatedAt` etter at metoden har returnert `bool`; `TimeProvider` i entiteten | Domenet avgjør selv hva som er en reell endring, og kan ikke glemme å oppdatere tidsstempelet. Ingen tidskilde i entiteten. |
+| `ChangeHousingUnitAsync` finnes ved siden av `UpdateDetailsAsync` | bare `UpdateDetailsAsync` | Enkelt kall for «knytt til/fjern boenhet», uten at kalleren må bygge hele `BoardCaseDetails`. Bruker `BoardCase.ToDetails()` og samme kontroll. |
+| Ny kobling krever aktiv boenhet; eksisterende kobling beholdes | alltid tillate inaktive; alltid kreve aktive | Historikk skal ikke gå tapt når en boenhet deaktiveres, men nye saker skal ikke knyttes til boenheter som ikke lenger er i bruk. |
+| Referansekontroll i tjenesten | fremmednøkkel alene | Gir en forståelig feil før lagring. Fremmednøkkelen (M2C) er likevel siste sikring. |
+| `BoardCaseInUseException` finnes allerede | innføre den i M3 | Kontrakten er da ferdig, og UI (M2D) kan håndtere den. |
+
+## Avklaringer før M2C
+Besluttet i M2B: `UpdatedAt` finnes, `TimeProvider` brukes, kobling til boenhet kontrolleres i tjenesten (aktiv ved ny kobling, eksisterende beholdes), repository-kontrakten er liten, og `DeleteAsync` er forberedt.
+
+Åpent:
+1. **Historikk:** er `CreatedAt` og `UpdatedAt` nok for v1.0, eller trengs en logg over statusendringer og vedtak (egen tabell)? Foreslått: nei for nå.
+2. **Persistens:** `DateTime` leses fra SQLite som `Unspecified`, så EF trenger en verdikonvertering til UTC for `CreatedAt` og `UpdatedAt`. Enum og `DateOnly` lagres som tekst. EF trenger en privat parameterløs konstruktør i `BoardCase`.
+3. **Fremmednøkkel:** `BoardCase.HousingUnitId` skal ha `Restrict` mot `HousingUnits`. Hvilken feilmelding vil vi vise i boenhetens slettedialog når styresaker refererer til den? (Den eksisterende teksten nevner allerede styresaker.)
+4. **Registrering i DI:** `TimeProvider.System`, `IBoardCaseRepository` og `BoardCaseService` (M2C/M2D).
+5. **Liste i UI (M2D):** filter på status, prioritet og boenhet, og sortering (forslag: nyeste først, eller på møtedato).
