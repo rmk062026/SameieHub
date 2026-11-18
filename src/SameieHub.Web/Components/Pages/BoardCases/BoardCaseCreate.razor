@@ -24,13 +24,25 @@ else if (_loadError != null)
 }
 else
 {
-    <BoardCaseForm AvailableHousingUnits="_activeHousingUnits" SubmitText="Registrer styresak" OnSave="RegisterAsync" />
+    @if (_preselectNotice != null)
+    {
+        <div class="alert alert-warning" role="status">@_preselectNotice</div>
+    }
+
+    <BoardCaseForm AvailableHousingUnits="_activeHousingUnits" InitialHousingUnitId="_preselectedHousingUnitId"
+                   SubmitText="Registrer styresak" OnSave="RegisterAsync" />
 }
 
 @code {
     private IReadOnlyList<HousingUnit> _activeHousingUnits = [];
+    private int? _preselectedHousingUnitId;
+    private string? _preselectNotice;
     private bool _isLoading = true;
     private string? _loadError;
+
+    /// <summary>Set by the shortcut on the housing unit page. It is only a suggestion and is checked below.</summary>
+    [SupplyParameterFromQuery(Name = "boenhet")]
+    public int? HousingUnitId { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
@@ -47,6 +59,8 @@ else
             var units = await HousingUnitService.GetAllAsync();
 
             _activeHousingUnits = units.Where(unit => unit.IsActive).OrderBy(unit => unit.Address).ToList();
+
+            PreselectHousingUnit();
         }
         catch (Exception exception)
         {
@@ -56,6 +70,28 @@ else
         finally
         {
             _isLoading = false;
+        }
+    }
+
+    private void PreselectHousingUnit()
+    {
+        _preselectedHousingUnitId = null;
+        _preselectNotice = null;
+
+        if (HousingUnitId == null)
+        {
+            return;
+        }
+
+        var unit = _activeHousingUnits.FirstOrDefault(activeUnit => activeUnit.Id == HousingUnitId);
+        if (unit == null)
+        {
+            _preselectNotice = "Boenheten fra lenken finnes ikke eller er inaktiv, så den er ikke valgt. "
+                + "Velg en aktiv boenhet, eller la saken gjelde hele sameiet.";
+        }
+        else
+        {
+            _preselectedHousingUnitId = unit.Id;
         }
     }
 

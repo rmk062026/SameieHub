@@ -256,4 +256,42 @@ public class HousingUnitDetailTests : UiTestBase
     {
         cut.FindAll("button").First(button => button.TextContent.Trim() == text).Click();
     }
+
+    [Fact]
+    public async Task Render_ActiveUnit_ShowsRegisterBoardCaseShortcutWithTheUnitInTheLink()
+    {
+        var unit = await Service.RegisterAsync("Storgata 1A");
+
+        var cut = Render<HousingUnitDetail>(parameters => parameters.Add(page => page.Id, unit.Id));
+
+        cut.WaitForElement(".section-heading");
+        var link = cut.Find(".section-heading a");
+        Assert.Equal("Registrer styresak", link.TextContent);
+        Assert.Equal($"/styresaker/ny?boenhet={unit.Id}", link.GetAttribute("href"));
+    }
+
+    [Fact]
+    public async Task Render_InactiveUnit_HasNoRegisterBoardCaseShortcut()
+    {
+        var unit = await Service.RegisterAsync("Storgata 1A");
+        await Service.DeactivateAsync(unit.Id);
+
+        var cut = Render<HousingUnitDetail>(parameters => parameters.Add(page => page.Id, unit.Id));
+
+        cut.WaitForElement(".section-heading");
+        Assert.Empty(cut.FindAll(".section-heading a"));
+    }
+
+    [Fact]
+    public async Task Render_InactiveUnitWithExistingBoardCase_StillListsTheCase()
+    {
+        var unit = await Service.RegisterAsync("Storgata 1A");
+        await BoardCases.RegisterAsync(new BoardCaseDetails { Title = "Maling av porter", HousingUnitId = unit.Id });
+        await Service.DeactivateAsync(unit.Id);
+
+        var cut = Render<HousingUnitDetail>(parameters => parameters.Add(page => page.Id, unit.Id));
+
+        cut.WaitForElement("tbody tr");
+        Assert.Contains("Maling av porter", cut.Find("tbody").TextContent);
+    }
 }

@@ -90,6 +90,10 @@
     public BoardCase? Existing { get; set; }
 
     /// <summary>The housing units the user can choose from. The page decides which ones are offered.</summary>
+    /// <summary>The housing unit chosen when a new case is registered. Must be one of the available units.</summary>
+    [Parameter]
+    public int? InitialHousingUnitId { get; set; }
+
     [Parameter, EditorRequired]
     public IReadOnlyList<HousingUnit> AvailableHousingUnits { get; set; } = [];
 
@@ -104,7 +108,9 @@
 
     protected override void OnInitialized()
     {
-        _model = Existing == null ? new BoardCaseFormModel() : BoardCaseFormModel.From(Existing);
+        _model = Existing == null
+            ? new BoardCaseFormModel { HousingUnitId = InitialHousingUnitId }
+            : BoardCaseFormModel.From(Existing);
 
         _editContext = new EditContext(_model);
         _messageStore = new ValidationMessageStore(_editContext);

@@ -118,9 +118,33 @@ else
 
         <section class="surface-card detail-wide">
             <h2>Vedtak</h2>
-            <label for="decision" class="form-label">@(_boardCase.Decision == null ? "Registrer vedtak" : "Vedtak (kan korrigeres)")</label>
+            @if (_boardCase.Decision != null)
+            {
+                <div class="decision-box">
+                    <p class="notes-text mb-2">@_boardCase.Decision</p>
+                    <p class="decision-date mb-0">
+                        Vedtaksdato:
+                        @if (_boardCase.DecisionDate is { } decisionDate)
+                        {
+                            <strong>@NorwegianDateFormat.Date(decisionDate)</strong>
+                        }
+                        else
+                        {
+                            <span class="text-muted">Ikke registrert</span>
+                        }
+                    </p>
+                </div>
+            }
+
+            <label for="decision" class="form-label">@(_boardCase.Decision == null ? "Registrer vedtak" : "Korriger vedtak")</label>
             <textarea id="decision" class="form-control" rows="4" maxlength="@BoardCase.MaxDecisionLength"
                       @bind="_decisionText" @bind:event="oninput"></textarea>
+
+            <label for="decisionDate" class="form-label mt-3">Vedtaksdato</label>
+            <input id="decisionDate" type="date" class="form-control date-input" @bind="_decisionDate"
+                   aria-describedby="decisionDate-help" />
+            <div id="decisionDate-help" class="form-text">Datoen styret fattet vedtaket. Kan stå tom.</div>
+
             <div class="form-actions mt-3">
                 <button type="button" class="btn btn-primary" disabled="@_isBusy" @onclick="SaveDecisionAsync">
                     @(_boardCase.Decision == null ? "Registrer vedtak" : "Lagre vedtak")
@@ -189,6 +213,7 @@ else
     private HousingUnit? _housingUnit;
     private BoardCaseStatus _selectedStatus;
     private string _decisionText = string.Empty;
+    private DateOnly? _decisionDate;
     private bool _isLoading = true;
     private bool _isBusy;
     private bool _confirmingDelete;
@@ -247,6 +272,7 @@ else
         {
             _selectedStatus = _boardCase.Status;
             _decisionText = _boardCase.Decision ?? string.Empty;
+            _decisionDate = _boardCase.DecisionDate;
         }
     }
 
@@ -255,7 +281,7 @@ else
         await RunActionAsync(
             () => BoardCaseService.ChangeStatusAsync(Id, _selectedStatus),
             "Statusen er endret.",
-            "Saken kan ikke settes til «Vedtatt» før et vedtak er registrert.");
+            _ => "Saken kan ikke settes til «Vedtatt» før et vedtak er registrert.");
     }
 
     private async Task ReopenAsync()
@@ -263,26 +289,39 @@ else
         await RunActionAsync(
             () => BoardCaseService.ChangeStatusAsync(Id, BoardCaseStatus.InProgress),
             "Saken er gjenåpnet.",
-            "Saken kunne ikke gjenåpnes.");
+            _ => "Saken kunne ikke gjenåpnes.");
     }
 
     private async Task SaveDecisionAsync()
     {
         await RunActionAsync(
-            () => BoardCaseService.RegisterDecisionAsync(Id, _decisionText),
+            () => BoardCaseService.RegisterDecisionAsync(Id, _decisionText, _decisionDate),
             "Vedtaket er lagret.",
-            $"Vedtaket må fylles ut og kan ha maks {BoardCase.MaxDecisionLength} tegn.");
+            DecisionRejectedMessage);
     }
 
     private async Task ClearDecisionAsync()
     {
         await RunActionAsync(
             () => BoardCaseService.ClearDecisionAsync(Id),
-            "Vedtaket er fjernet.",
-            "Et vedtak kan ikke fjernes mens saken har status «Vedtatt». Endre statusen først.");
+            "Vedtaket og vedtaksdatoen er fjernet.",
+            _ => "Et vedtak kan ikke fjernes mens saken har status «Vedtatt». Endre statusen først.");
     }
 
-    private async Task RunActionAsync(Func<Task> action, string successMessage, string rejectedMessage)
+    private static string DecisionRejectedMessage(Exception exception)
+    {
+        if (exception is ArgumentException { ParamName: "DecisionDate" })
+        {
+            var from = NorwegianDateFormat.Date(BoardCase.MinDecisionDate);
+            var to = NorwegianDateFormat.Date(BoardCase.MaxDecisionDate);
+
+            return $"Vedtaksdatoen må være mellom {from} og {to}.";
+        }
+
+        return $"Vedtaket må fylles ut og kan ha maks {BoardCase.MaxDecisionLength} tegn.";
+    }
+
+    private async Task RunActionAsync(Func<Task> action, string successMessage, Func<Exception, string> rejectedMessage)
     {
         if (_isBusy)
         {
@@ -301,7 +340,7 @@ else
         }
         catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
         {
-            _actionError = rejectedMessage;
+            _actionError = rejectedMessage(exception);
             _selectedStatus = _boardCase!.Status;
         }
         catch (KeyNotFoundException)

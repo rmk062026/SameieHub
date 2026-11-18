@@ -1,4 +1,6 @@
 using Bunit;
+using Microsoft.AspNetCore.Components;
+using Microsoft.Extensions.DependencyInjection;
 using SameieHub.Domain;
 using SameieHub.Web.Components.Pages.BoardCases;
 
@@ -226,5 +228,16 @@ public class BoardCaseListTests : UiTestBase
         cut.Find("button").Click();
 
         cut.WaitForAssertion(() => Assert.Contains("Ingen styresaker registrert ennå", cut.Markup));
+    }
+
+    [Fact]
+    public async Task Render_StatusDeletedInTheAddress_ShowsTheDeletedMessage()
+    {
+        await RegisterAsync("Sak A");
+        Services.GetRequiredService<NavigationManager>().NavigateTo("/styresaker?status=slettet");
+
+        var cut = Render<BoardCaseList>();
+
+        cut.WaitForAssertion(() => Assert.Equal("Styresaken er slettet permanent.", cut.Find("[role=status]").TextContent));
     }
 }

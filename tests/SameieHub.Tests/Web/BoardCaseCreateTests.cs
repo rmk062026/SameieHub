@@ -1,4 +1,6 @@
 using Bunit;
+using Microsoft.AspNetCore.Components;
+using Microsoft.Extensions.DependencyInjection;
 using SameieHub.Domain;
 using SameieHub.Web.Components.Pages.BoardCases;
 
@@ -143,5 +145,67 @@ public class BoardCaseCreateTests : UiTestBase
         var cut = Render<BoardCaseCreate>();
 
         Assert.Equal("/styresaker", cut.Find("a.back-link").GetAttribute("href"));
+    }
+
+    // Shortcut from the housing unit page
+
+    private IRenderedComponent<BoardCaseCreate> RenderWithQuery(string query)
+    {
+        Services.GetRequiredService<NavigationManager>().NavigateTo("/styresaker/ny" + query);
+        var cut = Render<BoardCaseCreate>();
+        cut.WaitForElement("#title");
+
+        return cut;
+    }
+
+    [Fact]
+    public async Task Shortcut_ActiveHousingUnit_IsPreselectedAndSavedWithTheCase()
+    {
+        var unit = await Service.RegisterAsync("Storgata 1A");
+        await Service.RegisterAsync("Storgata 1B");
+
+        var cut = RenderWithQuery($"?boenhet={unit.Id}");
+
+        Assert.Equal(unit.Id.ToString(), cut.Find("#housingUnitId").GetAttribute("value"));
+        Assert.Empty(cut.FindAll(".alert-warning"));
+        cut.Find("#title").Change("Maling");
+        cut.Find("form").Submit();
+        Assert.Equal(unit.Id, Assert.Single(await BoardCases.GetAllAsync()).HousingUnitId);
+    }
+
+    [Fact]
+    public async Task Shortcut_InactiveHousingUnit_IsNotPreselectedNotOfferedAndShowsNotice()
+    {
+        var inactive = await Service.RegisterAsync("Storgata 1A");
+        await Service.DeactivateAsync(inactive.Id);
+
+        var cut = RenderWithQuery($"?boenhet={inactive.Id}");
+
+        Assert.Equal("", cut.Find("#housingUnitId").GetAttribute("value") ?? "");
+        Assert.DoesNotContain(cut.FindAll("#housingUnitId option"), option => option.TextContent.Contains("Storgata 1A"));
+        Assert.Contains("finnes ikke eller er inaktiv", cut.Find(".alert-warning").TextContent);
+        cut.Find("#title").Change("Maling");
+        cut.Find("form").Submit();
+        Assert.Null(Assert.Single(await BoardCases.GetAllAsync()).HousingUnitId);
+    }
+
+    [Fact]
+    public void Shortcut_UnknownHousingUnit_IsNotPreselectedAndShowsNotice()
+    {
+        var cut = RenderWithQuery("?boenhet=999");
+
+        Assert.Equal("", cut.Find("#housingUnitId").GetAttribute("value") ?? "");
+        Assert.Contains("finnes ikke eller er inaktiv", cut.Find(".alert-warning").TextContent);
+    }
+
+    [Fact]
+    public async Task Shortcut_NoHousingUnitInTheLink_ShowsNoNoticeAndWholeCooperative()
+    {
+        await Service.RegisterAsync("Storgata 1A");
+
+        var cut = RenderWithQuery("");
+
+        Assert.Empty(cut.FindAll(".alert-warning"));
+        Assert.Equal("", cut.Find("#housingUnitId").GetAttribute("value") ?? "");
     }
 }
