@@ -210,4 +210,56 @@ public class HousingUnitServiceTests
     {
         await Assert.ThrowsAsync<KeyNotFoundException>(() => _service.ActivateAsync(999));
     }
+
+    [Fact]
+    public async Task DeleteAsync_ExistingUnit_RemovesOnlyThatUnit()
+    {
+        var first = await _service.RegisterAsync("Storgata 1A");
+        var second = await _service.RegisterAsync("Storgata 1B");
+
+        await _service.DeleteAsync(first.Id);
+
+        Assert.Null(await _service.GetByIdAsync(first.Id));
+        var remaining = Assert.Single(await _service.GetAllAsync());
+        Assert.Equal(second.Id, remaining.Id);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_UnknownId_ThrowsKeyNotFoundException()
+    {
+        await Assert.ThrowsAsync<KeyNotFoundException>(() => _service.DeleteAsync(999));
+    }
+
+    [Fact]
+    public async Task DeleteAsync_SameUnitTwice_SecondCallThrowsKeyNotFoundException()
+    {
+        var unit = await _service.RegisterAsync("Storgata 1A");
+        await _service.DeleteAsync(unit.Id);
+
+        await Assert.ThrowsAsync<KeyNotFoundException>(() => _service.DeleteAsync(unit.Id));
+    }
+
+    [Fact]
+    public async Task DeleteAsync_UnitInUse_ThrowsAndKeepsTheUnit()
+    {
+        var repository = new FailableHousingUnitRepository();
+        var service = new HousingUnitService(repository);
+        var unit = await service.RegisterAsync("Storgata 1A");
+        repository.IsDeletionBlocked = true;
+
+        await Assert.ThrowsAsync<HousingUnitInUseException>(() => service.DeleteAsync(unit.Id));
+
+        Assert.NotNull(await service.GetByIdAsync(unit.Id));
+    }
+
+    [Fact]
+    public async Task DeleteAsync_InactiveUnit_CanBeDeleted()
+    {
+        var unit = await _service.RegisterAsync("Storgata 1A");
+        await _service.DeactivateAsync(unit.Id);
+
+        await _service.DeleteAsync(unit.Id);
+
+        Assert.Null(await _service.GetByIdAsync(unit.Id));
+    }
 }

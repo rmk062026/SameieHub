@@ -16,7 +16,7 @@ public static class ServiceCollectionExtensions
         }
 
         services.AddDbContextFactory<SameieHubDbContext>(options =>
-            options.UseSqlite($"Data Source={databasePath}"));
+            options.UseSqlite($"Data Source={databasePath};Foreign Keys=True"));
         services.AddScoped<IHousingUnitRepository, EfHousingUnitRepository>();
 
         return services;

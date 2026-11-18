@@ -81,6 +81,20 @@ public class HousingUnitService
         await _repository.UpdateAsync(unit);
     }
 
+    /// <summary>
+    /// Permanently deletes the housing unit and everything registered on it, including owner information.
+    /// </summary>
+    /// <exception cref="KeyNotFoundException">No housing unit has the given Id.</exception>
+    /// <exception cref="HousingUnitInUseException">Other records refer to the housing unit. Nothing is deleted.</exception>
+    public async Task DeleteAsync(int id)
+    {
+        var wasDeleted = await _repository.DeleteAsync(id);
+        if (!wasDeleted)
+        {
+            throw new KeyNotFoundException($"Housing unit {id} was not found.");
+        }
+    }
+
     private async Task<HousingUnit> GetExistingUnitAsync(int id)
     {
         var unit = await _repository.GetByIdAsync(id);

@@ -3,13 +3,16 @@ using SameieHub.Domain;
 namespace SameieHub.Tests.Fakes;
 
 /// <summary>
-/// Wraps the fake repository and can simulate that the database is unavailable.
+/// Wraps the fake repository and can simulate that the database is unavailable
+/// or that other records refer to the housing unit.
 /// </summary>
 public class FailableHousingUnitRepository : IHousingUnitRepository
 {
     private readonly FakeHousingUnitRepository _inner = new();
 
     public bool IsFailing { get; set; }
+
+    public bool IsDeletionBlocked { get; set; }
 
     public Task AddAsync(HousingUnit unit)
     {
@@ -37,6 +40,18 @@ public class FailableHousingUnitRepository : IHousingUnitRepository
         ThrowIfFailing();
 
         return _inner.UpdateAsync(unit);
+    }
+
+    public Task<bool> DeleteAsync(int id)
+    {
+        ThrowIfFailing();
+
+        if (IsDeletionBlocked)
+        {
+            throw new HousingUnitInUseException(id);
+        }
+
+        return _inner.DeleteAsync(id);
     }
 
     private void ThrowIfFailing()

@@ -34,4 +34,9 @@ public class FakeHousingUnitRepository : IHousingUnitRepository
     {
         return Task.CompletedTask;
     }
+
+    public Task<bool> DeleteAsync(int id)
+    {
+        return Task.FromResult(_units.Remove(id));
+    }
 }

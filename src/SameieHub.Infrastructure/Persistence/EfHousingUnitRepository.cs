@@ -1,3 +1,4 @@
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using SameieHub.Domain;
 
@@ -49,5 +50,39 @@ public class EfHousingUnitRepository : IHousingUnitRepository
         // The unit was loaded by another context, so Update tells this one to save all its values.
         context.HousingUnits.Update(unit);
         await context.SaveChangesAsync();
+    }
+
+    public async Task<bool> DeleteAsync(int id)
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync();
+
+        var unit = await context.HousingUnits.FirstOrDefaultAsync(existing => existing.Id == id);
+        if (unit == null)
+        {
+            return false;
+        }
+
+        context.HousingUnits.Remove(unit);
+
+        try
+        {
+            await context.SaveChangesAsync();
+        }
+        catch (DbUpdateException exception) when (IsForeignKeyViolation(exception))
+        {
+            throw new HousingUnitInUseException(id, exception);
+        }
+
+        return true;
+    }
+
+    private static bool IsForeignKeyViolation(DbUpdateException exception)
+    {
+        // SQLite reports all constraint errors as code 19, so the message tells foreign keys from other constraints.
+        const int SqliteConstraintErrorCode = 19;
+
+        return exception.InnerException is SqliteException sqliteException
+            && sqliteException.SqliteErrorCode == SqliteConstraintErrorCode
+            && sqliteException.Message.Contains("FOREIGN KEY", StringComparison.OrdinalIgnoreCase);
     }
 }
