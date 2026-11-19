@@ -347,7 +347,7 @@ Nøkkelpunkt: RESTRICT rapporteres som 1811, ikke 787. Forventningen om bare 787
 
 ## Domenemodell: TaskItem (M3A)
 
-`TaskItem` er en oppgave. Vedlikehold er en **kategori** av oppgaver, ikke et eget system. Foreløpig finnes bare domeneklassen og testene; repository og tjeneste (M3B), database (M3C) og UI (M3D) er ikke laget.
+`TaskItem` er en oppgave. Vedlikehold er en **kategori** av oppgaver, ikke et eget system. Domeneklassen (M3A) og repository-kontrakt og tjeneste (M3B) finnes; database (M3C) og UI (M3D) er ikke laget.
 
 | Felt | Type | Regel |
 |---|---|---|
@@ -368,7 +368,7 @@ Nøkkelpunkt: RESTRICT rapporteres som 1811, ikke 787. Forventningen om bare 787
 
 Alle felt har `private set`. Tekst trimmes, og blank valgfri tekst blir `null`. Feil gir `ArgumentException` (eller `ArgumentOutOfRangeException`) der `ParamName` er feltnavnet, som for `HousingUnit` og `BoardCase`. Enum-verdier starter på 1, så `default` (0) avvises.
 
-**Metoder:** `new TaskItem(details, createdAt)`, `UpdateDetails(details, now)`, `ChangeStatus(status, now)`, `IsOverdue(today)` og `AssignId(id)`. `TaskItemDetails` (record) samler tittel, beskrivelse, kategori, prioritet, frist, ansvarlig, boenhet, styresak og merknader. `UpdateDetails` er alt-eller-ingenting (alt valideres før noe tilordnes) og endrer verken status eller `CompletedAt`.
+**Metoder:** `new TaskItem(details, createdAt)`, `UpdateDetails(details, now)`, `ChangeStatus(status, now)`, `IsOverdue(today)`, `ToDetails()` og `AssignId(id)`. `TaskItemDetails` (record) samler tittel, beskrivelse, kategori, prioritet, frist, ansvarlig, boenhet, styresak og merknader. `UpdateDetails` er alt-eller-ingenting (alt valideres før noe tilordnes) og endrer verken status eller `CompletedAt`.
 
 ### Status og fullføring
 - **Start**, **fullfør** og **gjenåpne** er alle `ChangeStatus`. Hvilken som helst status kan endres til hvilken som helst annen, slik at registreringsfeil kan rettes. Det finnes ingen egne `Start`/`Complete`/`Reopen`-metoder.
@@ -384,7 +384,7 @@ Alle felt har `private set`. Tekst trimmes, og blank valgfri tekst blir `null`. 
 ### Koblinger (planlagt)
 - En oppgave kan være uten kobling, knyttet til én boenhet, til én styresak, eller til begge. Koblingene er uavhengige: oppgavens boenhet trenger ikke være lik styresakens boenhet, og styresaken kan gjelde hele sameiet.
 - Domenet kjenner bare `int?` (positive Id-er), uten navigasjonsegenskaper, som `BoardCase.HousingUnitId`.
-- **M3B (tjenesten):** kontrollerer at refererte objekter finnes. En **ny** kobling til en boenhet krever en **aktiv** boenhet; en **uendret** eksisterende kobling til en senere deaktivert boenhet beholdes og kan fortsatt redigeres (samme regel som for styresaker). Ny kobling til en styresak krever at den finnes (alle statuser er tillatt).
+- **M3B (tjenesten, gjort):** kontrollerer at refererte objekter finnes. En **ny** kobling til en boenhet krever en **aktiv** boenhet; en **uendret** eksisterende kobling til en senere deaktivert boenhet beholdes og kan fortsatt redigeres (samme regel som for styresaker). Ny kobling til en styresak krever at den finnes (alle statuser er tillatt).
 - **M3C (database):** fremmednøkler til `HousingUnits` og `BoardCases` med `DeleteBehavior.Restrict` (aldri cascade). Da blokkeres sletting av en boenhet eller styresak som har oppgaver, via `HousingUnitInUseException` og `BoardCaseInUseException`.
 
 ### Beslutninger (M3A)
@@ -396,3 +396,56 @@ Alle felt har `private set`. Tekst trimmes, og blank valgfri tekst blir `null`. 
 | Gjenåpning går til hvilken som helst ikke-fullført status | alltid `InProgress` | Enklere og lar brukeren rette feil. |
 | `AssignedTo` er tekst | eget personobjekt | Nok for v1.0; ingen personregister. |
 | Hjelpemetodene for normalisering er kopiert privat inn i `TaskItem` | felles baseklasse/hjelpeklasse | Fire–fem små metoder per klasse. En felles hjelper ville gitt en refaktorering av M1/M2 uten stor gevinst; kan vurderes senere. |
+
+## Oppgavetjeneste og repository (M3B)
+
+```mermaid
+graph LR
+    Service["TaskItemService<br/>(Domain)"] --> TaskRepo["ITaskItemRepository<br/>(Domain)"]
+    Service --> UnitRepo["IHousingUnitRepository<br/>(Domain)"]
+    Service --> CaseRepo["IBoardCaseRepository<br/>(Domain)"]
+    Service --> Time["TimeProvider<br/>(.NET)"]
+    FakeRepo["FakeTaskItemRepository<br/>(Tests)"] -.implementerer.-> TaskRepo
+    EfRepo["EF Core-repository<br/>(Infrastructure, M3C)"] -.implementerer.-> TaskRepo
+```
+
+- **`ITaskItemRepository`** har samme lille kontrakt som `IBoardCaseRepository`: `AddAsync` (tilordner positiv Id), `GetByIdAsync`, `GetAllAsync`, `UpdateAsync` og `DeleteAsync(id)` (`true` ved sletting, `false` for ukjent Id). Ingen generisk repository.
+- **`TaskItemService`** (konstruktør: de tre repositoryene og `TimeProvider`): `RegisterAsync`, `GetByIdAsync`, `GetAllAsync`, `UpdateDetailsAsync`, `ChangeHousingUnitAsync`, `ChangeBoardCaseAsync`, `ChangeStatusAsync`, `DeleteAsync`, `GetToday()` og `GetOverdueAsync()`. Domeneklassen eier reglene; tjenesten henter oppgaven, kontrollerer referanser, kaller domenemetoden med tiden og lagrer. Ukjent oppgave gir `KeyNotFoundException`.
+- **Ikke registrert i DI ennå** (M3C, sammen med EF-repositoryet).
+
+### Kontroll av koblinger
+| Situasjon | Resultat |
+|---|---|
+| Boenhet `null` / styresak `null` | OK |
+| Ny kobling til **eksisterende og aktiv** boenhet | OK |
+| Ny kobling til ukjent eller inaktiv boenhet | `ArgumentException`, `ParamName = "HousingUnitId"` |
+| Uendret kobling til en boenhet som senere er deaktivert | **Beholdes**; andre felt kan redigeres, status kan endres |
+| Ny kobling til **eksisterende** styresak (alle statuser, også `Closed`) | OK |
+| Ny kobling til ukjent styresak | `ArgumentException`, `ParamName = "BoardCaseId"` |
+| Koblinger fjernes (`null`) | Alltid tillatt |
+| Både boenhet og styresak | OK. Uavhengige: styresakens boenhet kopieres aldri, og styresaken kan gjelde en annen boenhet eller hele sameiet |
+
+Bare **endrede** koblinger kontrolleres (`details.HousingUnitId != task.HousingUnitId`), som i `BoardCaseService`.
+
+### Atomisk oppdatering
+`UpdateDetailsAsync` kontrollerer først en endret boenhetskobling, så en endret styresakskobling, og først deretter kalles `TaskItem.UpdateDetails`, som validerer alle øvrige felt før noe tilordnes. Alt skjer før `UpdateAsync` lagrer, så hvis én verdi er ugyldig (en av referansene eller et vanlig felt) endres ingenting, også når begge referansene endres samtidig. `ChangeHousingUnitAsync` og `ChangeBoardCaseAsync` bruker samme vei via `TaskItem.ToDetails()`.
+
+### Tid, status og tidsstempler
+- Tiden kommer fra `TimeProvider` (`GetUtcNow().UtcDateTime`, alltid UTC). `CreatedAt` settes ved registrering og endres aldri. `UpdatedAt` endres bare ved reell endring. `CompletedAt` settes ved overgang til `Completed` og fjernes ved gjenåpning; samme status på nytt endrer ingenting. Redigering av en fullført oppgave er tillatt og beholder `CompletedAt`. Det finnes ingen statushistorikk.
+
+### Forfalt og «i dag»
+- `GetToday()` gir dagens dato i **norsk tid** (`NorwegianTime.DateOf`, `Europe/Oslo`), ikke systemets tidssone og ikke UTC-dato. Nær midnatt kan norsk dato være en dag foran UTC (testet for vinter og sommertid). Tiden hentes fra `TimeProvider`, så tester styrer «i dag» med `ManualTimeProvider`.
+- `GetOverdueAsync()` leser alle oppgaver og filtrerer i minnet med `TaskItem.IsOverdue(GetToday())`, tidligste frist først. Antallet er lite, så det finnes ingen eget repository-spørsmål. Oversikt og dashboard kan bruke samme to metoder (`GetToday()` per rad, `GetOverdueAsync().Count` for telling). Forfalt lagres aldri i databasen, og det finnes ingen dashboardtjeneste.
+- `NorwegianTime` ligger i Domain og brukes også av `NorwegianDateFormat` i Web (den hadde en egen kopi av tidssoneoppslaget; den er fjernet).
+
+### Sletting
+`DeleteAsync` kaster `KeyNotFoundException` for ukjent Id og sletter ellers bare oppgaven. Boenheten og styresaken den peker på berøres aldri, og det er ingen cascade. Oppgaver blir ikke referert av andre tabeller, så ingen `InUse`-unntak trengs. Bekreftelse kommer i M3D.
+
+### Beslutninger (M3B)
+| Beslutning | Alternativer | Begrunnelse |
+|---|---|---|
+| `GetToday()` og `GetOverdueAsync()` i tjenesten | egen dashboardtjeneste; kolonne i databasen | Minst mulig kode; filtrering i minnet; ingen skjult systemklokke. |
+| `NorwegianTime` i Domain | la tjenesten bruke `TimeProvider.GetLocalNow()` | `GetLocalNow()` følger PC-ens tidssone; norsk dato skal gjelde uansett. |
+| Referansekontroll i tjenesten, bare for endrede koblinger | kontroll av alle koblinger hver gang | En senere deaktivert boenhet skal ikke blokkere redigering. |
+| Styresak kan være i alle statuser | bare åpne saker | Oppgaver kan følge opp et vedtak også etter at saken er avsluttet. |
+| Hjelpemetodene for referansekontroll er skrevet i `TaskItemService` | felles hjelper med `BoardCaseService` | To små metoder; en felles hjelper ville gitt endringer i M2. |
