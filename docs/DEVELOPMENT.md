@@ -38,7 +38,7 @@ Eksempel: `ParkingSpace` (tekst). Følg rekkefølgen, og skriv testen først (TD
 7. **Dokumentasjon:** `REQUIREMENTS.md` (regler) og `ARCHITECTURE.md` (beslutning).
 
 ## Legge til en tabell som refererer til boenheter
-Gjelder `BoardCase` (M2C, gjort) og `TaskItem` (M3).
+Gjelder `BoardCase` (M2C, gjort) og `TaskItem` (M3C, gjort).
 1. Konfigurer fremmednøkkelen med `HasOne<HousingUnit>().WithMany().HasForeignKey(...).OnDelete(DeleteBehavior.Restrict)`. Ikke bruk cascade.
 2. Sjekk at den genererte migreringen har `onDelete: ReferentialAction.Restrict`.
-3. Skriv tester mot den ekte tabellen etter mønsteret i `BoardCaseRelationTests`: sletting av en boenhet med en tilknyttet post skal gi `HousingUnitInUseException`, og boenheten skal bestå. For en ny tabell som refererer til `BoardCases` (`TaskItem`, M3): tilsvarende test mot `BoardCaseInUseException`, og fjern forbeholdet om manglende test i `ARCHITECTURE.md`.
+3. Skriv tester mot den ekte tabellen etter mønsteret i `BoardCaseRelationTests`: sletting av en boenhet med en tilknyttet post skal gi `HousingUnitInUseException`, og boenheten skal bestå. For en ny tabell som refererer til `BoardCases` (`TaskItem`, M3C, gjort i `TaskItemRelationTests`): tilsvarende test mot `BoardCaseInUseException`.

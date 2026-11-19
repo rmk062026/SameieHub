@@ -2,7 +2,7 @@
 
 Lokalt administrasjonsprogram for små sameier: oversikt over boenheter, styresaker og oppgaver/vedlikehold. Bygget med C#, .NET 10, Blazor (Interactive Server) og SQLite. Kodehode-prosjekt og porteføljeeksempel.
 
-**Status:** M0–M1E ferdig: boenhetsregisteret (registrere, vise, redigere, søke, deaktivere og slette (M1F), med opptil to eiere per boenhet) i et norsk Blazor-grensesnitt med SQLite-lagring. Styresaker (M2): registrere, redigere, søke, filtrere, endre status, registrere vedtak (med vedtaksdato) og slette, med kobling til boenheter og snarvei fra boenhetens side. Oppgaver og dashboard er ikke laget ennå. Oppgaver og vedlikehold: domenemodell og tjeneste (`TaskItem`, `TaskItemService`) er på plass (M3A–M3B); database og UI mangler.
+**Status:** M0–M1E ferdig: boenhetsregisteret (registrere, vise, redigere, søke, deaktivere og slette (M1F), med opptil to eiere per boenhet) i et norsk Blazor-grensesnitt med SQLite-lagring. Styresaker (M2): registrere, redigere, søke, filtrere, endre status, registrere vedtak (med vedtaksdato) og slette, med kobling til boenheter og snarvei fra boenhetens side. Oppgaver og dashboard er ikke laget ennå. Oppgaver og vedlikehold: domenemodell og tjeneste (`TaskItem`, `TaskItemService`) er på plass (M3A–M3B), og oppgaver lagres i SQLite med fremmednøkler til boenheter og styresaker (M3C); UI mangler (M3D).
 
 ![CI](https://github.com/rmk062026/SameieHub/actions/workflows/ci.yml/badge.svg)
 

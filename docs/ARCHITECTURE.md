@@ -192,7 +192,7 @@ Ingen maksimal lengde i databasen: SQLite håndhever ikke lengde, og grensene h�
 - **Hva som slettes:** raden i `HousingUnits`. Eier- og kontaktopplysningene er kolonner i samme rad og forsvinner dermed med den (testet).
 - **Referanseintegritet:** tilkoblingen bruker `Foreign Keys=True`, slik at SQLite alltid håndhever fremmednøkler. Fremmednøkler konfigureres med `OnDelete(DeleteBehavior.Restrict)`: **aldri cascade**. Sletting av en refert boenhet gir SQLite-feil 19, og `EfHousingUnitRepository` oversetter den til `HousingUnitInUseException`. Hvordan feilen kjennes igjen er beskrevet under «Fremmednøkkelfeil» i M2C-avsnittet. `try/catch` er her berettiget fordi feilen kan håndteres (UI viser en forståelig melding).
 - **Id-er gjenbrukes ikke:** `Id` er `INTEGER PRIMARY KEY AUTOINCREMENT`, så SQLite husker høyeste brukte Id selv om den siste raden slettes (testet). Koden setter aldri Id-er manuelt.
-- **Blokkering testet mot ekte relasjon (M2C):** `BoardCases.HousingUnitId` er en ekte fremmednøkkel, og `BoardCaseRelationTests` viser at sletting av en boenhet med styresaker blokkeres. De simulerte testene fra M1F er erstattet. Relasjonen fra `TaskItem` (M3) er ikke testet ennå, fordi `TaskItem` ikke finnes.
+- **Blokkering testet mot ekte relasjon (M2C):** `BoardCases.HousingUnitId` er en ekte fremmednøkkel, og `BoardCaseRelationTests` viser at sletting av en boenhet med styresaker blokkeres. De simulerte testene fra M1F er erstattet. Relasjonen fra `TaskItem` er testet i M3C (`TaskItemRelationTests`).
 - **Personvern:** logger inneholder bare Id-en til boenheten, aldri adresse eller eierinformasjon.
 
 | Beslutning | Alternativer | Begrunnelse |
@@ -241,8 +241,8 @@ Kontrollen skjer før domenemetoden endrer noe, og domenemetoden er alt-eller-in
 
 ### Sletting (foreløpig)
 - `DeleteAsync(id)` i tjenesten: `KeyNotFoundException` for ukjent Id, ellers sletter den og lar `BoardCaseInUseException` boble opp hvis repoet melder at andre poster refererer til saken.
-- Kontrakten er implementert i `EfBoardCaseRepository` (M2C). Det er ingen cascade. I M3 skal fremmednøkkelen fra `TaskItem` til `BoardCase` konfigureres med `DeleteBehavior.Restrict`. `EfBoardCaseRepository.DeleteAsync` oversetter allerede fremmednøkkelbrudd til `BoardCaseInUseException`, men det er ikke testet mot en ekte referanse før `TaskItem` finnes (kun klassifiseringen er enhetstestet).
-- Fake-repoet har `IsDeletionBlocked` for å teste at feilen når frem. `TaskItem` finnes ikke ennå, og er ikke laget for å teste dette.
+- Kontrakten er implementert i `EfBoardCaseRepository` (M2C). Det er ingen cascade. Fremmednøkkelen fra `TaskItem` til `BoardCase` er konfigurert med `DeleteBehavior.Restrict` (M3C). `EfBoardCaseRepository.DeleteAsync` oversetter allerede fremmednøkkelbrudd til `BoardCaseInUseException`, og dette er testet mot en ekte `TaskItem`-referanse i M3C (`TaskItemRelationTests`).
+- Fake-repoet har `IsDeletionBlocked` for å teste at feilen når frem. Mot databasen er den samme blokkeringen testet med ekte oppgaver (M3C).
 - Sletting av en **boenhet** som styresaker refererer til blokkeres av fremmednøkkelen fra `BoardCase.HousingUnitId` (`Restrict`) og er testet i M2C.
 
 ### Beslutninger (M2B)
@@ -341,13 +341,13 @@ Nøkkelpunkt: RESTRICT rapporteres som 1811, ikke 787. Forventningen om bare 787
 `CreatedAt` og `UpdatedAt` forteller **ikke** hvilke endringer som ble gjort eller av hvem; de kan ikke brukes som protokoll. Hvis SameieHub skal brukes til formell protokollføring kan en hendelseshistorikk (egen tabell med tidspunkt, type endring og gamle/nye verdier) vurderes senere. Den er bevisst ikke laget nå.
 
 ### Gjenstår etter M2 (M2 er godkjent)
-1. **Oppgavekobling (M3):** fremmednøkkel fra `TaskItem` til `BoardCase` med `Restrict`, og test av `BoardCaseInUseException` mot ekte referanse (så langt bare klassifiseringen og UI-håndteringen er testet).
+1. ~~**Oppgavekobling (M3):**~~ gjort i M3C: fremmednøkkel fra `TaskItem` til `BoardCase` med `Restrict`, og `BoardCaseInUseException` testet mot ekte referanse.
 2. **Dashboard (M4):** åpne saker og kommende møter (data finnes).
 3. **Beslutning:** er `CreatedAt`/`UpdatedAt` nok til v1.0, eller skal historikk lages senere?
 
 ## Domenemodell: TaskItem (M3A)
 
-`TaskItem` er en oppgave. Vedlikehold er en **kategori** av oppgaver, ikke et eget system. Domeneklassen (M3A) og repository-kontrakt og tjeneste (M3B) finnes; database (M3C) og UI (M3D) er ikke laget.
+`TaskItem` er en oppgave. Vedlikehold er en **kategori** av oppgaver, ikke et eget system. Domeneklassen (M3A) og repository-kontrakt og tjeneste (M3B) finnes; database (M3C) finnes; UI (M3D) er ikke laget.
 
 | Felt | Type | Regel |
 |---|---|---|
@@ -385,7 +385,7 @@ Alle felt har `private set`. Tekst trimmes, og blank valgfri tekst blir `null`. 
 - En oppgave kan være uten kobling, knyttet til én boenhet, til én styresak, eller til begge. Koblingene er uavhengige: oppgavens boenhet trenger ikke være lik styresakens boenhet, og styresaken kan gjelde hele sameiet.
 - Domenet kjenner bare `int?` (positive Id-er), uten navigasjonsegenskaper, som `BoardCase.HousingUnitId`.
 - **M3B (tjenesten, gjort):** kontrollerer at refererte objekter finnes. En **ny** kobling til en boenhet krever en **aktiv** boenhet; en **uendret** eksisterende kobling til en senere deaktivert boenhet beholdes og kan fortsatt redigeres (samme regel som for styresaker). Ny kobling til en styresak krever at den finnes (alle statuser er tillatt).
-- **M3C (database):** fremmednøkler til `HousingUnits` og `BoardCases` med `DeleteBehavior.Restrict` (aldri cascade). Da blokkeres sletting av en boenhet eller styresak som har oppgaver, via `HousingUnitInUseException` og `BoardCaseInUseException`.
+- **M3C (database, gjort):** fremmednøkler til `HousingUnits` og `BoardCases` med `DeleteBehavior.Restrict` (aldri cascade). Da blokkeres sletting av en boenhet eller styresak som har oppgaver, via `HousingUnitInUseException` og `BoardCaseInUseException`.
 
 ### Beslutninger (M3A)
 | Beslutning | Alternativer | Begrunnelse |
@@ -411,7 +411,7 @@ graph LR
 
 - **`ITaskItemRepository`** har samme lille kontrakt som `IBoardCaseRepository`: `AddAsync` (tilordner positiv Id), `GetByIdAsync`, `GetAllAsync`, `UpdateAsync` og `DeleteAsync(id)` (`true` ved sletting, `false` for ukjent Id). Ingen generisk repository.
 - **`TaskItemService`** (konstruktør: de tre repositoryene og `TimeProvider`): `RegisterAsync`, `GetByIdAsync`, `GetAllAsync`, `UpdateDetailsAsync`, `ChangeHousingUnitAsync`, `ChangeBoardCaseAsync`, `ChangeStatusAsync`, `DeleteAsync`, `GetToday()` og `GetOverdueAsync()`. Domeneklassen eier reglene; tjenesten henter oppgaven, kontrollerer referanser, kaller domenemetoden med tiden og lagrer. Ukjent oppgave gir `KeyNotFoundException`.
-- **Ikke registrert i DI ennå** (M3C, sammen med EF-repositoryet).
+- Registrert i DI i M3C sammen med `EfTaskItemRepository` (`ITaskItemRepository` og `TaskItemService`).
 
 ### Kontroll av koblinger
 | Situasjon | Resultat |
@@ -440,6 +440,17 @@ Bare **endrede** koblinger kontrolleres (`details.HousingUnitId != task.HousingU
 
 ### Sletting
 `DeleteAsync` kaster `KeyNotFoundException` for ukjent Id og sletter ellers bare oppgaven. Boenheten og styresaken den peker på berøres aldri, og det er ingen cascade. Oppgaver blir ikke referert av andre tabeller, så ingen `InUse`-unntak trengs. Bekreftelse kommer i M3D.
+
+## Oppgaver i databasen (M3C)
+
+- **Tabell:** `TaskItems` (migrering `AddTaskItems`). Mappingen er Fluent API i `SameieHubDbContext.ConfigureTaskItem`, samme mønster som `BoardCase`. `TaskItem` har en privat parameterløs konstruktør som bare EF Core bruker.
+- **To valgfrie, ekte fremmednøkler:** `HousingUnitId` → `HousingUnits.Id` og `BoardCaseId` → `BoardCases.Id`, begge `DeleteBehavior.Restrict`. Ingen cascade, ingen automatisk nullstilling og ingen navigasjonsegenskaper. Oppgaven og styresaken trenger ikke gjelde samme boenhet. EF lager hver sin indeks på de to fremmednøklene; det er ingen indeks på `DueDate`.
+- **Sletting:** en boenhet eller styresak med oppgaver kan ikke slettes (`HousingUnitInUseException`, `BoardCaseInUseException`), og ingenting slettes. Når koblingen fjernes (`ChangeHousingUnitAsync`/`ChangeBoardCaseAsync` med `null`) eller oppgaven slettes, kan boenheten/styresaken slettes. Sletting av en oppgave påvirker aldri boenhet eller styresak. Ugyldig Id direkte mot repositoryet gir `DbUpdateException` (SQLite 787), men tjenesten stopper det først.
+- **Klassifisering av feil:** RESTRICT-brudd ved sletting rapporteres som utvidet kode 1811 (trigger), som alle triggere deler. `SqliteConstraintErrors.IsForeignKeyViolation` godtar derfor 1811 bare når meldingen også nevner «FOREIGN KEY». En egendefinert trigger med `RAISE(ABORT, ...)` gir dermed ikke feilaktig «i bruk»-feil (testet).
+- **Tid og dato:** `CreatedAt`, `UpdatedAt` og `CompletedAt` lagres som UTC-tekst og leses tilbake med `DateTimeKind.Utc` (`UtcDateTimeConverter`, også for `CompletedAt` som kan være `null`). `DueDate` lagres som ren dato (`yyyy-MM-dd`). Enumer lagres som lesbar tekst. `CompletedAt` er `null` for uferdige oppgaver, og gjenåpning nullstiller den også etter omstart.
+- **Forfalt lagres ikke.** Det beregnes i `TaskItemService` mot norsk dato (`NorwegianTime`), aldri i SQLite.
+- **Migrering:** kun ny tabell, to fremmednøkler og to indekser; eksisterende migreringer er uendret. Testet fra skjemaet etter M2E (`AddBoardCaseDecisionDate`) med data, og fra tom database (`TaskItemMigrationTests`).
+- **Gjenstår:** brukergrensesnitt (M3D), dashboard (M4), backup (M5).
 
 ### Beslutninger (M3B)
 | Beslutning | Alternativer | Begrunnelse |
