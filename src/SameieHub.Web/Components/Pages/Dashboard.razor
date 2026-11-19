@@ -67,9 +67,9 @@ else if (_overview != null)
                         <caption class="visually-hidden">Oppgaver som er forfalt eller har nær frist</caption>
                         <thead>
                             <tr>
-                                <th scope="col" class="col-id">Nr.</th>
+                                <th scope="col" class="col-id d-none d-md-table-cell">Nr.</th>
                                 <th scope="col">Oppgave</th>
-                                <th scope="col" class="d-none d-md-table-cell">Prioritet</th>
+                                <th scope="col" class="d-none d-lg-table-cell">Prioritet</th>
                                 <th scope="col">Status</th>
                                 <th scope="col">Frist</th>
                             </tr>
@@ -78,9 +78,9 @@ else if (_overview != null)
                             @foreach (var task in _overview.FollowUpTasks)
                             {
                                 <tr>
-                                    <td class="col-id">#@task.Id</td>
+                                    <td class="col-id d-none d-md-table-cell">#@task.Id</td>
                                     <td><a class="unit-link" href="/oppgaver/@task.Id">@task.Title</a></td>
-                                    <td class="d-none d-md-table-cell"><TaskPriorityBadge Priority="task.Priority" /></td>
+                                    <td class="d-none d-lg-table-cell"><TaskPriorityBadge Priority="task.Priority" /></td>
                                     <td><TaskStatusBadge Status="task.Status" /></td>
                                     <td><TaskDueDate Task="task" Today="_today" /></td>
                                 </tr>
@@ -107,10 +107,10 @@ else if (_overview != null)
                         <caption class="visually-hidden">Åpne styresaker, sist oppdaterte først</caption>
                         <thead>
                             <tr>
-                                <th scope="col" class="col-id">Sak</th>
+                                <th scope="col" class="col-id d-none d-md-table-cell">Sak</th>
                                 <th scope="col">Tittel</th>
                                 <th scope="col">Status</th>
-                                <th scope="col" class="d-none d-md-table-cell">Prioritet</th>
+                                <th scope="col" class="d-none d-lg-table-cell">Prioritet</th>
                                 <th scope="col">Møtedato</th>
                             </tr>
                         </thead>
@@ -118,10 +118,10 @@ else if (_overview != null)
                             @foreach (var boardCase in _overview.CurrentBoardCases)
                             {
                                 <tr>
-                                    <td class="col-id">#@boardCase.Id</td>
+                                    <td class="col-id d-none d-md-table-cell">#@boardCase.Id</td>
                                     <td><a class="unit-link" href="/styresaker/@boardCase.Id">@boardCase.Title</a></td>
                                     <td><BoardCaseStatusBadge Status="boardCase.Status" /></td>
-                                    <td class="d-none d-md-table-cell"><BoardCasePriorityBadge Priority="boardCase.Priority" /></td>
+                                    <td class="d-none d-lg-table-cell"><BoardCasePriorityBadge Priority="boardCase.Priority" /></td>
                                     <td>
                                         @if (boardCase.MeetingDate is { } meetingDate)
                                         {
