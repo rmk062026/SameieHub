@@ -11,8 +11,8 @@ public static class SqliteConstraintErrors
     private const int ForeignKeyExtendedCode = 787;
 
     // Deleting a row that other rows refer to, when the key is ON DELETE RESTRICT.
-    // SQLite implements RESTRICT with a trigger, so it reports the trigger code. The database has no
-    // other triggers, so this code only means a restricted foreign key.
+    // SQLite implements RESTRICT with a trigger, so it reports the trigger code. That code is shared by
+    // all triggers, so the message must also name the foreign key.
     private const int ForeignKeyRestrictExtendedCode = 1811;
 
     /// <summary>
@@ -26,8 +26,17 @@ public static class SqliteConstraintErrors
             return false;
         }
 
-        return sqliteException.SqliteErrorCode == SqliteConstraintErrorCode
-            && (sqliteException.SqliteExtendedErrorCode == ForeignKeyExtendedCode
-                || sqliteException.SqliteExtendedErrorCode == ForeignKeyRestrictExtendedCode);
+        if (sqliteException.SqliteErrorCode != SqliteConstraintErrorCode)
+        {
+            return false;
+        }
+
+        if (sqliteException.SqliteExtendedErrorCode == ForeignKeyExtendedCode)
+        {
+            return true;
+        }
+
+        return sqliteException.SqliteExtendedErrorCode == ForeignKeyRestrictExtendedCode
+            && sqliteException.Message.Contains("FOREIGN KEY", StringComparison.OrdinalIgnoreCase);
     }
 }

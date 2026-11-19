@@ -15,6 +15,8 @@ public class SameieHubDbContext : DbContext
 
     public DbSet<BoardCase> BoardCases => Set<BoardCase>();
 
+    public DbSet<TaskItem> TaskItems => Set<TaskItem>();
+
     // SQLite stores DateTime as text without a time zone and EF Core reads it back as Unspecified.
     // Everything we store is UTC, so it is marked as UTC again when it is read.
     private static readonly ValueConverter<DateTime, DateTime> UtcDateTimeConverter =
@@ -29,6 +31,7 @@ public class SameieHubDbContext : DbContext
         housingUnit.Property(unit => unit.HousingType).HasConversion<string>();
 
         ConfigureBoardCase(modelBuilder);
+        ConfigureTaskItem(modelBuilder);
     }
 
     private static void ConfigureBoardCase(ModelBuilder modelBuilder)
@@ -46,6 +49,30 @@ public class SameieHubDbContext : DbContext
         boardCase.HasOne<HousingUnit>()
             .WithMany()
             .HasForeignKey(entity => entity.HousingUnitId)
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+
+    private static void ConfigureTaskItem(ModelBuilder modelBuilder)
+    {
+        var task = modelBuilder.Entity<TaskItem>();
+
+        task.HasKey(entity => entity.Id);
+        task.Property(entity => entity.Title).IsRequired();
+        task.Property(entity => entity.Category).HasConversion<string>();
+        task.Property(entity => entity.Status).HasConversion<string>();
+        task.Property(entity => entity.Priority).HasConversion<string>();
+        task.Property(entity => entity.CreatedAt).HasConversion(UtcDateTimeConverter);
+        task.Property(entity => entity.UpdatedAt).HasConversion(UtcDateTimeConverter);
+        task.Property(entity => entity.CompletedAt).HasConversion(UtcDateTimeConverter);
+
+        // Restrict on both: housing units and board cases that have tasks can never be deleted.
+        task.HasOne<HousingUnit>()
+            .WithMany()
+            .HasForeignKey(entity => entity.HousingUnitId)
+            .OnDelete(DeleteBehavior.Restrict);
+        task.HasOne<BoardCase>()
+            .WithMany()
+            .HasForeignKey(entity => entity.BoardCaseId)
             .OnDelete(DeleteBehavior.Restrict);
     }
 }

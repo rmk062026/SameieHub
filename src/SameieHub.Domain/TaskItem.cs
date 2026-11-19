@@ -43,6 +43,11 @@ public class TaskItem
 
     public string? Notes { get; private set; }
 
+    // Used by EF Core when it reads a task from the database.
+    private TaskItem()
+    {
+    }
+
     /// <param name="createdAt">Must be a UTC time (<see cref="DateTimeKind.Utc"/>).</param>
     /// <exception cref="ArgumentException">
     /// A value is invalid. <see cref="ArgumentException.ParamName"/> names the invalid property.

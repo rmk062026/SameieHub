@@ -117,8 +117,79 @@ namespace SameieHub.Infrastructure.Persistence.Migrations
                     b.ToTable("HousingUnits");
                 });
 
+            modelBuilder.Entity("SameieHub.Domain.TaskItem", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("AssignedTo")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("BoardCaseId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("DueDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("HousingUnitId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Priority")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BoardCaseId");
+
+                    b.HasIndex("HousingUnitId");
+
+                    b.ToTable("TaskItems");
+                });
+
             modelBuilder.Entity("SameieHub.Domain.BoardCase", b =>
                 {
+                    b.HasOne("SameieHub.Domain.HousingUnit", null)
+                        .WithMany()
+                        .HasForeignKey("HousingUnitId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("SameieHub.Domain.TaskItem", b =>
+                {
+                    b.HasOne("SameieHub.Domain.BoardCase", null)
+                        .WithMany()
+                        .HasForeignKey("BoardCaseId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("SameieHub.Domain.HousingUnit", null)
                         .WithMany()
                         .HasForeignKey("HousingUnitId")

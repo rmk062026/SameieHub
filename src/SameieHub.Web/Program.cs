@@ -13,6 +13,7 @@ var databasePath = builder.Configuration["Database:Path"] ?? DatabaseLocation.Ge
 builder.Services.AddSameieHubInfrastructure(databasePath);
 builder.Services.AddScoped<HousingUnitService>();
 builder.Services.AddScoped<BoardCaseService>();
+builder.Services.AddScoped<TaskItemService>();
 builder.Services.AddSingleton(TimeProvider.System);
 
 var app = builder.Build();

@@ -19,6 +19,7 @@ public static class ServiceCollectionExtensions
             options.UseSqlite($"Data Source={databasePath};Foreign Keys=True"));
         services.AddScoped<IHousingUnitRepository, EfHousingUnitRepository>();
         services.AddScoped<IBoardCaseRepository, EfBoardCaseRepository>();
+        services.AddScoped<ITaskItemRepository, EfTaskItemRepository>();
 
         return services;
     }
