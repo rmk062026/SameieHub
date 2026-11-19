@@ -499,6 +499,24 @@ public class TaskItemTests
         Assert.True(task.IsOverdue(Today));
     }
 
+    // ToDetails
+
+    [Fact]
+    public void ToDetails_ReturnsCurrentValues()
+    {
+        Assert.Equal(FullDetails(), NewTask().ToDetails());
+    }
+
+    [Fact]
+    public void ToDetails_UsedForUpdate_ChangesNothing()
+    {
+        var task = NewTask();
+
+        task.UpdateDetails(task.ToDetails(), Later);
+
+        Assert.Equal(CreatedAt, task.UpdatedAt);
+    }
+
     // Id
 
     [Fact]

@@ -156,6 +156,22 @@ public class TaskItem
         return Status != TaskItemStatus.Completed && DueDate < today;
     }
 
+    public TaskItemDetails ToDetails()
+    {
+        return new TaskItemDetails
+        {
+            Title = Title,
+            Description = Description,
+            Category = Category,
+            Priority = Priority,
+            DueDate = DueDate,
+            AssignedTo = AssignedTo,
+            HousingUnitId = HousingUnitId,
+            BoardCaseId = BoardCaseId,
+            Notes = Notes
+        };
+    }
+
     private static void EnsureUtc(DateTime now)
     {
         if (now.Kind != DateTimeKind.Utc)
