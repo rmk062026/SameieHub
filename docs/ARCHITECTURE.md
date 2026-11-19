@@ -452,6 +452,36 @@ Bare **endrede** koblinger kontrolleres (`details.HousingUnitId != task.HousingU
 - **Migrering:** kun ny tabell, to fremmednøkler og to indekser; eksisterende migreringer er uendret. Testet fra skjemaet etter M2E (`AddBoardCaseDecisionDate`) med data, og fra tom database (`TaskItemMigrationTests`).
 - **Gjenstår:** dashboard (M4), backup (M5).
 
+## Dashboard (M4)
+
+`Pages/Dashboard.razor` (rute `/`) leser fra de eksisterende tjenestene `HousingUnitService`, `BoardCaseService` og `TaskItemService`, og gir dataene til den rene klassen `DashboardOverview` i Domain. Det finnes ingen `DashboardService`, ingen nytt repository og ingen lagrede tall. Dashboardet endrer aldri data.
+
+```mermaid
+graph LR
+    Page["Dashboard.razor"] --> Units["HousingUnitService"]
+    Page --> Cases["BoardCaseService"]
+    Page --> Tasks["TaskItemService<br/>(GetToday)"]
+    Page --> Overview["DashboardOverview.Create<br/>(Domain, ren funksjon)"]
+```
+
+- **Hvorfor en hjelpeklasse:** `DashboardOverview.Create(boenheter, styresaker, oppgaver, i dag)` har ingen avhengigheter, så alle regler testes uten Blazor og uten klokke. «I dag» er norsk dato fra `TaskItemService.GetToday()`; siden leser den ved hver lasting.
+- **Tall:** aktive boenheter = `IsActive`; åpne styresaker = status ikke `Closed`; åpne oppgaver = status ikke `Completed`; forfalte oppgaver = åpne oppgaver der `TaskItem.IsOverdue(i dag)`. Fullførte oppgaver teller aldri som åpne eller forfalte.
+- **Oppfølging:** åpne oppgaver med frist senest `i dag + 7 dager` (altså forfalte, frist i dag og nær frist), sortert på frist (eldst først), så høyest prioritet, så laveste Id; maks 8. Oppgaver uten frist tas ikke med.
+- **Styresaker:** åpne saker, sist oppdaterte først (`UpdatedAt`), maks 5.
+- **Kommende datoer:** møtedatoer på åpne saker fra i dag og 60 dager frem, og oppgavefrister fra dag 8 til dag 60 (de nærmere fristene ligger i oppfølgingslisten, så de gjentas ikke). Sortert på dato; ved lik dato kommer styremøte før frist; maks 8.
+- **Feil:** leses ikke alle tre kildene, vises en feilmelding og «Prøv igjen», ikke nuller. Feil logges uten tekst fra dataene.
+- **Lenken «Forfalte oppgaver»:** `TaskList` leser `?forfalt=1` og starter med «Bare forfalte» avkrysset.
+
+### Beslutninger (M4)
+
+| Beslutning | Alternativ | Begrunnelse |
+|---|---|---|
+| Ren `DashboardOverview` i Domain | `DashboardService` med repositories | Ingen ny avhengighet eller lag; reglene kan testes direkte. |
+| Oppfølgingsvindu på 7 dager | Alle åpne oppgaver med frist | Listen skal vise det som haster; resten finnes i «Kommende datoer» og oppgavelisten. |
+| Frister etter dag 7 i «Kommende datoer» | Gjenta oppgavene fra oppfølgingslisten | Unngår duplisering uten at noen frister faller utenfor. Et styremøte vises både i styresaklisten (møtedato-kolonnen) og i «Kommende datoer», fordi det gir en samlet datooversikt. |
+| «Åpne styresaker» lenker til hele listen | Filtrert visning | Styresaklisten har ikke filter «åpne»; å bygge det bare for dashboardet ville vært uforholdsmessig. |
+| Manuell «Oppdater oversikten» | Timer eller sanntid | Enkelt og forutsigbart for ett lokalt program. |
+
 ## Oppgaver i brukergrensesnittet (M3D)
 
 Filene ligger i `Web/Components/Pages/TaskItems/` etter samme mønster som styresaker: `TaskList` (`/oppgaver`), `TaskCreate`, `TaskEdit`, `TaskForm` (felles skjema) med `TaskFormModel`, `TaskDetail`, `TaskText` (norske navn og CSS-klasser), `TaskFieldMessages` (feilmeldinger per felt), `TaskStatusBadge`, `TaskPriorityBadge` og `TaskDueDate` (frist med «Forfalt»/«Frist i dag»). Den gamle plassholderen er fjernet.

@@ -25,7 +25,7 @@ wwwroot/app.css  designvariabler og felles stiler
 ## Navigasjon og ruter
 | Rute | Side | Status |
 |---|---|---|
-| `/` | Dashboard | Plassholder |
+| `/` | Dashboard | Funksjonell |
 | `/boenheter` | Oversikt | Funksjonell |
 | `/boenheter/ny` | Registrer | Funksjonell |
 | `/boenheter/{id}` | Detaljvisning | Funksjonell |
@@ -81,5 +81,15 @@ Sidemeny på bred skjerm (≥ 768 px); på smal skjerm en toppstripe med menykna
 - **Sletting:** som for boenheter og styresaker (eget kort nederst, bekreftelse med tittel og «Dette kan ikke angres», Avbryt endrer ingenting, melding «Oppgaven er slettet permanent.» på oversikten). Teksten sier at styresaken og boenheten ikke slettes.
 - **Snarveier:** styresakens og boenhetens detaljside har en seksjon «Oppgaver» (nummer, tittel, status, frist) med knappen «Registrer oppgave» som åpner registreringen med styresaken (`?styresak=`) eller boenheten (`?boenhet=`) forhåndsvalgt. Boenhetens knapp vises bare for aktive boenheter, men eksisterende oppgaver på en inaktiv boenhet vises fortsatt. Verdiene i URL-en kontrolleres mot de faktiske dataene (ugyldig, ukjent eller inaktiv verdi gir en melding og ingen forhåndsvalg).
 
+## Dashboard (M4)
+- **Statistikkkort (lenker):** aktive boenheter (`/boenheter`), åpne styresaker (`/styresaker`), åpne oppgaver (`/oppgaver`) og forfalte oppgaver (`/oppgaver?forfalt=1`, som åpner oppgavelisten med «Bare forfalte» avkrysset). Forfalt-kortet får rød kant og rødt tall når det finnes forfalte oppgaver; tallet står alltid også som tekst.
+- **Oppgaver som krever oppfølging:** forfalte oppgaver først, så frist i dag, så frister de neste 7 dagene, maks 8. Nr., tittel (lenke), prioritet (fra bred skjerm), status og frist med «Forfalt»/«Frist i dag». Knappen «Se alle oppgaver» åpner hele listen.
+- **Aktuelle styresaker:** åpne saker (ikke avsluttet), sist oppdaterte først, maks 5, med saksnummer, tittel (lenke), status, prioritet (fra bred skjerm) og møtedato eller «Ingen møtedato». Knappen «Se alle styresaker» åpner hele listen.
+- **Kommende datoer:** styremøter (møtedato på åpne saker) og oppgavefrister de neste 60 dagene, sortert på dato, maks 8, med dato, type («Styremøte»/«Frist») og lenke. Oppgaver som allerede står i oppfølgingslisten (frist innen 7 dager) gjentas ikke.
+- **Hurtighandlinger:** vanlige lenker til `/boenheter/ny`, `/styresaker/ny` og `/oppgaver/ny`.
+- **Oppdatering og feil:** «Oppdater oversikten» henter tallene på nytt. Kan data ikke leses, vises en feilmelding med «Prøv igjen», og ingen tall (ikke 0). Ingen timere eller sanntid.
+- **Tom database:** alle kort viser 0 (reelle tall), og hver seksjon har en tomtilstand: «Ingen åpne oppgaver. Registrer en oppgave …», «Ingen åpne styresaker.» og «Ingen kommende møter eller frister de neste 60 dagene.».
+- **Smal skjerm:** kortene ligger to og to. Nr.-kolonnen skjules i tabellene (prioritet skjules under bred skjerm), så fristen alltid er synlig uten at siden får vannrett rulling.
+
 ## Ikke laget ennå
-Dashboard. Endringshistorikk for styresaker.
+Endringshistorikk for styresaker.
