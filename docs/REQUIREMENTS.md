@@ -49,4 +49,4 @@ En oppgave har tittel (obligatorisk), beskrivelse, kategori (Generell eller Vedl
 - Data forblir lokalt og committes aldri.
 
 ## Utenfor v1.0
-Økonomi og felleskostnader · flere brukere/innlogging · dokumentarkiv · ekstern tilgang · flere sameier · eksterne integrasjoner.
+Økonomi og felleskostnader · flere brukere/innlogging · dokumentarkiv · ekstern tilgang · flere sameier · eksterne integrasjoner · egen modell for carport og elbillader (laderens modell og status, kobling til ladesystem, forbruk og ladehistorikk; i demodataene står dette i boenhetens merknader, se [DEMO.md](DEMO.md)).

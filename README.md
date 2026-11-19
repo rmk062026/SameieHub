@@ -6,6 +6,10 @@ Lokalt administrasjonsprogram for små sameier: oversikt over boenheter, styresa
 
 ![CI](https://github.com/rmk062026/SameieHub/actions/workflows/ci.yml/badge.svg)
 
+## Demo
+
+En fiktiv demodatabase (Fiktivdalen Sameie) viser programmet med realistiske data: `.\scripts\demo.ps1 create` og `.\scripts\demo.ps1 start`. Den vanlige databasen berøres aldri. Se [docs/DEMO.md](docs/DEMO.md).
+
 ## Kom i gang
 
 Krever .NET 10 SDK (kun for utvikling).

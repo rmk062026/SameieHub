@@ -452,6 +452,16 @@ Bare **endrede** koblinger kontrolleres (`details.HousingUnitId != task.HousingU
 - **Migrering:** kun ny tabell, to fremmednøkler og to indekser; eksisterende migreringer er uendret. Testet fra skjemaet etter M2E (`AddBoardCaseDecisionDate`) med data, og fra tom database (`TaskItemMigrationTests`).
 - **Gjenstår:** dashboard (M4), backup (M5).
 
+## Demodata (M4D)
+
+`Infrastructure/Demo/DemoDatabaseSeeder` oppretter det fiktive Fiktivdalen Sameie (8 boenheter, 12 styresaker, 20 oppgaver). Innholdet og kommandoene er beskrevet i [DEMO.md](DEMO.md).
+
+- **Eksplisitt kommando:** `dotnet run --project src/SameieHub.Web -- --seed-demo` (skriptet `scripts/demo.ps1` setter `Database__Path`). Seederen kjøres aldri ved vanlig oppstart. `Program.cs` avviser kommandoen før noe opprettes hvis stien mangler eller er den ordinære (`IsSafeDemoPath`).
+- **Ekte tjenester:** seederen bruker `HousingUnitService`, `BoardCaseService` og `TaskItemService` med repositories og migreringer, ingen SQL. En liten privat `DemoClock` flytter tiden bakover mens dataene opprettes, slik at opprettet og fullført-tidspunkt blir spredt over månedene før i dag uten å gå forbi nåtid. Frister og møtedatoer regnes fra dagens norske dato.
+- **Trygg og idempotent:** er databasen tom, opprettes alt. Inneholder den bare boenheter med adresser som starter med «Fiktivdalen », skjer ingenting. Alt annet gir `DemoDatabaseNotEmptyException`, og databasen endres ikke.
+- **Hvorfor i Infrastructure og i `Program.cs`:** ingen nye prosjekter eller pakker; seederen trenger bare repository-grensesnittene. Alternativet var et eget konsollprosjekt, som krever godkjenning og mer vedlikehold.
+- **Carport og elbillader** er bare tekst i `HousingUnit.Notes`. Egne felter er utenfor v1.0.
+
 ## Dashboard (M4)
 
 `Pages/Dashboard.razor` (rute `/`) leser fra de eksisterende tjenestene `HousingUnitService`, `BoardCaseService` og `TaskItemService`, og gir dataene til den rene klassen `DashboardOverview` i Domain. Det finnes ingen `DashboardService`, ingen nytt repository og ingen lagrede tall. Dashboardet endrer aldri data.

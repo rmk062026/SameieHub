@@ -25,6 +25,8 @@ dotnet run --project src/SameieHub.Web
 EF Core-pakker pinnes til 10.0.x så lenge prosjektet målretter `net10.0`.
 
 ## Milepæler
+Demodata for visning og manuell testing: se [DEMO.md](DEMO.md) (`.\scripts\demo.ps1 create|start|reset|info`).
+
 M0 fundament · M1 Boenheter · M2 Styresaker · M3 Oppgaver · M4 Dashboard · M5 Backup/gjenoppretting og lokal pakking. Hver milepæl avsluttes med kontrollrapport og krever godkjenning.
 
 ## Legge til et nytt felt i `HousingUnit`
