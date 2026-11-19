@@ -34,9 +34,9 @@ Hvorfor Web refererer Infrastructure: composition root (`Program.cs`) registrere
 
 ```mermaid
 erDiagram
-    HousingUnit ||--o{ TaskItem : "kan ha"
+    HousingUnit |o--o{ TaskItem : "gjelder (valgfri)"
     HousingUnit |o--o{ BoardCase : "gjelder (valgfri)"
-    BoardCase ||--o{ TaskItem : "kan gi"
+    BoardCase |o--o{ TaskItem : "kan gi (valgfri)"
     HousingUnit {
         int Id
         string Address
@@ -63,8 +63,13 @@ erDiagram
         int Id
         string Title
         string Category
-        date DueDate
         string Status
+        string Priority
+        date DueDate
+        string AssignedTo
+        int HousingUnitId
+        int BoardCaseId
+        datetime CompletedAt
     }
 ```
 
@@ -335,7 +340,59 @@ Nøkkelpunkt: RESTRICT rapporteres som 1811, ikke 787. Forventningen om bare 787
 ### Endringshistorikk (ikke implementert)
 `CreatedAt` og `UpdatedAt` forteller **ikke** hvilke endringer som ble gjort eller av hvem; de kan ikke brukes som protokoll. Hvis SameieHub skal brukes til formell protokollføring kan en hendelseshistorikk (egen tabell med tidspunkt, type endring og gamle/nye verdier) vurderes senere. Den er bevisst ikke laget nå.
 
-### Gjenstår før M2 er godkjent
+### Gjenstår etter M2 (M2 er godkjent)
 1. **Oppgavekobling (M3):** fremmednøkkel fra `TaskItem` til `BoardCase` med `Restrict`, og test av `BoardCaseInUseException` mot ekte referanse (så langt bare klassifiseringen og UI-håndteringen er testet).
 2. **Dashboard (M4):** åpne saker og kommende møter (data finnes).
 3. **Beslutning:** er `CreatedAt`/`UpdatedAt` nok til v1.0, eller skal historikk lages senere?
+
+## Domenemodell: TaskItem (M3A)
+
+`TaskItem` er en oppgave. Vedlikehold er en **kategori** av oppgaver, ikke et eget system. Foreløpig finnes bare domeneklassen og testene; repository og tjeneste (M3B), database (M3C) og UI (M3D) er ikke laget.
+
+| Felt | Type | Regel |
+|---|---|---|
+| `Id` | `int` | Satt av lagringen via `AssignId` (som de andre modulene) |
+| `Title` | `string` | Obligatorisk, trimmes, maks 200 tegn |
+| `Description` | `string?` | Valgfri, maks 4000 tegn |
+| `Category` | `TaskItemCategory` | `General` (Generell) eller `Maintenance` (Vedlikehold). Standard `General` |
+| `Status` | `TaskItemStatus` | `NotStarted` (Ikke startet), `InProgress` (Pågår), `Completed` (Fullført). Standard `NotStarted` |
+| `Priority` | `TaskItemPriority` | `Low`, `Normal`, `High`. Standard `Normal` |
+| `DueDate` | `DateOnly?` | Valgfri kalenderdato mellom 2000-01-01 og 2100-12-31 |
+| `AssignedTo` | `string?` | Valgfritt navn på ansvarlig, maks 100 tegn. Bare en tekst, ikke en kobling til en person |
+| `HousingUnitId` | `int?` | Valgfri; `null` = ingen boenhet; ellers positiv Id |
+| `BoardCaseId` | `int?` | Valgfri; `null` = ingen styresak; ellers positiv Id |
+| `CreatedAt` | `DateTime` | UTC, settes ved opprettelse, endres aldri |
+| `UpdatedAt` | `DateTime` | UTC. Lik `CreatedAt` til oppgaven endres. Settes bare ved en reell endring |
+| `CompletedAt` | `DateTime?` | UTC. Satt bare når status er `Completed` |
+| `Notes` | `string?` | Valgfri, maks 2000 tegn |
+
+Alle felt har `private set`. Tekst trimmes, og blank valgfri tekst blir `null`. Feil gir `ArgumentException` (eller `ArgumentOutOfRangeException`) der `ParamName` er feltnavnet, som for `HousingUnit` og `BoardCase`. Enum-verdier starter på 1, så `default` (0) avvises.
+
+**Metoder:** `new TaskItem(details, createdAt)`, `UpdateDetails(details, now)`, `ChangeStatus(status, now)`, `IsOverdue(today)` og `AssignId(id)`. `TaskItemDetails` (record) samler tittel, beskrivelse, kategori, prioritet, frist, ansvarlig, boenhet, styresak og merknader. `UpdateDetails` er alt-eller-ingenting (alt valideres før noe tilordnes) og endrer verken status eller `CompletedAt`.
+
+### Status og fullføring
+- **Start**, **fullfør** og **gjenåpne** er alle `ChangeStatus`. Hvilken som helst status kan endres til hvilken som helst annen, slik at registreringsfeil kan rettes. Det finnes ingen egne `Start`/`Complete`/`Reopen`-metoder.
+- Fra en ikke-fullført status til `Completed`: `CompletedAt` settes til tidspunktet som sendes inn (`now`, UTC).
+- Ut av `Completed` (gjenåpning, til `InProgress` eller `NotStarted`): `CompletedAt = null`. En ny fullføring gir et nytt tidspunkt.
+- Samme status på nytt endrer verken `CompletedAt` eller `UpdatedAt`.
+- Dermed gjelder alltid: `Status == Completed` hvis og bare hvis `CompletedAt != null`. Det lagres ingen historikk over tidligere fullføringer.
+- En `now` som ikke er UTC avvises (`ArgumentException`, `ParamName = "now"`). Tiden hentes av tjenesten via `TimeProvider` (M3B); domenet kaller aldri klokken selv.
+
+### Forfalt
+`IsOverdue(DateOnly today)` er true når oppgaven **ikke er fullført**, **har en frist** og **fristen er tidligere enn `today`**. Frist i dag er ikke forfalt før neste dag. En fullført oppgave er aldri forfalt, og en gjenåpnet oppgave med passert frist er forfalt igjen. Dagens dato sendes inn (`DateOnly`), så metoden kan testes uten klokke og bruker ikke `DateTime.Today`. Forfalt er en **beregnet egenskap** som ikke lagres i SQLite.
+
+### Koblinger (planlagt)
+- En oppgave kan være uten kobling, knyttet til én boenhet, til én styresak, eller til begge. Koblingene er uavhengige: oppgavens boenhet trenger ikke være lik styresakens boenhet, og styresaken kan gjelde hele sameiet.
+- Domenet kjenner bare `int?` (positive Id-er), uten navigasjonsegenskaper, som `BoardCase.HousingUnitId`.
+- **M3B (tjenesten):** kontrollerer at refererte objekter finnes. En **ny** kobling til en boenhet krever en **aktiv** boenhet; en **uendret** eksisterende kobling til en senere deaktivert boenhet beholdes og kan fortsatt redigeres (samme regel som for styresaker). Ny kobling til en styresak krever at den finnes (alle statuser er tillatt).
+- **M3C (database):** fremmednøkler til `HousingUnits` og `BoardCases` med `DeleteBehavior.Restrict` (aldri cascade). Da blokkeres sletting av en boenhet eller styresak som har oppgaver, via `HousingUnitInUseException` og `BoardCaseInUseException`.
+
+### Beslutninger (M3A)
+| Beslutning | Alternativer | Begrunnelse |
+|---|---|---|
+| Egen `TaskItemPriority` | gjenbruke `BoardCasePriority` | Samme tre verdier, men oppgaver og styresaker utvikler seg uavhengig, og `TaskItem` slipper å kjenne et styresakbegrep. Koster tre linjer. |
+| Enum-navn med `TaskItem`-prefiks (`TaskItemStatus`, `TaskItemCategory`) | `TaskStatus`, `TaskCategory` | `TaskStatus` kolliderer med `System.Threading.Tasks.TaskStatus` (implisitt `using`). Prefikset gir også samme navngivning for alle tre. |
+| `CompletedAt` styres av `ChangeStatus` | egen `Complete()`/`Reopen()`, eller felt som settes utenfra | Én metode, én regel, og invarianten «fullført ⇔ `CompletedAt` finnes» kan ikke brytes. |
+| Gjenåpning går til hvilken som helst ikke-fullført status | alltid `InProgress` | Enklere og lar brukeren rette feil. |
+| `AssignedTo` er tekst | eget personobjekt | Nok for v1.0; ingen personregister. |
+| Hjelpemetodene for normalisering er kopiert privat inn i `TaskItem` | felles baseklasse/hjelpeklasse | Fire–fem små metoder per klasse. En felles hjelper ville gitt en refaktorering av M1/M2 uten stor gevinst; kan vurderes senere. |
