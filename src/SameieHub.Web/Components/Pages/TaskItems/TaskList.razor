@@ -192,10 +192,16 @@ else
     [SupplyParameterFromQuery(Name = "status")]
     public string? Status { get; set; }
 
+    /// <summary>Set to 1 by the dashboard link «Forfalte oppgaver».</summary>
+    [SupplyParameterFromQuery(Name = "forfalt")]
+    public string? OverdueParameter { get; set; }
+
     private string? StatusMessage => Status == "slettet" ? "Oppgaven er slettet permanent." : null;
 
     protected override async Task OnInitializedAsync()
     {
+        _overdueOnly = OverdueParameter == "1";
+
         await LoadAsync();
     }
 

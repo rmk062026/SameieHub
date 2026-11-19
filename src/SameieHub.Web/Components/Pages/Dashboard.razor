@@ -1,11 +1,216 @@
 @page "/"
+@using SameieHub.Web.Components.Pages.BoardCases
+@using SameieHub.Web.Components.Pages.TaskItems
+@inject HousingUnitService HousingUnitService
+@inject BoardCaseService BoardCaseService
+@inject TaskItemService TaskService
+@inject ILogger<Dashboard> Logger
 
 <PageTitle>Dashboard – SameieHub</PageTitle>
 
-<PageHeader Title="Dashboard" Description="Velkommen til SameieHub – administrasjon av sameiet ditt." />
+<PageHeader Title="Dashboard" Description="@(_overview == null ? "Status for sameiet." : $"Status for sameiet per {NorwegianDateFormat.Date(_today)}.")">
+    <button type="button" class="btn btn-outline-secondary" disabled="@_isLoading" @onclick="LoadAsync">Oppdater oversikten</button>
+</PageHeader>
 
-<section class="surface-card empty-state">
-    <h2>Oversikten kommer senere</h2>
-    <p>Her vises en samlet oversikt over styresaker og oppgaver når disse områdene er på plass.</p>
-    <a class="btn btn-primary" href="/boenheter">Gå til boenheter</a>
-</section>
+@if (_isLoading)
+{
+    <div class="surface-card" role="status">
+        <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Laster oversikten …
+    </div>
+}
+else if (_loadError != null)
+{
+    <div class="alert alert-danger" role="alert">
+        <p>@_loadError</p>
+        <button type="button" class="btn btn-outline-danger btn-sm" @onclick="LoadAsync">Prøv igjen</button>
+    </div>
+}
+else if (_overview != null)
+{
+    <div class="stat-row stat-row-wide">
+        <a class="stat-card stat-link" href="/boenheter">
+            <span class="stat-value">@_overview.ActiveHousingUnits</span>
+            <span class="stat-label">Aktive boenheter</span>
+        </a>
+        <a class="stat-card stat-link" href="/styresaker">
+            <span class="stat-value">@_overview.OpenBoardCases</span>
+            <span class="stat-label">Åpne styresaker</span>
+        </a>
+        <a class="stat-card stat-link" href="/oppgaver">
+            <span class="stat-value">@_overview.OpenTasks</span>
+            <span class="stat-label">Åpne oppgaver</span>
+        </a>
+        <a class="stat-card stat-link @(_overview.OverdueTasks > 0 ? "stat-alert" : "")" href="/oppgaver?forfalt=1">
+            <span class="stat-value">@_overview.OverdueTasks</span>
+            <span class="stat-label">Forfalte oppgaver</span>
+        </a>
+    </div>
+
+    <div class="detail-grid">
+        <section class="surface-card detail-wide" aria-labelledby="follow-up-title">
+            <div class="section-heading">
+                <h2 id="follow-up-title">Oppgaver som krever oppfølging</h2>
+                <a class="btn btn-outline-primary btn-sm" href="/oppgaver">Se alle oppgaver</a>
+            </div>
+            @if (_overview.FollowUpTasks.Count == 0)
+            {
+                <p class="text-muted mb-0">
+                    @(_overview.OpenTasks == 0
+                        ? "Ingen åpne oppgaver. Registrer en oppgave for å følge opp arbeid i sameiet."
+                        : $"Ingen oppgaver er forfalt eller har frist de neste {DashboardOverview.FollowUpDays} dagene.")
+                </p>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table data-table">
+                        <caption class="visually-hidden">Oppgaver som er forfalt eller har nær frist</caption>
+                        <thead>
+                            <tr>
+                                <th scope="col" class="col-id">Nr.</th>
+                                <th scope="col">Oppgave</th>
+                                <th scope="col" class="d-none d-md-table-cell">Prioritet</th>
+                                <th scope="col">Status</th>
+                                <th scope="col">Frist</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var task in _overview.FollowUpTasks)
+                            {
+                                <tr>
+                                    <td class="col-id">#@task.Id</td>
+                                    <td><a class="unit-link" href="/oppgaver/@task.Id">@task.Title</a></td>
+                                    <td class="d-none d-md-table-cell"><TaskPriorityBadge Priority="task.Priority" /></td>
+                                    <td><TaskStatusBadge Status="task.Status" /></td>
+                                    <td><TaskDueDate Task="task" Today="_today" /></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+
+        <section class="surface-card detail-wide" aria-labelledby="board-cases-title">
+            <div class="section-heading">
+                <h2 id="board-cases-title">Aktuelle styresaker</h2>
+                <a class="btn btn-outline-primary btn-sm" href="/styresaker">Se alle styresaker</a>
+            </div>
+            @if (_overview.CurrentBoardCases.Count == 0)
+            {
+                <p class="text-muted mb-0">Ingen åpne styresaker.</p>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table data-table">
+                        <caption class="visually-hidden">Åpne styresaker, sist oppdaterte først</caption>
+                        <thead>
+                            <tr>
+                                <th scope="col" class="col-id">Sak</th>
+                                <th scope="col">Tittel</th>
+                                <th scope="col">Status</th>
+                                <th scope="col" class="d-none d-md-table-cell">Prioritet</th>
+                                <th scope="col">Møtedato</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var boardCase in _overview.CurrentBoardCases)
+                            {
+                                <tr>
+                                    <td class="col-id">#@boardCase.Id</td>
+                                    <td><a class="unit-link" href="/styresaker/@boardCase.Id">@boardCase.Title</a></td>
+                                    <td><BoardCaseStatusBadge Status="boardCase.Status" /></td>
+                                    <td class="d-none d-md-table-cell"><BoardCasePriorityBadge Priority="boardCase.Priority" /></td>
+                                    <td>
+                                        @if (boardCase.MeetingDate is { } meetingDate)
+                                        {
+                                            @NorwegianDateFormat.Date(meetingDate)
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">Ingen møtedato</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+
+        <section class="surface-card" aria-labelledby="upcoming-title">
+            <h2 id="upcoming-title">Kommende datoer</h2>
+            @if (_overview.UpcomingDates.Count == 0)
+            {
+                <p class="text-muted mb-0">Ingen kommende møter eller frister de neste @DashboardOverview.UpcomingDays dagene.</p>
+            }
+            else
+            {
+                <ul class="date-list">
+                    @foreach (var upcoming in _overview.UpcomingDates)
+                    {
+                        <li>
+                            <span class="date-list-date">@NorwegianDateFormat.Date(upcoming.Date)</span>
+                            <span class="date-list-kind">@(upcoming.Kind == UpcomingDateKind.BoardMeeting ? "Styremøte" : "Frist")</span>
+                            <a href="@UpcomingHref(upcoming)">@upcoming.Title</a>
+                        </li>
+                    }
+                </ul>
+            }
+        </section>
+
+        <section class="surface-card" aria-labelledby="quick-title">
+            <h2 id="quick-title">Hurtighandlinger</h2>
+            <div class="quick-actions">
+                <a class="btn btn-outline-primary" href="/boenheter/ny">Registrer boenhet</a>
+                <a class="btn btn-outline-primary" href="/styresaker/ny">Registrer styresak</a>
+                <a class="btn btn-outline-primary" href="/oppgaver/ny">Registrer oppgave</a>
+            </div>
+        </section>
+    </div>
+}
+
+@code {
+    private DashboardOverview? _overview;
+    private DateOnly _today;
+    private bool _isLoading = true;
+    private string? _loadError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _isLoading = true;
+        _loadError = null;
+
+        try
+        {
+            var units = await HousingUnitService.GetAllAsync();
+            var boardCases = await BoardCaseService.GetAllAsync();
+            var tasks = await TaskService.GetAllAsync();
+
+            _today = TaskService.GetToday();
+            _overview = DashboardOverview.Create(units, boardCases, tasks, _today);
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Could not load the dashboard.");
+            _overview = null;
+            _loadError = "Kunne ikke hente oversikten. Kontroller at databasen er tilgjengelig og prøv igjen.";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private static string UpcomingHref(UpcomingDate upcoming)
+    {
+        return upcoming.Kind == UpcomingDateKind.BoardMeeting ? $"/styresaker/{upcoming.Id}" : $"/oppgaver/{upcoming.Id}";
+    }
+}

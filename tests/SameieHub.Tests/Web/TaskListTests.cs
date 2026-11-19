@@ -381,6 +381,30 @@ public class TaskListTests : UiTestBase
     }
 
     [Fact]
+    public async Task Render_OverdueParameterFromTheDashboard_StartsWithOnlyOverdueTasks()
+    {
+        await RegisterAsync("Forfalt", new TaskItemDetails { Title = "Forfalt", DueDate = Today.AddDays(-1) });
+        await RegisterAsync("Uten frist");
+        Services.GetRequiredService<NavigationManager>().NavigateTo("/oppgaver?forfalt=1");
+
+        var cut = RenderList();
+
+        Assert.Contains("Forfalt", Assert.Single(RowTexts(cut)));
+        Assert.True((bool)cut.Find("#overdueOnly").HasAttribute("checked"));
+    }
+
+    [Fact]
+    public async Task Render_WithoutOverdueParameter_ShowsAllOpenTasks()
+    {
+        await RegisterAsync("Forfalt", new TaskItemDetails { Title = "Forfalt", DueDate = Today.AddDays(-1) });
+        await RegisterAsync("Uten frist");
+
+        var cut = RenderList();
+
+        Assert.Equal(2, cut.FindAll("tbody tr").Count);
+    }
+
+    [Fact]
     public void Render_HasRegisterButtonInTheHeader()
     {
         var cut = RenderList();
