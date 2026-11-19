@@ -39,6 +39,10 @@ public sealed class SqliteTestDatabase : IAsyncDisposable
 
     public IBoardCaseRepository BoardCaseRepository => _scope.ServiceProvider.GetRequiredService<IBoardCaseRepository>();
 
+    public TaskItemService Tasks => _scope.ServiceProvider.GetRequiredService<TaskItemService>();
+
+    public ITaskItemRepository TaskRepository => _scope.ServiceProvider.GetRequiredService<ITaskItemRepository>();
+
     public static async Task<SqliteTestDatabase> CreateAsync()
     {
         var database = new SqliteTestDatabase();
@@ -137,6 +141,7 @@ public sealed class SqliteTestDatabase : IAsyncDisposable
         services.AddSameieHubInfrastructure(DatabasePath);
         services.AddScoped<HousingUnitService>();
         services.AddScoped<BoardCaseService>();
+        services.AddScoped<TaskItemService>();
         services.AddSingleton<TimeProvider>(Clock);
 
         return services.BuildServiceProvider(validateScopes: true);

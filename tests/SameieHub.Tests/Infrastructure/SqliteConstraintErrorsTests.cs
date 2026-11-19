@@ -18,6 +18,14 @@ public class SqliteConstraintErrorsTests
         Assert.True(SqliteConstraintErrors.IsForeignKeyViolation(exception));
     }
 
+    [Fact]
+    public void IsForeignKeyViolation_TriggerErrorThatIsNotAForeignKey_ReturnsFalse()
+    {
+        var exception = Wrap(new SqliteException("Deleting is blocked by a custom rule", SqliteConstraint, 1811));
+
+        Assert.False(SqliteConstraintErrors.IsForeignKeyViolation(exception));
+    }
+
     [Theory]
     [InlineData(1299)]
     [InlineData(1555)]
