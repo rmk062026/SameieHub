@@ -34,7 +34,10 @@ wwwroot/app.css  designvariabler og felles stiler
 | `/styresaker/ny` | Registrer | Funksjonell |
 | `/styresaker/{id}` | Detaljvisning med status og vedtak | Funksjonell |
 | `/styresaker/{id}/rediger` | Rediger | Funksjonell |
-| `/oppgaver` | Plassholder | Ikke laget |
+| `/oppgaver` | Oversikt | Funksjonell |
+| `/oppgaver/ny` | Registrer (`?boenhet=` og `?styresak=` forhåndsvelger) | Funksjonell |
+| `/oppgaver/{id}` | Detaljvisning med status og sletting | Funksjonell |
+| `/oppgaver/{id}/rediger` | Rediger | Funksjonell |
 
 Sidemeny på bred skjerm (≥ 768 px); på smal skjerm en toppstripe med menyknapp.
 
@@ -66,5 +69,17 @@ Sidemeny på bred skjerm (≥ 768 px); på smal skjerm en toppstripe med menykna
 - **Sletting:** som for boenheter: knapp i et eget kort, bekreftelse med sakens tittel og «Dette kan ikke angres», Avbryt endrer ingenting, og melding i oversikten etter sletting. Hvis saken er knyttet til oppgaver blokkeres sletting med en forståelig melding (via `BoardCaseInUseException`; testet mot ekte oppgaver i M3C).
 - **Boenhetens detaljside** har en seksjon «Styresaker» med saksnummer, tittel (lenke) og status, eller en kort tomtilstand. For aktive boenheter har seksjonen knappen «Registrer styresak», som åpner registreringssiden med boenheten forhåndsvalgt (`?boenhet=`). Inaktive boenheter har ikke knappen. Registreringssiden velger bare en boenhet som finnes og er aktiv, og viser ellers en gul merknad.
 
+## Oppgaver (M3D)
+- **Oversikt:** fem statistikkort (totalt, ikke startet, pågår, fullført, forfalt), søk (oppgavenummer som `#12` eller `12`, tittel, beskrivelse og ansvarlig), filter på status, kategori, prioritet, boenhet, styresak og «Bare forfalte», og sortering. **Standardvisningen viser oppgaver som ikke er fullført**; statusvalget har «Ikke fullførte» (standard), «Alle», «Ikke startet», «Pågår» og «Fullførte». Når alle oppgaver er fullført, forklarer tomtilstanden det og tilbyr «Vis også fullførte».
+- **Sortering:** «Frist (nærmeste først)» er standard: ikke fullførte oppgaver med nærmeste frist først (forfalte havner dermed øverst), deretter oppgaver uten frist (nyeste først), og fullførte sist. Dessuten nyeste først, eldste først, prioritet (høyest først, så nærmeste frist) og tittel.
+- **Tabell:** Nr., tittel (lenke, med tilknyttet styresak og boenhet som undertekst), kategori, status, prioritet, frist, ansvarlig og handlinger. På smal skjerm vises bare Nr., oppgave, status og frist, så siden ikke får vannrett rulling; tittelen er lenke til detaljsiden, der Rediger finnes.
+- **Frist og forfall:** «Forfalt» og «Frist i dag» vises som tekst i et merke (farge er bare et hint). Fullførte oppgaver er aldri forfalt. «I dag» er norsk kalenderdato (`TaskItemService.GetToday()`), også nær midnatt. Forfall beregnes med `TaskItem.IsOverdue` og lagres ikke.
+- **Skjema (registrer og rediger):** tittel (obligatorisk), beskrivelse, kategori, prioritet, frist (datofelt), ansvarlig, boenhet, styresak og merknader. Feilmeldinger vises ved riktig felt via `ArgumentException.ParamName`. Knappen deaktiveres mens lagring pågår, så dobbel innsending ikke lager to oppgaver. Etter registrering vises detaljsiden med «Oppgaven er registrert.»
+- **Koblinger:** boenhetsvalget har «Ingen boenhet» og aktive boenheter; ved redigering vises en senere deaktivert, allerede koblet boenhet som «(inaktiv)», men andre inaktive enheter tilbys ikke. Styresaksvalget har alle styresaker, også avsluttede. Begge kan fjernes. Boenhet og styresak trenger ikke høre sammen, og ingenting kopieres automatisk.
+- **Detaljside:** nummer, tittel, status, prioritet, kategori, beskrivelse, frist med forfallsmerke, ansvarlig, boenhet og styresak (begge som lenker), opprettet, sist oppdatert, fullført-tidspunkt (bare når oppgaven er fullført) og merknader.
+- **Status:** «Marker som fullført» (for ikke fullførte) og «Gjenåpne oppgaven» (for fullførte; setter statusen til «Pågår») er snarveier, og statusvalget med «Endre status» gir full kontroll. Alle endringer går via `TaskItemService.ChangeStatusAsync`, så fullført-tidspunktet settes og fjernes i domenet.
+- **Sletting:** som for boenheter og styresaker (eget kort nederst, bekreftelse med tittel og «Dette kan ikke angres», Avbryt endrer ingenting, melding «Oppgaven er slettet permanent.» på oversikten). Teksten sier at styresaken og boenheten ikke slettes.
+- **Snarveier:** styresakens og boenhetens detaljside har en seksjon «Oppgaver» (nummer, tittel, status, frist) med knappen «Registrer oppgave» som åpner registreringen med styresaken (`?styresak=`) eller boenheten (`?boenhet=`) forhåndsvalgt. Boenhetens knapp vises bare for aktive boenheter, men eksisterende oppgaver på en inaktiv boenhet vises fortsatt. Verdiene i URL-en kontrolleres mot de faktiske dataene (ugyldig, ukjent eller inaktiv verdi gir en melding og ingen forhåndsvalg).
+
 ## Ikke laget ennå
-Oppgaver og dashboard. Endringshistorikk for styresaker.
+Dashboard. Endringshistorikk for styresaker.

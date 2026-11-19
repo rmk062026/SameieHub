@@ -347,7 +347,7 @@ Nøkkelpunkt: RESTRICT rapporteres som 1811, ikke 787. Forventningen om bare 787
 
 ## Domenemodell: TaskItem (M3A)
 
-`TaskItem` er en oppgave. Vedlikehold er en **kategori** av oppgaver, ikke et eget system. Domeneklassen (M3A) og repository-kontrakt og tjeneste (M3B) finnes; database (M3C) finnes; UI (M3D) er ikke laget.
+`TaskItem` er en oppgave. Vedlikehold er en **kategori** av oppgaver, ikke et eget system. Domeneklassen (M3A) og repository-kontrakt og tjeneste (M3B) finnes; database (M3C) og UI (M3D) finnes.
 
 | Felt | Type | Regel |
 |---|---|---|
@@ -450,7 +450,40 @@ Bare **endrede** koblinger kontrolleres (`details.HousingUnitId != task.HousingU
 - **Tid og dato:** `CreatedAt`, `UpdatedAt` og `CompletedAt` lagres som UTC-tekst og leses tilbake med `DateTimeKind.Utc` (`UtcDateTimeConverter`, også for `CompletedAt` som kan være `null`). `DueDate` lagres som ren dato (`yyyy-MM-dd`). Enumer lagres som lesbar tekst. `CompletedAt` er `null` for uferdige oppgaver, og gjenåpning nullstiller den også etter omstart.
 - **Forfalt lagres ikke.** Det beregnes i `TaskItemService` mot norsk dato (`NorwegianTime`), aldri i SQLite.
 - **Migrering:** kun ny tabell, to fremmednøkler og to indekser; eksisterende migreringer er uendret. Testet fra skjemaet etter M2E (`AddBoardCaseDecisionDate`) med data, og fra tom database (`TaskItemMigrationTests`).
-- **Gjenstår:** brukergrensesnitt (M3D), dashboard (M4), backup (M5).
+- **Gjenstår:** dashboard (M4), backup (M5).
+
+## Oppgaver i brukergrensesnittet (M3D)
+
+Filene ligger i `Web/Components/Pages/TaskItems/` etter samme mønster som styresaker: `TaskList` (`/oppgaver`), `TaskCreate`, `TaskEdit`, `TaskForm` (felles skjema) med `TaskFormModel`, `TaskDetail`, `TaskText` (norske navn og CSS-klasser), `TaskFieldMessages` (feilmeldinger per felt), `TaskStatusBadge`, `TaskPriorityBadge` og `TaskDueDate` (frist med «Forfalt»/«Frist i dag»). Den gamle plassholderen er fjernet.
+
+```mermaid
+graph LR
+    List["TaskList"] --> Filter["TaskItemFilter / TaskItemSorting<br/>(Domain)"]
+    List --> Service["TaskItemService<br/>(Domain)"]
+    Create["TaskCreate"] --> Form["TaskForm"]
+    Edit["TaskEdit"] --> Form
+    Form --> Service
+    Detail["TaskDetail"] --> Service
+    BoardCaseDetail["BoardCaseDetail"] -.viser oppgaver.-> Service
+    HousingUnitDetail["HousingUnitDetail"] -.viser oppgaver.-> Service
+```
+
+- **Filter og sortering i Domain:** `TaskItemFilter.Apply` og `TaskItemSorting.Sort` er rene funksjoner uten UI og database (samme mønster som `BoardCaseFilter`), og er enhetstestet uten Blazor. `TaskItemFilterCriteria.OverdueOn` tar dagens norske dato som parameter, så testene kontrollerer midnattsgrensen uten klokke. `OpenOnly` skjuler fullførte oppgaver, men ignoreres når en bestemt status er valgt.
+- **Forfall:** siden henter «i dag» fra `TaskItemService.GetToday()` ved hver visning og bruker `TaskItem.IsOverdue`. Ingenting lagres.
+- **Status:** alle statusendringer går via `TaskItemService.ChangeStatusAsync`. «Marker som fullført» og «Gjenåpne» er bare knapper som kaller den med en bestemt status, så forretningslogikken finnes ett sted. Gjenåpning gir «Pågår».
+- **Forhåndsvalg fra URL:** `TaskCreate` leser `boenhet` og `styresak` som tekst og tolker dem med `int.TryParse`; verdien godtas bare hvis boenheten er aktiv eller styresaken finnes. Ellers vises en melding, og ingenting forhåndsvelges. Skjemaet sender `TaskItemDetails` til tjenesten, som uansett kontrollerer koblingene på nytt.
+- **Feil:** databasefeil logges uten skjemaverdier eller fritekst og vises som en generell melding. Testene sjekker at tittel og merknader ikke havner i loggen.
+- **Oppgaveseksjon på andre sider:** `BoardCaseDetail` og `HousingUnitDetail` injiserer `TaskItemService` og viser oppgavene sine (sortert etter frist). Det gjør at begge sidene også feiler hvis oppgaver ikke kan leses, på samme måte som styresakslisten på boenhetssiden.
+
+### Beslutninger (M3D)
+
+| Beslutning | Alternativ | Begrunnelse |
+|---|---|---|
+| Standard viser ikke fullførte oppgaver, med «Alle» og «Fullførte» i samme statusvalg | Egen avkrysning for fullførte | Ett valg er enklere og følger kravet; samme filtermønster som styresaker. |
+| Standardsortering på frist, uten frist og fullførte sist | Nyeste først (som styresaker) | Forfalte oppgaver må være lette å finne uten ekstra klikk. |
+| Gjenåpning gir «Pågår» | «Ikke startet» | Samme valg som for styresaker; en oppgave som har vært fullført har vært i arbeid. Brukeren kan velge annen status. |
+| Handlingskolonnen skjules på smal skjerm | Vannrett rulling i tabellen | Målt i nettleser: ellers fikk siden vannrett rulling ved 375 px. Tittelen er lenke til detaljsiden. |
+| Søk dekker ikke merknader | Søk i alle tekstfelt | Merknader kan inneholde sensitive opplysninger og er ikke nødvendige for å finne en oppgave. |
 
 ### Beslutninger (M3B)
 | Beslutning | Alternativer | Begrunnelse |
