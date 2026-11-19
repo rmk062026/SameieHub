@@ -1,0 +1,25 @@
+@if (Task.DueDate is not { } dueDate)
+{
+    <span class="text-muted">Ingen frist</span>
+}
+else
+{
+    <span>@NorwegianDateFormat.Date(dueDate)</span>
+    @if (Task.IsOverdue(Today))
+    {
+        <span class="status-badge is-overdue">Forfalt</span>
+    }
+    else if (Task.Status != TaskItemStatus.Completed && dueDate == Today)
+    {
+        <span class="status-badge is-due-today">Frist i dag</span>
+    }
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public TaskItem Task { get; set; } = default!;
+
+    /// <summary>Today's Norwegian date, from <see cref="TaskItemService.GetToday"/>.</summary>
+    [Parameter, EditorRequired]
+    public DateOnly Today { get; set; }
+}

@@ -1,0 +1,289 @@
+@page "/oppgaver"
+@inject TaskItemService TaskService
+@inject HousingUnitService HousingUnitService
+@inject BoardCaseService BoardCaseService
+@inject ILogger<TaskList> Logger
+
+<PageTitle>Oppgaver – SameieHub</PageTitle>
+
+<PageHeader Title="Oppgaver" Description="Oppgaver og vedlikehold i sameiet, med frister og status.">
+    <a class="btn btn-primary" href="/oppgaver/ny">Registrer oppgave</a>
+</PageHeader>
+
+@if (StatusMessage != null)
+{
+    <div class="alert alert-success" role="status">@StatusMessage</div>
+}
+
+@if (_isLoading)
+{
+    <div class="surface-card" role="status">
+        <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Laster oppgaver …
+    </div>
+}
+else if (_loadError != null)
+{
+    <div class="alert alert-danger" role="alert">
+        <p>@_loadError</p>
+        <button type="button" class="btn btn-outline-danger btn-sm" @onclick="LoadAsync">Prøv igjen</button>
+    </div>
+}
+else if (_allTasks.Count == 0)
+{
+    <section class="surface-card empty-state">
+        <h2>Ingen oppgaver registrert ennå</h2>
+        <p>Registrer den første oppgaven for å komme i gang.</p>
+        <a class="btn btn-primary" href="/oppgaver/ny">Registrer oppgave</a>
+    </section>
+}
+else
+{
+    var today = TaskService.GetToday();
+
+    <div class="stat-row">
+        <div class="stat-card"><span class="stat-value">@_allTasks.Count</span><span class="stat-label">Totalt</span></div>
+        @foreach (var status in TaskText.AllStatuses)
+        {
+            <div class="stat-card">
+                <span class="stat-value">@CountWithStatus(status)</span>
+                <span class="stat-label">@TaskText.StatusText(status)</span>
+            </div>
+        }
+        <div class="stat-card">
+            <span class="stat-value">@CountOverdue(today)</span>
+            <span class="stat-label">Forfalt</span>
+        </div>
+    </div>
+
+    <div class="toolbar">
+        <input type="search" class="form-control" aria-label="Søk i oppgaver"
+               placeholder="Søk på oppgavenummer, tittel, beskrivelse eller ansvarlig"
+               @bind="_searchText" @bind:event="oninput" />
+        <select class="form-select" aria-label="Filtrer på status" @bind="_statusValue">
+            <option value="@OpenValue">Ikke fullførte</option>
+            <option value="@AllValue">Alle</option>
+            @foreach (var status in TaskText.AllStatuses)
+            {
+                <option value="@status">@(status == TaskItemStatus.Completed ? "Fullførte" : TaskText.StatusText(status))</option>
+            }
+        </select>
+        <select class="form-select" aria-label="Filtrer på kategori" @bind="_categoryValue">
+            <option value="">Alle kategorier</option>
+            @foreach (var category in TaskText.AllCategories)
+            {
+                <option value="@category">@TaskText.CategoryText(category)</option>
+            }
+        </select>
+        <select class="form-select" aria-label="Filtrer på prioritet" @bind="_priorityValue">
+            <option value="">Alle prioriteter</option>
+            @foreach (var priority in TaskText.AllPriorities)
+            {
+                <option value="@priority">@TaskText.PriorityText(priority)</option>
+            }
+        </select>
+        <select class="form-select" aria-label="Filtrer på boenhet" @bind="_housingUnitValue">
+            <option value="">Alle boenheter</option>
+            @foreach (var unit in _housingUnits)
+            {
+                <option value="@unit.Id">@unit.Address@(unit.IsActive ? "" : " (inaktiv)")</option>
+            }
+        </select>
+        <select class="form-select" aria-label="Filtrer på styresak" @bind="_boardCaseValue">
+            <option value="">Alle styresaker</option>
+            @foreach (var boardCase in _boardCases)
+            {
+                <option value="@boardCase.Id">#@boardCase.Id @boardCase.Title</option>
+            }
+        </select>
+        <select class="form-select" aria-label="Sorter" @bind="_sortOrder">
+            @foreach (var order in Enum.GetValues<TaskItemSortOrder>())
+            {
+                <option value="@order">@TaskText.SortOrderText(order)</option>
+            }
+        </select>
+        <div class="form-check toolbar-check">
+            <input id="overdueOnly" type="checkbox" class="form-check-input" @bind="_overdueOnly" />
+            <label for="overdueOnly" class="form-check-label">Bare forfalte</label>
+        </div>
+    </div>
+
+    var visibleTasks = GetVisibleTasks(today);
+
+    @if (visibleTasks.Count == 0)
+    {
+        <section class="surface-card empty-state">
+            <h2>Ingen oppgaver funnet</h2>
+            <p>Ingen oppgaver passer med søket og filtrene dine.</p>
+            <button type="button" class="btn btn-outline-primary" @onclick="ResetFilters">Nullstill søk og filtre</button>
+            @if (_statusValue == OpenValue)
+            {
+                <button type="button" class="btn btn-link" @onclick="ShowAll">Vis også fullførte</button>
+            }
+        </section>
+    }
+    else
+    {
+        <p class="summary" role="status">Viser <strong>@visibleTasks.Count</strong> av @_allTasks.Count @(_allTasks.Count == 1 ? "oppgave" : "oppgaver")</p>
+
+        <div class="data-table-card table-responsive">
+            <table class="table data-table">
+                <caption class="visually-hidden">Registrerte oppgaver</caption>
+                <thead>
+                    <tr>
+                        <th scope="col" class="col-id">Nr.</th>
+                        <th scope="col">Oppgave</th>
+                        <th scope="col" class="d-none d-md-table-cell">Kategori</th>
+                        <th scope="col">Status</th>
+                        <th scope="col" class="d-none d-md-table-cell">Prioritet</th>
+                        <th scope="col">Frist</th>
+                        <th scope="col" class="d-none d-lg-table-cell">Ansvarlig</th>
+                        <th scope="col" class="col-actions"><span class="visually-hidden">Handlinger</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var task in visibleTasks)
+                    {
+                        <tr>
+                            <td class="col-id">#@task.Id</td>
+                            <td>
+                                <a class="unit-link" href="/oppgaver/@task.Id">@task.Title</a>
+                                @if (LinkText(task) is { } linkText)
+                                {
+                                    <div class="unit-sub">@linkText</div>
+                                }
+                            </td>
+                            <td class="d-none d-md-table-cell">@TaskText.CategoryText(task.Category)</td>
+                            <td><TaskStatusBadge Status="task.Status" /></td>
+                            <td class="d-none d-md-table-cell"><TaskPriorityBadge Priority="task.Priority" /></td>
+                            <td><TaskDueDate Task="task" Today="today" /></td>
+                            <td class="d-none d-lg-table-cell">@(task.AssignedTo ?? "–")</td>
+                            <td class="col-actions">
+                                <a class="btn btn-outline-primary btn-sm" href="/oppgaver/@task.Id"
+                                   aria-label="Åpne oppgave @task.Id">Åpne</a>
+                                <a class="btn btn-link btn-sm" href="/oppgaver/@task.Id/rediger"
+                                   aria-label="Rediger oppgave @task.Id">Rediger</a>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+}
+
+@code {
+    private const string OpenValue = "open";
+    private const string AllValue = "all";
+
+    private IReadOnlyList<TaskItem> _allTasks = [];
+    private IReadOnlyList<HousingUnit> _housingUnits = [];
+    private IReadOnlyList<BoardCase> _boardCases = [];
+    private string _searchText = string.Empty;
+    private string _statusValue = OpenValue;
+    private string _categoryValue = string.Empty;
+    private string _priorityValue = string.Empty;
+    private string _housingUnitValue = string.Empty;
+    private string _boardCaseValue = string.Empty;
+    private bool _overdueOnly;
+    private TaskItemSortOrder _sortOrder = TaskItemSortOrder.DueDate;
+    private bool _isLoading = true;
+    private string? _loadError;
+
+    [SupplyParameterFromQuery(Name = "status")]
+    public string? Status { get; set; }
+
+    private string? StatusMessage => Status == "slettet" ? "Oppgaven er slettet permanent." : null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _isLoading = true;
+        _loadError = null;
+
+        try
+        {
+            _allTasks = await TaskService.GetAllAsync();
+
+            var units = await HousingUnitService.GetAllAsync();
+            _housingUnits = units.OrderBy(unit => unit.Address).ToList();
+
+            var boardCases = await BoardCaseService.GetAllAsync();
+            _boardCases = boardCases.OrderBy(boardCase => boardCase.Id).ToList();
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Could not load tasks.");
+            _loadError = "Kunne ikke hente oppgavene. Kontroller at databasen er tilgjengelig og prøv igjen.";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private int CountWithStatus(TaskItemStatus status)
+    {
+        return _allTasks.Count(task => task.Status == status);
+    }
+
+    private int CountOverdue(DateOnly today)
+    {
+        return _allTasks.Count(task => task.IsOverdue(today));
+    }
+
+    private List<TaskItem> GetVisibleTasks(DateOnly today)
+    {
+        var criteria = new TaskItemFilterCriteria
+        {
+            SearchText = _searchText,
+            OpenOnly = _statusValue == OpenValue,
+            Status = Enum.TryParse<TaskItemStatus>(_statusValue, out var status) ? status : null,
+            Category = Enum.TryParse<TaskItemCategory>(_categoryValue, out var category) ? category : null,
+            Priority = Enum.TryParse<TaskItemPriority>(_priorityValue, out var priority) ? priority : null,
+            HousingUnitId = int.TryParse(_housingUnitValue, out var housingUnitId) ? housingUnitId : null,
+            BoardCaseId = int.TryParse(_boardCaseValue, out var boardCaseId) ? boardCaseId : null,
+            OverdueOn = _overdueOnly ? today : null
+        };
+
+        return TaskItemSorting.Sort(TaskItemFilter.Apply(_allTasks, criteria), _sortOrder);
+    }
+
+    private string? LinkText(TaskItem task)
+    {
+        var parts = new List<string>();
+
+        if (task.BoardCaseId != null)
+        {
+            var boardCase = _boardCases.FirstOrDefault(existing => existing.Id == task.BoardCaseId);
+            parts.Add(boardCase == null ? $"Styresak #{task.BoardCaseId}" : $"Styresak #{boardCase.Id} {boardCase.Title}");
+        }
+
+        if (task.HousingUnitId != null)
+        {
+            var unit = _housingUnits.FirstOrDefault(existing => existing.Id == task.HousingUnitId);
+            parts.Add(unit == null ? $"Boenhet {task.HousingUnitId}" : unit.Address);
+        }
+
+        return parts.Count == 0 ? null : string.Join(" · ", parts);
+    }
+
+    private void ResetFilters()
+    {
+        _searchText = string.Empty;
+        _statusValue = OpenValue;
+        _categoryValue = string.Empty;
+        _priorityValue = string.Empty;
+        _housingUnitValue = string.Empty;
+        _boardCaseValue = string.Empty;
+        _overdueOnly = false;
+    }
+
+    private void ShowAll()
+    {
+        _statusValue = AllValue;
+    }
+}

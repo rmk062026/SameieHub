@@ -495,3 +495,29 @@ a:focus-visible,
     .section-heading h2 {
         margin-bottom: 0;
     }
+
+/* Tasks: due date markers (the text is always shown, color is only a hint) */
+.status-badge.is-overdue {
+    background: #fdecea;
+    color: #7a1710;
+    margin-left: 0.4rem;
+}
+
+.status-badge.is-due-today {
+    background: #fff4d6;
+    color: #7a4b00;
+    margin-left: 0.4rem;
+}
+
+.toolbar-check {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex: 1 1 11rem;
+    margin: 0;
+    padding-left: 0.5rem;
+}
+
+    .toolbar-check .form-check-input {
+        margin: 0;
+    }

@@ -1,0 +1,6 @@
+<span class="status-badge @TaskText.StatusCssClass(Status)">@TaskText.StatusText(Status)</span>
+
+@code {
+    [Parameter]
+    public TaskItemStatus Status { get; set; }
+}

@@ -1,0 +1,365 @@
+@page "/oppgaver/{Id:int}"
+@inject TaskItemService TaskService
+@inject HousingUnitService HousingUnitService
+@inject BoardCaseService BoardCaseService
+@inject NavigationManager Navigation
+@inject ILogger<TaskDetail> Logger
+
+<PageTitle>@(_task?.Title ?? "Oppgave") – SameieHub</PageTitle>
+
+@if (_isLoading)
+{
+    <PageHeader Title="Oppgave" BackHref="/oppgaver" BackText="Oppgaver" />
+    <div class="surface-card" role="status">
+        <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Laster oppgave …
+    </div>
+}
+else if (_loadError != null)
+{
+    <PageHeader Title="Oppgave" BackHref="/oppgaver" BackText="Oppgaver" />
+    <div class="alert alert-danger" role="alert">
+        <p>@_loadError</p>
+        <button type="button" class="btn btn-outline-danger btn-sm" @onclick="LoadAsync">Prøv igjen</button>
+    </div>
+}
+else if (_task == null)
+{
+    <PageHeader Title="Oppgave" BackHref="/oppgaver" BackText="Oppgaver" />
+    <div class="surface-card empty-state">
+        <h2>Fant ikke oppgaven</h2>
+        <p>Oppgaven finnes ikke, eller den er slettet.</p>
+        <a class="btn btn-primary" href="/oppgaver">Tilbake til oppgaver</a>
+    </div>
+}
+else
+{
+    var today = TaskService.GetToday();
+
+    <PageHeader Title="@_task.Title" BackHref="/oppgaver" BackText="Oppgaver">
+        <a class="btn btn-primary" href="/oppgaver/@_task.Id/rediger">Rediger</a>
+    </PageHeader>
+
+    @if (_message != null)
+    {
+        <div class="alert alert-success" role="status">@_message</div>
+    }
+    @if (_actionError != null)
+    {
+        <div class="alert alert-danger" role="alert">@_actionError</div>
+    }
+
+    <div class="detail-meta">
+        <span class="text-muted">Oppgave #@_task.Id</span>
+        <TaskStatusBadge Status="_task.Status" />
+        <TaskPriorityBadge Priority="_task.Priority" />
+        @if (_task.IsOverdue(today))
+        {
+            <span class="status-badge is-overdue">Forfalt</span>
+        }
+    </div>
+
+    <div class="detail-grid">
+        <section class="surface-card">
+            <h2>Oppgaveinformasjon</h2>
+            <dl class="detail-list">
+                <DetailItem Label="Kategori" Value="@TaskText.CategoryText(_task.Category)" />
+                <DetailItem Label="Status" Value="@TaskText.StatusText(_task.Status)" />
+                <DetailItem Label="Prioritet" Value="@TaskText.PriorityText(_task.Priority)" />
+                <div class="detail-item">
+                    <dt>Frist</dt>
+                    <dd><TaskDueDate Task="_task" Today="today" /></dd>
+                </div>
+                <DetailItem Label="Ansvarlig" Value="@_task.AssignedTo" />
+                <div class="detail-item">
+                    <dt>Boenhet</dt>
+                    <dd>
+                        @if (_task.HousingUnitId == null)
+                        {
+                            <span class="text-muted">Ingen boenhet</span>
+                        }
+                        else if (_housingUnit == null)
+                        {
+                            <span>Boenhet @_task.HousingUnitId</span>
+                        }
+                        else
+                        {
+                            <a href="/boenheter/@_housingUnit.Id">@_housingUnit.Address</a>
+                            @if (!_housingUnit.IsActive)
+                            {
+                                <span class="text-muted"> (inaktiv)</span>
+                            }
+                        }
+                    </dd>
+                </div>
+                <div class="detail-item">
+                    <dt>Styresak</dt>
+                    <dd>
+                        @if (_task.BoardCaseId == null)
+                        {
+                            <span class="text-muted">Ingen styresak</span>
+                        }
+                        else if (_boardCase == null)
+                        {
+                            <span>Styresak #@_task.BoardCaseId</span>
+                        }
+                        else
+                        {
+                            <a href="/styresaker/@_boardCase.Id">#@_boardCase.Id @_boardCase.Title</a>
+                        }
+                    </dd>
+                </div>
+                <DetailItem Label="Opprettet" Value="@NorwegianDateFormat.DateTime(_task.CreatedAt)" />
+                <DetailItem Label="Sist oppdatert" Value="@NorwegianDateFormat.DateTime(_task.UpdatedAt)" />
+                @if (_task.CompletedAt is { } completedAt)
+                {
+                    <DetailItem Label="Fullført" Value="@NorwegianDateFormat.DateTime(completedAt)" />
+                }
+            </dl>
+        </section>
+
+        <section class="surface-card">
+            <h2>Beskrivelse</h2>
+            @if (string.IsNullOrWhiteSpace(_task.Description))
+            {
+                <p class="text-muted mb-0">Ikke registrert</p>
+            }
+            else
+            {
+                <p class="notes-text mb-0">@_task.Description</p>
+            }
+        </section>
+
+        <section class="surface-card detail-wide">
+            <h2>Status</h2>
+            <div class="inline-form">
+                @if (_task.Status == TaskItemStatus.Completed)
+                {
+                    <button type="button" class="btn btn-primary" disabled="@_isBusy" @onclick="ReopenAsync">Gjenåpne oppgaven</button>
+                }
+                else
+                {
+                    <button type="button" class="btn btn-primary" disabled="@_isBusy" @onclick="CompleteAsync">Marker som fullført</button>
+                }
+                <label for="newStatus" class="visually-hidden">Ny status</label>
+                <select id="newStatus" class="form-select" @bind="_selectedStatus">
+                    @foreach (var status in TaskText.AllStatuses)
+                    {
+                        <option value="@status">@TaskText.StatusText(status)</option>
+                    }
+                </select>
+                <button type="button" class="btn btn-outline-secondary" disabled="@(_isBusy || _selectedStatus == _task.Status)"
+                        @onclick="ChangeStatusAsync">Endre status</button>
+            </div>
+            @if (_task.CompletedAt is { } completed)
+            {
+                <p class="form-text mb-0">Fullført @NorwegianDateFormat.DateTime(completed). Tidspunktet fjernes hvis oppgaven gjenåpnes.</p>
+            }
+        </section>
+
+        <section class="surface-card detail-wide">
+            <h2>Merknader</h2>
+            @if (string.IsNullOrWhiteSpace(_task.Notes))
+            {
+                <p class="text-muted mb-0">Ikke registrert</p>
+            }
+            else
+            {
+                <p class="notes-text mb-0">@_task.Notes</p>
+            }
+        </section>
+    </div>
+
+    <section class="surface-card danger-zone">
+        @if (_deleteError != null)
+        {
+            <div class="alert alert-danger" role="alert">@_deleteError</div>
+        }
+
+        @if (!_confirmingDelete)
+        {
+            <div class="danger-zone-row">
+                <div>
+                    <h2>Slett oppgave</h2>
+                    <p class="text-muted mb-0">Fjerner oppgaven permanent. Bruk dette bare for feilregistrerte oppgaver.</p>
+                </div>
+                <button type="button" class="btn btn-outline-danger" @onclick="AskForDeleteConfirmation">Slett oppgaven …</button>
+            </div>
+        }
+        else
+        {
+            <div role="alertdialog" aria-labelledby="delete-title" aria-describedby="delete-text">
+                <h2 id="delete-title">Slette «@_task.Title» permanent?</h2>
+                <p id="delete-text">
+                    <strong>Dette kan ikke angres.</strong> Oppgaven og alle opplysninger om den blir slettet for alltid.
+                    Styresaken og boenheten den er knyttet til blir ikke slettet.
+                </p>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-danger" disabled="@_isDeleting" @onclick="DeleteAsync">
+                        @(_isDeleting ? "Sletter …" : "Ja, slett permanent")
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" disabled="@_isDeleting" @onclick="CancelDelete">Avbryt</button>
+                </div>
+            </div>
+        }
+    </section>
+}
+
+@code {
+    private TaskItem? _task;
+    private HousingUnit? _housingUnit;
+    private BoardCase? _boardCase;
+    private TaskItemStatus _selectedStatus;
+    private bool _isLoading = true;
+    private bool _isBusy;
+    private bool _confirmingDelete;
+    private bool _isDeleting;
+    private string? _loadError;
+    private string? _message;
+    private string? _actionError;
+    private string? _deleteError;
+
+    [Parameter]
+    public int Id { get; set; }
+
+    [SupplyParameterFromQuery(Name = "status")]
+    public string? Status { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _message = Status switch
+        {
+            "opprettet" => "Oppgaven er registrert.",
+            "endret" => "Endringene er lagret.",
+            _ => null
+        };
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _isLoading = true;
+        _loadError = null;
+
+        try
+        {
+            await ReadTaskAsync();
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Could not load task {Id}.", Id);
+            _loadError = "Kunne ikke hente oppgaven. Kontroller at databasen er tilgjengelig og prøv igjen.";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task ReadTaskAsync()
+    {
+        _task = await TaskService.GetByIdAsync(Id);
+        _housingUnit = _task?.HousingUnitId == null
+            ? null
+            : await HousingUnitService.GetByIdAsync(_task.HousingUnitId.Value);
+        _boardCase = _task?.BoardCaseId == null
+            ? null
+            : await BoardCaseService.GetByIdAsync(_task.BoardCaseId.Value);
+
+        if (_task != null)
+        {
+            _selectedStatus = _task.Status;
+        }
+    }
+
+    private async Task CompleteAsync()
+    {
+        await RunActionAsync(TaskItemStatus.Completed, "Oppgaven er markert som fullført.");
+    }
+
+    private async Task ReopenAsync()
+    {
+        await RunActionAsync(TaskItemStatus.InProgress, "Oppgaven er gjenåpnet.");
+    }
+
+    private async Task ChangeStatusAsync()
+    {
+        await RunActionAsync(_selectedStatus, "Statusen er endret.");
+    }
+
+    private async Task RunActionAsync(TaskItemStatus newStatus, string successMessage)
+    {
+        if (_isBusy)
+        {
+            return;
+        }
+
+        _isBusy = true;
+        _message = null;
+        _actionError = null;
+
+        try
+        {
+            await TaskService.ChangeStatusAsync(Id, newStatus);
+            await ReadTaskAsync();
+            _message = successMessage;
+        }
+        catch (KeyNotFoundException)
+        {
+            _actionError = "Oppgaven finnes ikke lenger. Gå tilbake til oversikten.";
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Could not change status of task {Id}.", Id);
+            _actionError = "Kunne ikke lagre endringen. Kontroller at databasen er tilgjengelig og prøv på nytt.";
+        }
+        finally
+        {
+            _isBusy = false;
+        }
+    }
+
+    private void AskForDeleteConfirmation()
+    {
+        _deleteError = null;
+        _confirmingDelete = true;
+    }
+
+    private void CancelDelete()
+    {
+        _confirmingDelete = false;
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (_isDeleting)
+        {
+            return;
+        }
+
+        _isDeleting = true;
+        _deleteError = null;
+
+        try
+        {
+            await TaskService.DeleteAsync(Id);
+
+            Navigation.NavigateTo("/oppgaver?status=slettet");
+        }
+        catch (KeyNotFoundException)
+        {
+            _deleteError = "Oppgaven finnes ikke lenger. Gå tilbake til oversikten.";
+            _confirmingDelete = false;
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Could not delete task {Id}.", Id);
+            _deleteError = "Kunne ikke slette oppgaven. Kontroller at databasen er tilgjengelig og prøv på nytt.";
+            _confirmingDelete = false;
+        }
+        finally
+        {
+            _isDeleting = false;
+        }
+    }
+}

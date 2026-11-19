@@ -1,0 +1,214 @@
+@inject ILogger<TaskForm> Logger
+
+<EditForm EditContext="_editContext" OnValidSubmit="SaveAsync" novalidate>
+    <DataAnnotationsValidator />
+
+    @if (_errorMessage != null)
+    {
+        <div class="alert alert-danger" role="alert">@_errorMessage</div>
+    }
+
+    <section class="surface-card form-section">
+        <h2>Oppgaveinformasjon</h2>
+        <div class="row g-3">
+            <div class="col-12">
+                <label for="title" class="form-label">Tittel <span class="required-mark" aria-hidden="true">*</span></label>
+                <InputText id="title" @ref="_titleInput" class="form-control" @bind-Value="_model.Title"
+                           maxlength="@TaskItem.MaxTitleLength" aria-required="true" autocomplete="off" />
+                <ValidationMessage For="() => _model.Title" />
+            </div>
+            <div class="col-12">
+                <label for="description" class="form-label">Beskrivelse</label>
+                <InputTextArea id="description" class="form-control" rows="4" @bind-Value="_model.Description"
+                               maxlength="@TaskItem.MaxDescriptionLength" />
+                <ValidationMessage For="() => _model.Description" />
+            </div>
+            <div class="col-md-6">
+                <label for="category" class="form-label">Kategori</label>
+                <InputSelect id="category" class="form-select" @bind-Value="_model.Category">
+                    @foreach (var category in TaskText.AllCategories)
+                    {
+                        <option value="@category">@TaskText.CategoryText(category)</option>
+                    }
+                </InputSelect>
+                <ValidationMessage For="() => _model.Category" />
+            </div>
+            <div class="col-md-6">
+                <label for="priority" class="form-label">Prioritet</label>
+                <InputSelect id="priority" class="form-select" @bind-Value="_model.Priority">
+                    @foreach (var priority in TaskText.AllPriorities)
+                    {
+                        <option value="@priority">@TaskText.PriorityText(priority)</option>
+                    }
+                </InputSelect>
+                <ValidationMessage For="() => _model.Priority" />
+            </div>
+            <div class="col-md-6">
+                <label for="dueDate" class="form-label">Frist</label>
+                <InputDate id="dueDate" class="form-control" @bind-Value="_model.DueDate"
+                           ParsingErrorMessage="Fristen må være en gyldig dato." />
+                <ValidationMessage For="() => _model.DueDate" />
+            </div>
+            <div class="col-md-6">
+                <label for="assignedTo" class="form-label">Ansvarlig</label>
+                <InputText id="assignedTo" class="form-control" @bind-Value="_model.AssignedTo"
+                           maxlength="@TaskItem.MaxAssignedToLength" autocomplete="off" />
+                <ValidationMessage For="() => _model.AssignedTo" />
+            </div>
+        </div>
+    </section>
+
+    <section class="surface-card form-section">
+        <h2>Koblinger</h2>
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label for="housingUnitId" class="form-label">Tilknyttet boenhet</label>
+                <InputSelect id="housingUnitId" class="form-select" @bind-Value="_model.HousingUnitId">
+                    <option value="">Ingen boenhet</option>
+                    @foreach (var unit in AvailableHousingUnits)
+                    {
+                        <option value="@unit.Id">@unit.Address@(unit.IsActive ? "" : " (inaktiv)")</option>
+                    }
+                </InputSelect>
+                <ValidationMessage For="() => _model.HousingUnitId" />
+            </div>
+            <div class="col-md-6">
+                <label for="boardCaseId" class="form-label">Tilknyttet styresak</label>
+                <InputSelect id="boardCaseId" class="form-select" @bind-Value="_model.BoardCaseId">
+                    <option value="">Ingen styresak</option>
+                    @foreach (var boardCase in AvailableBoardCases)
+                    {
+                        <option value="@boardCase.Id">#@boardCase.Id @boardCase.Title</option>
+                    }
+                </InputSelect>
+                <ValidationMessage For="() => _model.BoardCaseId" />
+            </div>
+        </div>
+        <p class="form-text mb-0 mt-2">Oppgaven og styresaken trenger ikke gjelde samme boenhet.</p>
+    </section>
+
+    <section class="surface-card form-section">
+        <h2>Andre opplysninger</h2>
+        <label for="notes" class="form-label">Merknader</label>
+        <InputTextArea id="notes" class="form-control" rows="4" @bind-Value="_model.Notes"
+                       maxlength="@TaskItem.MaxNotesLength" />
+        <ValidationMessage For="() => _model.Notes" />
+    </section>
+
+    <div class="form-actions">
+        <button type="submit" class="btn btn-primary" disabled="@_isSaving">
+            @if (_isSaving)
+            {
+                <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
+                <span>Lagrer …</span>
+            }
+            else
+            {
+                @SubmitText
+            }
+        </button>
+        <a class="btn btn-outline-secondary" href="@CancelHref">Avbryt</a>
+    </div>
+</EditForm>
+
+@code {
+    private TaskFormModel _model = new();
+    private EditContext _editContext = default!;
+    private ValidationMessageStore _messageStore = default!;
+    private InputText? _titleInput;
+    private bool _isSaving;
+    private string? _errorMessage;
+
+    [Parameter]
+    public TaskItem? Existing { get; set; }
+
+    /// <summary>The housing unit chosen when a new task is registered. Must be one of the available units.</summary>
+    [Parameter]
+    public int? InitialHousingUnitId { get; set; }
+
+    /// <summary>The board case chosen when a new task is registered. Must be one of the available cases.</summary>
+    [Parameter]
+    public int? InitialBoardCaseId { get; set; }
+
+    /// <summary>The housing units the user can choose from. The page decides which ones are offered.</summary>
+    [Parameter, EditorRequired]
+    public IReadOnlyList<HousingUnit> AvailableHousingUnits { get; set; } = [];
+
+    [Parameter, EditorRequired]
+    public IReadOnlyList<BoardCase> AvailableBoardCases { get; set; } = [];
+
+    [Parameter, EditorRequired]
+    public string SubmitText { get; set; } = string.Empty;
+
+    [Parameter]
+    public string CancelHref { get; set; } = "/oppgaver";
+
+    [Parameter, EditorRequired]
+    public Func<TaskItemDetails, Task> OnSave { get; set; } = _ => Task.CompletedTask;
+
+    protected override void OnInitialized()
+    {
+        _model = Existing == null
+            ? new TaskFormModel { HousingUnitId = InitialHousingUnitId, BoardCaseId = InitialBoardCaseId }
+            : TaskFormModel.From(Existing);
+
+        _editContext = new EditContext(_model);
+        _messageStore = new ValidationMessageStore(_editContext);
+        _editContext.OnValidationRequested += (_, _) => _messageStore.Clear();
+        _editContext.OnFieldChanged += (_, e) => _messageStore.Clear(e.FieldIdentifier);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && _titleInput?.Element is { } element)
+        {
+            await element.FocusAsync();
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_isSaving)
+        {
+            return;
+        }
+
+        _isSaving = true;
+        _errorMessage = null;
+
+        try
+        {
+            await OnSave(_model.ToDetails());
+        }
+        catch (ArgumentException exception) when (TaskFieldMessages.TryGet(exception.ParamName, out _))
+        {
+            ShowFieldError(exception.ParamName!);
+        }
+        catch (ArgumentException)
+        {
+            _errorMessage = "En av verdiene er ugyldig. Kontroller skjemaet og prøv på nytt.";
+        }
+        catch (KeyNotFoundException)
+        {
+            _errorMessage = "Oppgaven finnes ikke lenger. Gå tilbake til oversikten.";
+        }
+        catch (Exception exception)
+        {
+            // Only the exception is logged, never the form values.
+            Logger.LogError(exception, "Could not save task.");
+            _errorMessage = "Kunne ikke lagre. Kontroller at databasen er tilgjengelig og prøv på nytt.";
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private void ShowFieldError(string fieldName)
+    {
+        TaskFieldMessages.TryGet(fieldName, out var message);
+
+        _messageStore.Add(_editContext.Field(fieldName), message);
+        _editContext.NotifyValidationStateChanged();
+    }
+}

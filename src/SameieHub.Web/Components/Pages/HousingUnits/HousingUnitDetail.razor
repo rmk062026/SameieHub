@@ -1,7 +1,9 @@
 @page "/boenheter/{Id:int}"
 @using SameieHub.Web.Components.Pages.BoardCases
+@using SameieHub.Web.Components.Pages.TaskItems
 @inject HousingUnitService HousingUnitService
 @inject BoardCaseService BoardCaseService
+@inject TaskItemService TaskService
 @inject NavigationManager Navigation
 @inject ILogger<HousingUnitDetail> Logger
 
@@ -147,6 +149,48 @@ else
                 </div>
             }
         </section>
+        <section class="surface-card detail-wide">
+            <div class="section-heading">
+                <h2>Oppgaver</h2>
+                @if (_unit.IsActive)
+                {
+                    <a class="btn btn-outline-primary btn-sm" href="/oppgaver/ny?boenhet=@_unit.Id">Registrer oppgave</a>
+                }
+            </div>
+            @if (_linkedTasks.Count == 0)
+            {
+                <p class="text-muted mb-0">Ingen oppgaver er knyttet til denne boenheten.</p>
+            }
+            else
+            {
+                var today = TaskService.GetToday();
+
+                <div class="table-responsive">
+                    <table class="table data-table">
+                        <caption class="visually-hidden">Oppgaver knyttet til boenheten</caption>
+                        <thead>
+                            <tr>
+                                <th scope="col" class="col-id">Nr.</th>
+                                <th scope="col">Oppgave</th>
+                                <th scope="col">Status</th>
+                                <th scope="col">Frist</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var task in _linkedTasks)
+                            {
+                                <tr>
+                                    <td class="col-id">#@task.Id</td>
+                                    <td><a class="unit-link" href="/oppgaver/@task.Id">@task.Title</a></td>
+                                    <td><TaskStatusBadge Status="task.Status" /></td>
+                                    <td><TaskDueDate Task="task" Today="today" /></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
     </div>
 
     <section class="surface-card danger-zone">
@@ -187,6 +231,7 @@ else
 @code {
     private HousingUnit? _unit;
     private IReadOnlyList<BoardCase> _linkedCases = [];
+    private IReadOnlyList<TaskItem> _linkedTasks = [];
     private bool _isLoading = true;
     private bool _isChangingStatus;
     private bool _confirmingDelete;
@@ -229,6 +274,9 @@ else
 
             var allCases = await BoardCaseService.GetAllAsync();
             _linkedCases = BoardCaseSorting.Sort(allCases.Where(boardCase => boardCase.HousingUnitId == Id), BoardCaseSortOrder.Newest);
+
+            var allTasks = await TaskService.GetAllAsync();
+            _linkedTasks = TaskItemSorting.Sort(allTasks.Where(task => task.HousingUnitId == Id), TaskItemSortOrder.DueDate);
         }
         catch (Exception exception)
         {

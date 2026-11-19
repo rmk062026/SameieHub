@@ -1,0 +1,139 @@
+@page "/oppgaver/ny"
+@inject TaskItemService TaskService
+@inject HousingUnitService HousingUnitService
+@inject BoardCaseService BoardCaseService
+@inject NavigationManager Navigation
+@inject ILogger<TaskCreate> Logger
+
+<PageTitle>Registrer oppgave – SameieHub</PageTitle>
+
+<PageHeader Title="Registrer oppgave" Description="Bare tittelen er obligatorisk. Resten kan du fylle inn senere."
+            BackHref="/oppgaver" BackText="Oppgaver" />
+
+@if (_isLoading)
+{
+    <div class="surface-card" role="status">
+        <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Laster skjema …
+    </div>
+}
+else if (_loadError != null)
+{
+    <div class="alert alert-danger" role="alert">
+        <p>@_loadError</p>
+        <button type="button" class="btn btn-outline-danger btn-sm" @onclick="LoadAsync">Prøv igjen</button>
+    </div>
+}
+else
+{
+    @foreach (var notice in _preselectNotices)
+    {
+        <div class="alert alert-warning" role="status">@notice</div>
+    }
+
+    <TaskForm AvailableHousingUnits="_activeHousingUnits" AvailableBoardCases="_boardCases"
+              InitialHousingUnitId="_preselectedHousingUnitId" InitialBoardCaseId="_preselectedBoardCaseId"
+              SubmitText="Registrer oppgave" CancelHref="@CancelHref" OnSave="RegisterAsync" />
+}
+
+@code {
+    private IReadOnlyList<HousingUnit> _activeHousingUnits = [];
+    private IReadOnlyList<BoardCase> _boardCases = [];
+    private int? _preselectedHousingUnitId;
+    private int? _preselectedBoardCaseId;
+    private List<string> _preselectNotices = [];
+    private bool _isLoading = true;
+    private string? _loadError;
+
+    /// <summary>Set by the shortcut on a housing unit page. It is only a suggestion and is checked below.</summary>
+    [SupplyParameterFromQuery(Name = "boenhet")]
+    public string? HousingUnitParameter { get; set; }
+
+    /// <summary>Set by the shortcut on a board case page. It is only a suggestion and is checked below.</summary>
+    [SupplyParameterFromQuery(Name = "styresak")]
+    public string? BoardCaseParameter { get; set; }
+
+    private string CancelHref => _preselectedBoardCaseId != null
+        ? $"/styresaker/{_preselectedBoardCaseId}"
+        : _preselectedHousingUnitId != null ? $"/boenheter/{_preselectedHousingUnitId}" : "/oppgaver";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _isLoading = true;
+        _loadError = null;
+
+        try
+        {
+            var units = await HousingUnitService.GetAllAsync();
+            _activeHousingUnits = units.Where(unit => unit.IsActive).OrderBy(unit => unit.Address).ToList();
+
+            var boardCases = await BoardCaseService.GetAllAsync();
+            _boardCases = boardCases.OrderBy(boardCase => boardCase.Id).ToList();
+
+            Preselect();
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Could not load the task form.");
+            _loadError = "Kunne ikke hente skjemaet. Kontroller at databasen er tilgjengelig og prøv igjen.";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void Preselect()
+    {
+        _preselectedHousingUnitId = null;
+        _preselectedBoardCaseId = null;
+        _preselectNotices = [];
+
+        if (HousingUnitParameter != null)
+        {
+            var unit = FindActiveUnit(HousingUnitParameter);
+            if (unit == null)
+            {
+                _preselectNotices.Add("Boenheten fra lenken finnes ikke eller er inaktiv, så den er ikke valgt.");
+            }
+            else
+            {
+                _preselectedHousingUnitId = unit.Id;
+            }
+        }
+
+        if (BoardCaseParameter != null)
+        {
+            var boardCase = FindBoardCase(BoardCaseParameter);
+            if (boardCase == null)
+            {
+                _preselectNotices.Add("Styresaken fra lenken finnes ikke, så den er ikke valgt.");
+            }
+            else
+            {
+                _preselectedBoardCaseId = boardCase.Id;
+            }
+        }
+    }
+
+    private HousingUnit? FindActiveUnit(string value)
+    {
+        return int.TryParse(value, out var id) ? _activeHousingUnits.FirstOrDefault(unit => unit.Id == id) : null;
+    }
+
+    private BoardCase? FindBoardCase(string value)
+    {
+        return int.TryParse(value, out var id) ? _boardCases.FirstOrDefault(boardCase => boardCase.Id == id) : null;
+    }
+
+    private async Task RegisterAsync(TaskItemDetails details)
+    {
+        var task = await TaskService.RegisterAsync(details);
+
+        Navigation.NavigateTo($"/oppgaver/{task.Id}?status=opprettet");
+    }
+}

@@ -1,0 +1,93 @@
+@page "/oppgaver/{Id:int}/rediger"
+@inject TaskItemService TaskService
+@inject HousingUnitService HousingUnitService
+@inject BoardCaseService BoardCaseService
+@inject NavigationManager Navigation
+@inject ILogger<TaskEdit> Logger
+
+<PageTitle>Rediger oppgave – SameieHub</PageTitle>
+
+<PageHeader Title="Rediger oppgave" Description="Endre opplysningene om oppgaven."
+            BackHref="@($"/oppgaver/{Id}")" BackText="Tilbake til oppgaven" />
+
+@if (_isLoading)
+{
+    <div class="surface-card" role="status">
+        <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Laster oppgave …
+    </div>
+}
+else if (_loadError != null)
+{
+    <div class="alert alert-danger" role="alert">
+        <p>@_loadError</p>
+        <button type="button" class="btn btn-outline-danger btn-sm" @onclick="LoadAsync">Prøv igjen</button>
+    </div>
+}
+else if (_task == null)
+{
+    <div class="surface-card empty-state">
+        <h2>Fant ikke oppgaven</h2>
+        <p>Oppgaven finnes ikke, eller den er slettet.</p>
+        <a class="btn btn-primary" href="/oppgaver">Tilbake til oppgaver</a>
+    </div>
+}
+else
+{
+    <TaskForm Existing="_task" AvailableHousingUnits="_availableHousingUnits" AvailableBoardCases="_boardCases"
+              SubmitText="Lagre endringer" CancelHref="@($"/oppgaver/{Id}")" OnSave="UpdateAsync" />
+}
+
+@code {
+    private TaskItem? _task;
+    private IReadOnlyList<HousingUnit> _availableHousingUnits = [];
+    private IReadOnlyList<BoardCase> _boardCases = [];
+    private bool _isLoading = true;
+    private string? _loadError;
+
+    [Parameter]
+    public int Id { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _isLoading = true;
+        _loadError = null;
+
+        try
+        {
+            _task = await TaskService.GetByIdAsync(Id);
+
+            var units = await HousingUnitService.GetAllAsync();
+
+            // The linked housing unit stays selectable even if it has been deactivated since.
+            // Other inactive units are not offered as new links.
+            _availableHousingUnits = units
+                .Where(unit => unit.IsActive || unit.Id == _task?.HousingUnitId)
+                .OrderBy(unit => unit.Address)
+                .ToList();
+
+            var boardCases = await BoardCaseService.GetAllAsync();
+            _boardCases = boardCases.OrderBy(boardCase => boardCase.Id).ToList();
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Could not load task {Id}.", Id);
+            _loadError = "Kunne ikke hente oppgaven. Kontroller at databasen er tilgjengelig og prøv igjen.";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task UpdateAsync(TaskItemDetails details)
+    {
+        await TaskService.UpdateDetailsAsync(Id, details);
+
+        Navigation.NavigateTo($"/oppgaver/{Id}?status=endret");
+    }
+}

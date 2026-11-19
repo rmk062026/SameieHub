@@ -1,6 +1,8 @@
 @page "/styresaker/{Id:int}"
 @inject BoardCaseService BoardCaseService
+@using SameieHub.Web.Components.Pages.TaskItems
 @inject HousingUnitService HousingUnitService
+@inject TaskItemService TaskService
 @inject NavigationManager Navigation
 @inject ILogger<BoardCaseDetail> Logger
 
@@ -161,6 +163,46 @@ else
         </section>
 
         <section class="surface-card detail-wide">
+            <div class="section-heading">
+                <h2>Oppgaver</h2>
+                <a class="btn btn-outline-primary btn-sm" href="/oppgaver/ny?styresak=@_boardCase.Id">Registrer oppgave</a>
+            </div>
+            @if (_linkedTasks.Count == 0)
+            {
+                <p class="text-muted mb-0">Ingen oppgaver er knyttet til denne styresaken.</p>
+            }
+            else
+            {
+                var today = TaskService.GetToday();
+
+                <div class="table-responsive">
+                    <table class="table data-table">
+                        <caption class="visually-hidden">Oppgaver knyttet til styresaken</caption>
+                        <thead>
+                            <tr>
+                                <th scope="col" class="col-id">Nr.</th>
+                                <th scope="col">Oppgave</th>
+                                <th scope="col">Status</th>
+                                <th scope="col">Frist</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var task in _linkedTasks)
+                            {
+                                <tr>
+                                    <td class="col-id">#@task.Id</td>
+                                    <td><a class="unit-link" href="/oppgaver/@task.Id">@task.Title</a></td>
+                                    <td><TaskStatusBadge Status="task.Status" /></td>
+                                    <td><TaskDueDate Task="task" Today="today" /></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+
+        <section class="surface-card detail-wide">
             <h2>Merknader</h2>
             @if (string.IsNullOrWhiteSpace(_boardCase.Notes))
             {
@@ -211,6 +253,7 @@ else
 @code {
     private BoardCase? _boardCase;
     private HousingUnit? _housingUnit;
+    private IReadOnlyList<TaskItem> _linkedTasks = [];
     private BoardCaseStatus _selectedStatus;
     private string _decisionText = string.Empty;
     private DateOnly? _decisionDate;
@@ -267,6 +310,9 @@ else
         _housingUnit = _boardCase?.HousingUnitId == null
             ? null
             : await HousingUnitService.GetByIdAsync(_boardCase.HousingUnitId.Value);
+
+        var allTasks = await TaskService.GetAllAsync();
+        _linkedTasks = TaskItemSorting.Sort(allTasks.Where(task => task.BoardCaseId == Id), TaskItemSortOrder.DueDate);
 
         if (_boardCase != null)
         {
