@@ -137,7 +137,7 @@ else
                         <th scope="col" class="d-none d-md-table-cell">Prioritet</th>
                         <th scope="col">Frist</th>
                         <th scope="col" class="d-none d-lg-table-cell">Ansvarlig</th>
-                        <th scope="col" class="col-actions"><span class="visually-hidden">Handlinger</span></th>
+                        <th scope="col" class="col-actions d-none d-md-table-cell"><span class="visually-hidden">Handlinger</span></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -157,7 +157,7 @@ else
                             <td class="d-none d-md-table-cell"><TaskPriorityBadge Priority="task.Priority" /></td>
                             <td><TaskDueDate Task="task" Today="today" /></td>
                             <td class="d-none d-lg-table-cell">@(task.AssignedTo ?? "–")</td>
-                            <td class="col-actions">
+                            <td class="col-actions d-none d-md-table-cell">
                                 <a class="btn btn-outline-primary btn-sm" href="/oppgaver/@task.Id"
                                    aria-label="Åpne oppgave @task.Id">Åpne</a>
                                 <a class="btn btn-link btn-sm" href="/oppgaver/@task.Id/rediger"
