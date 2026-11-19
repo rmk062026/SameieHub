@@ -70,7 +70,7 @@ else if (_overview != null)
                                 <th scope="col" class="col-id d-none d-md-table-cell">Nr.</th>
                                 <th scope="col">Oppgave</th>
                                 <th scope="col" class="d-none d-lg-table-cell">Prioritet</th>
-                                <th scope="col">Status</th>
+                                <th scope="col" class="d-none d-md-table-cell">Status</th>
                                 <th scope="col">Frist</th>
                             </tr>
                         </thead>
@@ -81,7 +81,7 @@ else if (_overview != null)
                                     <td class="col-id d-none d-md-table-cell">#@task.Id</td>
                                     <td><a class="unit-link" href="/oppgaver/@task.Id">@task.Title</a></td>
                                     <td class="d-none d-lg-table-cell"><TaskPriorityBadge Priority="task.Priority" /></td>
-                                    <td><TaskStatusBadge Status="task.Status" /></td>
+                                    <td class="d-none d-md-table-cell"><TaskStatusBadge Status="task.Status" /></td>
                                     <td><TaskDueDate Task="task" Today="_today" /></td>
                                 </tr>
                             }

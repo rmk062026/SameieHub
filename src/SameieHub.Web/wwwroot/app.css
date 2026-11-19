@@ -595,3 +595,16 @@ a:focus-visible,
 .detail-grid > * {
     min-width: 0;
 }
+
+/* Long option texts (for example board case titles) must not make the filter bar wider than the screen */
+.toolbar .form-select,
+.toolbar .form-control {
+    min-width: 0;
+    max-width: 100%;
+}
+
+/* The visually hidden header text is absolutely positioned; its container must clip it or the page gets wider */
+.data-table-card,
+.table-responsive {
+    position: relative;
+}
