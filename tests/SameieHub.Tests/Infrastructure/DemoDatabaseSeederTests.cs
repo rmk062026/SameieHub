@@ -363,25 +363,210 @@ public class DemoDatabaseSeederTests : IAsyncLifetime
         Assert.Empty(await _database.Tasks.GetAllAsync());
     }
 
+    // The dedicated demo database path
+
+    private const string DemoPath = @"C:\Users\test\AppData\Local\SameieHubDemo\sameiehub-demo.db";
+
     [Theory]
     [InlineData(null, false)]
     [InlineData("", false)]
     [InlineData("   ", false)]
     [InlineData(@"C:\Users\test\AppData\Local\SameieHub\sameiehub.db", false)]
-    [InlineData(@"c:\users\test\appdata\local\sameiehub\..\SameieHub\SAMEIEHUB.DB", false)]
+    [InlineData(@"C:\Users\test\AppData\Local\SameieHubDemo\other.db", false)]
+    [InlineData(@"C:\Users\test\AppData\Local\SameieHubDemo\sub\sameiehub-demo.db", false)]
+    [InlineData(@"C:\Users\test\AppData\Local\SameieHubDemo2\sameiehub-demo.db", false)]
+    [InlineData(@"D:\Temp\my-database.db", false)]
+    [InlineData(@"sameiehub-demo.db", false)]
     [InlineData(@"C:\Users\test\AppData\Local\SameieHubDemo\sameiehub-demo.db", true)]
-    public void IsSafeDemoPath_AcceptsOnlyAnExplicitPathThatIsNotTheOrdinaryDatabase(string? path, bool expected)
+    [InlineData(@"c:\USERS\test\appdata\local\sameiehubdemo\SAMEIEHUB-DEMO.DB", true)]
+    [InlineData(@"C:\Users\test\AppData\Local\SameieHub\..\SameieHubDemo\.\sameiehub-demo.db", true)]
+    public void IsDemoDatabasePath_AcceptsOnlyTheDedicatedDemoDatabaseAfterNormalizing(string? path, bool expected)
     {
-        var defaultPath = @"C:\Users\test\AppData\Local\SameieHub\sameiehub.db";
-
-        Assert.Equal(expected, DemoDatabaseSeeder.IsSafeDemoPath(path, defaultPath));
+        Assert.Equal(expected, DemoDatabaseSeeder.IsDemoDatabasePath(path, DemoPath));
     }
 
     [Fact]
-    public void DefaultDatabasePath_IsNotAcceptedAsDemoPath()
+    public void IsDemoDatabasePath_OrdinaryDatabaseIsNeverAccepted()
     {
-        var defaultPath = DatabaseLocation.GetDefaultPath();
+        var ordinary = DatabaseLocation.GetDefaultPath();
 
-        Assert.False(DemoDatabaseSeeder.IsSafeDemoPath(defaultPath, defaultPath));
+        Assert.False(DemoDatabaseSeeder.IsDemoDatabasePath(ordinary, DemoDatabaseLocation.GetPath()));
+    }
+
+    [Fact]
+    public void DemoDatabaseLocation_IsADifferentFileInADifferentFolderThanTheOrdinaryDatabase()
+    {
+        var demo = DemoDatabaseLocation.GetPath();
+        var ordinary = DatabaseLocation.GetDefaultPath();
+
+        Assert.NotEqual(Path.GetDirectoryName(ordinary), Path.GetDirectoryName(demo));
+        Assert.EndsWith(Path.Combine("SameieHubDemo", "sameiehub-demo.db"), demo);
+        Assert.True(DemoDatabaseSeeder.IsDemoDatabasePath(demo, demo));
+    }
+
+    // A complete demo, a partly created demo and other data are told apart
+
+    private async Task RegisterDemoUnitsAsync(int count)
+    {
+        for (var number = 1; number <= count; number++)
+        {
+            await _database.Service.RegisterAsync($"Fiktivdalen {number}A");
+        }
+    }
+
+    private async Task RegisterCasesAsync(int count)
+    {
+        for (var number = 1; number <= count; number++)
+        {
+            await _database.BoardCases.RegisterAsync(new BoardCaseDetails { Title = $"Sak {number}" });
+        }
+    }
+
+    private async Task RegisterTasksAsync(int count)
+    {
+        for (var number = 1; number <= count; number++)
+        {
+            await _database.Tasks.RegisterAsync(new TaskItemDetails { Title = $"Oppgave {number}" });
+        }
+    }
+
+    [Theory]
+    [InlineData(1, 0, 0)]
+    [InlineData(7, 0, 0)]
+    [InlineData(8, 1, 0)]
+    [InlineData(8, 11, 0)]
+    [InlineData(8, 12, 1)]
+    [InlineData(8, 12, 19)]
+    public async Task Seed_PartlyCreatedDemo_GivesAClearErrorAndChangesNothing(int units, int cases, int tasks)
+    {
+        await RegisterDemoUnitsAsync(units);
+        await RegisterCasesAsync(cases);
+        await RegisterTasksAsync(tasks);
+
+        var exception = await Assert.ThrowsAsync<DemoDatabaseIncompleteException>(SeedAsync);
+
+        Assert.Contains("reset", exception.Message);
+        Assert.Equal(units, (await _database.Service.GetAllAsync()).Count);
+        Assert.Equal(cases, (await _database.BoardCases.GetAllAsync()).Count);
+        Assert.Equal(tasks, (await _database.Tasks.GetAllAsync()).Count);
+    }
+
+    [Theory]
+    [InlineData(8, 12, 21)]
+    [InlineData(8, 13, 20)]
+    [InlineData(9, 12, 20)]
+    [InlineData(8, 0, 5)]
+    [InlineData(0, 3, 0)]
+    [InlineData(3, 12, 20)]
+    public async Task Seed_CountsThatAreNotACompleteDemoOrAPartlyCreatedOne_AreTreatedAsOtherData(int units, int cases, int tasks)
+    {
+        await RegisterDemoUnitsAsync(units);
+        await RegisterCasesAsync(cases);
+        await RegisterTasksAsync(tasks);
+
+        await Assert.ThrowsAsync<DemoDatabaseNotEmptyException>(SeedAsync);
+    }
+
+    [Fact]
+    public async Task Seed_RightCountsButNotTheDemoContent_IsNotReportedAsComplete()
+    {
+        await RegisterDemoUnitsAsync(8);
+        await RegisterCasesAsync(12);
+        await RegisterTasksAsync(20);
+
+        await Assert.ThrowsAsync<DemoDatabaseNotEmptyException>(SeedAsync);
+    }
+
+    [Fact]
+    public async Task Seed_CompleteDemoWithOneTaskDeleted_IsNotReportedAsComplete()
+    {
+        await SeedAsync();
+        await _database.Tasks.DeleteAsync((await _database.Tasks.GetAllAsync()).First().Id);
+
+        await Assert.ThrowsAnyAsync<InvalidOperationException>(SeedAsync);
+
+        Assert.Equal(19, (await _database.Tasks.GetAllAsync()).Count);
+    }
+
+    // Failure while the demo is being created
+
+    [Fact]
+    public async Task Seed_FailureInTheMiddle_RemovesWhatWasCreatedSoTheDemoIsNeverHalfDone()
+    {
+        var failing = new FailingTaskRepository(_database.TaskRepository, failOnAdd: 10);
+        var seeder = new DemoDatabaseSeeder(_database.Repository, _database.BoardCaseRepository, failing, _database.Clock);
+
+        await Assert.ThrowsAsync<IOException>(seeder.SeedAsync);
+
+        Assert.Empty(await _database.Service.GetAllAsync());
+        Assert.Empty(await _database.BoardCases.GetAllAsync());
+        Assert.Empty(await _database.Tasks.GetAllAsync());
+    }
+
+    [Fact]
+    public async Task Seed_AfterAFailedAttempt_CanBeRunAgainAndCompletes()
+    {
+        var failing = new FailingTaskRepository(_database.TaskRepository, failOnAdd: 3);
+        var seeder = new DemoDatabaseSeeder(_database.Repository, _database.BoardCaseRepository, failing, _database.Clock);
+        await Assert.ThrowsAsync<IOException>(seeder.SeedAsync);
+
+        var result = await SeedAsync();
+
+        Assert.Equal(DemoSeedResult.Seeded, result);
+        Assert.Equal(20, (await _database.Tasks.GetAllAsync()).Count);
+    }
+
+    [Fact]
+    public async Task Seed_FailureAndFailedCleanup_LeavesAPartlyCreatedDemoThatIsReportedAsIncomplete()
+    {
+        var failing = new FailingTaskRepository(_database.TaskRepository, failOnAdd: 5, failOnDelete: true);
+        var seeder = new DemoDatabaseSeeder(_database.Repository, _database.BoardCaseRepository, failing, _database.Clock);
+        var exception = await Assert.ThrowsAsync<AggregateException>(seeder.SeedAsync);
+
+        Assert.Contains("reset", exception.Message);
+        Assert.Equal(2, exception.InnerExceptions.Count);
+        await Assert.ThrowsAsync<DemoDatabaseIncompleteException>(SeedAsync);
+    }
+
+    private sealed class FailingTaskRepository : ITaskItemRepository
+    {
+        private readonly ITaskItemRepository _inner;
+        private readonly int _failOnAdd;
+        private readonly bool _failOnDelete;
+        private int _adds;
+
+        public FailingTaskRepository(ITaskItemRepository inner, int failOnAdd, bool failOnDelete = false)
+        {
+            _inner = inner;
+            _failOnAdd = failOnAdd;
+            _failOnDelete = failOnDelete;
+        }
+
+        public Task AddAsync(TaskItem task)
+        {
+            _adds++;
+            if (_adds == _failOnAdd)
+            {
+                throw new IOException("Simulated database failure.");
+            }
+
+            return _inner.AddAsync(task);
+        }
+
+        public Task<TaskItem?> GetByIdAsync(int id) => _inner.GetByIdAsync(id);
+
+        public Task<IReadOnlyList<TaskItem>> GetAllAsync() => _inner.GetAllAsync();
+
+        public Task UpdateAsync(TaskItem task) => _inner.UpdateAsync(task);
+
+        public Task<bool> DeleteAsync(int id)
+        {
+            if (_failOnDelete)
+            {
+                throw new IOException("Simulated database failure.");
+            }
+
+            return _inner.DeleteAsync(id);
+        }
     }
 }

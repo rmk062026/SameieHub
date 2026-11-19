@@ -6,12 +6,12 @@ using SameieHub.Web.Components;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// The demo command (scripts/demo.ps1) is the only way demo data is created. It needs an explicit database file,
-// so it can never fill the ordinary database by accident.
+// The demo command (scripts/demo.ps1) is the only way demo data is created. It only runs against the dedicated
+// demo database, so it can never fill the ordinary database or any other file by accident.
 var seedDemo = args.Contains("--seed-demo");
-if (seedDemo && !DemoDatabaseSeeder.IsSafeDemoPath(builder.Configuration["Database:Path"], DatabaseLocation.GetDefaultPath()))
+if (seedDemo && !DemoDatabaseSeeder.IsDemoDatabasePath(builder.Configuration["Database:Path"], DemoDatabaseLocation.GetPath()))
 {
-    Console.Error.WriteLine("The demo command needs Database__Path to point to a demo database file, not the ordinary database.");
+    Console.Error.WriteLine($"The demo command only runs against the demo database. Set Database__Path to {DemoDatabaseLocation.GetPath()}.");
     return 1;
 }
 
@@ -79,7 +79,7 @@ static async Task<int> RunDemoSeedingAsync(IServiceProvider services)
 
         return 0;
     }
-    catch (DemoDatabaseNotEmptyException exception)
+    catch (Exception exception) when (exception is DemoDatabaseNotEmptyException or DemoDatabaseIncompleteException or AggregateException)
     {
         Console.Error.WriteLine(exception.Message);
 

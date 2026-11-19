@@ -51,6 +51,52 @@ function Show-Info {
     Write-Host "Demo address:      $demoUrl"
 }
 
+# The SQLite files that belong to the demo database. Nothing else is ever deleted.
+function Get-DemoDatabaseFiles {
+    return @($demoDatabase, "$demoDatabase-shm", "$demoDatabase-wal", "$demoDatabase-journal")
+}
+
+function Test-DemoDatabaseInUse {
+    $listening = Get-NetTCPConnection -LocalPort 5100 -State Listen -ErrorAction SilentlyContinue
+    if ($listening) { return $true }
+
+    # SQLite keeps the file open while the program runs, so an exclusive open fails then.
+    foreach ($file in Get-DemoDatabaseFiles) {
+        if (-not (Test-Path $file)) { continue }
+        try {
+            $stream = [System.IO.File]::Open($file, 'Open', 'ReadWrite', 'None')
+            $stream.Dispose()
+        }
+        catch {
+            return $true
+        }
+    }
+
+    return $false
+}
+
+function Assert-IsDemoDatabasePath {
+    $fullDemo = [System.IO.Path]::GetFullPath($demoDatabase)
+    $fullOrdinary = [System.IO.Path]::GetFullPath($ordinaryDatabase)
+    $folderName = Split-Path -Leaf (Split-Path -Parent $fullDemo)
+    $fileName = Split-Path -Leaf $fullDemo
+
+    if ($fullDemo -eq $fullOrdinary -or $folderName -ne 'SameieHubDemo' -or $fileName -ne 'sameiehub-demo.db') {
+        throw "Refusing to continue: $fullDemo is not the dedicated demo database."
+    }
+}
+
+function Remove-DemoDatabase {
+    Assert-IsDemoDatabasePath
+    if (Test-DemoDatabaseInUse) {
+        throw 'The demo database is in use. Stop the demo (Ctrl+C in the window where it runs) and try again.'
+    }
+
+    foreach ($file in Get-DemoDatabaseFiles) {
+        if (Test-Path $file) { Remove-Item -LiteralPath $file -Force }
+    }
+}
+
 switch ($Action) {
     'create' {
         New-DemoDatabase
@@ -63,10 +109,7 @@ switch ($Action) {
         Invoke-WithDemoDatabase { dotnet run --project $project --no-launch-profile }
     }
     'reset' {
-        foreach ($suffix in '', '-shm', '-wal') {
-            $file = "$demoDatabase$suffix"
-            if (Test-Path $file) { Remove-Item $file -Force }
-        }
+        Remove-DemoDatabase
         New-DemoDatabase
         Show-Info
     }

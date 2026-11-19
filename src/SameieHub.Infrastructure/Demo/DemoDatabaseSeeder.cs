@@ -12,8 +12,31 @@ public enum DemoSeedResult
 public class DemoDatabaseNotEmptyException : InvalidOperationException
 {
     public DemoDatabaseNotEmptyException()
-        : base("The database already contains data that is not demo data, so the demo data was not added.")
+        : base("The database already contains data that is not the demo data, so nothing was changed.")
     {
+    }
+}
+
+/// <summary>The demo data was only partly created (for example after a crash), so it cannot be used or completed.</summary>
+public class DemoDatabaseIncompleteException : InvalidOperationException
+{
+    public DemoDatabaseIncompleteException()
+        : base("The demo database is only partly created. Nothing was changed. Run the demo command 'reset' to delete it and create it again.")
+    {
+    }
+}
+
+/// <summary>Where the dedicated demo database lives. It is never the ordinary database.</summary>
+public static class DemoDatabaseLocation
+{
+    public const string FolderName = "SameieHubDemo";
+    public const string FileName = "sameiehub-demo.db";
+
+    public static string GetPath()
+    {
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+
+        return Path.Combine(localAppData, FolderName, FileName);
     }
 }
 
@@ -25,6 +48,17 @@ public class DemoDatabaseNotEmptyException : InvalidOperationException
 public class DemoDatabaseSeeder
 {
     public const string AddressPrefix = "Fiktivdalen ";
+
+    private const int ExpectedHousingUnits = 8;
+    private const int ExpectedBoardCases = 12;
+    private const int ExpectedTasks = 20;
+
+    // The last board case and the last task that are created. Together with the counts and the addresses
+    // they show that the creation ran to the end, because the data is created in this order.
+    private const string LastBoardCaseTitle = "Gjennomgang av ladeanleggets kapasitet";
+    private const string LastTaskTitle = "Fornye merking av postkasser ved Fiktivdalen 16A";
+
+    private static readonly string[] UnitNumbers = ["10A", "10B", "12A", "12B", "14A", "14B", "16A", "16B"];
 
     private readonly IHousingUnitRepository _housingUnitRepository;
     private readonly IBoardCaseRepository _boardCaseRepository;
@@ -52,9 +86,10 @@ public class DemoDatabaseSeeder
     }
 
     /// <summary>
-    /// The demo command must be given an explicit database file that is not the ordinary one.
+    /// The demo command may only run against the dedicated demo database. Both paths are made absolute and
+    /// normalized (so "..", "." and letter case do not matter) before they are compared.
     /// </summary>
-    public static bool IsSafeDemoPath(string? configuredPath, string defaultPath)
+    public static bool IsDemoDatabasePath(string? configuredPath, string demoDatabasePath)
     {
         if (string.IsNullOrWhiteSpace(configuredPath))
         {
@@ -62,39 +97,75 @@ public class DemoDatabaseSeeder
         }
 
         var configuredFullPath = Path.GetFullPath(configuredPath);
-        var defaultFullPath = Path.GetFullPath(defaultPath);
+        var demoFullPath = Path.GetFullPath(demoDatabasePath);
 
-        return !string.Equals(configuredFullPath, defaultFullPath, StringComparison.OrdinalIgnoreCase);
+        return string.Equals(configuredFullPath, demoFullPath, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
-    /// Adds the demo data to an empty database. When the demo data is already there, nothing happens.
+    /// Adds the demo data to an empty database. A complete demo is left alone.
     /// </summary>
+    /// <exception cref="DemoDatabaseIncompleteException">The demo is only partly created. Nothing is changed.</exception>
     /// <exception cref="DemoDatabaseNotEmptyException">The database has other data. Nothing is changed.</exception>
+    /// <exception cref="AggregateException">Creating the demo failed and the clean-up failed too.</exception>
     public async Task<DemoSeedResult> SeedAsync()
     {
-        var existingUnits = await _housingUnitRepository.GetAllAsync();
-        var existingCases = await _boardCaseRepository.GetAllAsync();
-        var existingTasks = await _taskRepository.GetAllAsync();
+        var units = await _housingUnitRepository.GetAllAsync();
+        var boardCases = await _boardCaseRepository.GetAllAsync();
+        var tasks = await _taskRepository.GetAllAsync();
 
-        if (existingUnits.Count == 0 && existingCases.Count == 0 && existingTasks.Count == 0)
+        if (units.Count == 0 && boardCases.Count == 0 && tasks.Count == 0)
         {
-            await CreateDemoDataAsync();
+            await CreateDemoDataSafelyAsync();
 
             return DemoSeedResult.Seeded;
         }
 
-        if (IsOnlyDemoUnits(existingUnits))
+        if (IsCompleteDemo(units, boardCases, tasks))
         {
             return DemoSeedResult.AlreadySeeded;
+        }
+
+        if (IsPartlyCreatedDemo(units, boardCases, tasks))
+        {
+            throw new DemoDatabaseIncompleteException();
         }
 
         throw new DemoDatabaseNotEmptyException();
     }
 
-    private static bool IsOnlyDemoUnits(IReadOnlyList<HousingUnit> units)
+    private static bool IsCompleteDemo(
+        IReadOnlyList<HousingUnit> units,
+        IReadOnlyList<BoardCase> boardCases,
+        IReadOnlyList<TaskItem> tasks)
     {
-        if (units.Count == 0)
+        if (units.Count != ExpectedHousingUnits || boardCases.Count != ExpectedBoardCases || tasks.Count != ExpectedTasks)
+        {
+            return false;
+        }
+
+        foreach (var number in UnitNumbers)
+        {
+            if (!units.Any(unit => unit.Address == AddressPrefix + number))
+            {
+                return false;
+            }
+        }
+
+        return boardCases.Any(boardCase => boardCase.Title == LastBoardCaseTitle)
+            && tasks.Any(task => task.Title == LastTaskTitle);
+    }
+
+    /// <summary>
+    /// The data is created units first, then board cases, then tasks. A partly created demo therefore has
+    /// only demo units and looks like the first part of that sequence.
+    /// </summary>
+    private static bool IsPartlyCreatedDemo(
+        IReadOnlyList<HousingUnit> units,
+        IReadOnlyList<BoardCase> boardCases,
+        IReadOnlyList<TaskItem> tasks)
+    {
+        if (units.Count == 0 || units.Count > ExpectedHousingUnits)
         {
             return false;
         }
@@ -107,7 +178,59 @@ public class DemoDatabaseSeeder
             }
         }
 
-        return true;
+        var onlyUnits = boardCases.Count == 0 && tasks.Count == 0;
+        var allUnitsAndSomeCases = units.Count == ExpectedHousingUnits && boardCases.Count <= ExpectedBoardCases && tasks.Count == 0;
+        var allUnitsAndAllCasesAndSomeTasks = units.Count == ExpectedHousingUnits
+            && boardCases.Count == ExpectedBoardCases
+            && tasks.Count < ExpectedTasks;
+
+        return onlyUnits || allUnitsAndSomeCases || allUnitsAndAllCasesAndSomeTasks;
+    }
+
+    /// <summary>
+    /// If creating fails halfway, everything that was created is removed again, so the database is empty
+    /// and the command can be run again. The database was empty before the creation started.
+    /// </summary>
+    private async Task CreateDemoDataSafelyAsync()
+    {
+        try
+        {
+            await CreateDemoDataAsync();
+        }
+        catch (Exception creationError)
+        {
+            try
+            {
+                await RemoveEverythingAsync();
+            }
+            catch (Exception cleanupError)
+            {
+                throw new AggregateException(
+                    "Creating the demo data failed, and the clean-up failed too. The demo database is partly created. Run the demo command 'reset'.",
+                    creationError,
+                    cleanupError);
+            }
+
+            throw;
+        }
+    }
+
+    private async Task RemoveEverythingAsync()
+    {
+        foreach (var task in await _taskRepository.GetAllAsync())
+        {
+            await _taskRepository.DeleteAsync(task.Id);
+        }
+
+        foreach (var boardCase in await _boardCaseRepository.GetAllAsync())
+        {
+            await _boardCaseRepository.DeleteAsync(boardCase.Id);
+        }
+
+        foreach (var unit in await _housingUnitRepository.GetAllAsync())
+        {
+            await _housingUnitRepository.DeleteAsync(unit.Id);
+        }
     }
 
     private async Task CreateDemoDataAsync()
@@ -247,7 +370,7 @@ public class DemoDatabaseSeeder
             "Eier har sendt bilder (fiktive). Rørlegger kontaktes.",
             status: BoardCaseStatus.InProgress, statusDaysAgo: 3);
 
-        await AddCaseAsync("kapasitet", "Gjennomgang av ladeanleggets kapasitet",
+        await AddCaseAsync("kapasitet", LastBoardCaseTitle,
             "Flere ønsker å skaffe elbil. Er hovedsikringen og fordelingen dimensjonert for åtte ladere i bruk samtidig?",
             BoardCasePriority.Normal, 6, 16, null, null);
     }
@@ -340,7 +463,7 @@ public class DemoDatabaseSeeder
             30, null, null, caseKey: "belysning");
         await AddTaskAsync("Rydde fellesområdet etter dugnad", TaskItemCategory.General, TaskItemPriority.Low,
             30, -20, "Dugnadsgruppen", status: TaskItemStatus.Completed, statusDaysAgo: 21);
-        await AddTaskAsync("Fornye merking av postkasser ved Fiktivdalen 16A", TaskItemCategory.General, TaskItemPriority.Low,
+        await AddTaskAsync(LastTaskTitle, TaskItemCategory.General, TaskItemPriority.Low,
             9, -2, null, unit: "16A");
     }
 
