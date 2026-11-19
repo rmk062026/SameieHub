@@ -16,7 +16,7 @@ Kjør fra prosjektmappen. Hvis PowerShell nekter å kjøre skript, bruk `powersh
 | Nullstille og lage demoen på nytt | `.\scripts\demo.ps1 reset` |
 | Gå tilbake til den ordinære databasen | Start programmet som vanlig (`dotnet run --project src/SameieHub.Web`, eller Visual Studio). Skriptet setter bare miljøvariabler for sin egen kjøring og rydder opp etterpå. |
 
-`create` kan kjøres flere ganger: finnes demodataene allerede, skjer ingenting. Dagens dato styrer fristene og møtedatoene, så kjør `reset` for å få en demo som passer til datoen du viser den.
+`create` kan kjøres flere ganger: er demoen komplett, skjer ingenting. Er den bare delvis opprettet, får du en feilmelding (kjør `reset`). Dagens dato styrer fristene og møtedatoene, så kjør `reset` for å få en demo som passer til datoen du viser den.
 
 ## Hvilken database bruker programmet?
 
@@ -28,10 +28,19 @@ Kjør fra prosjektmappen. Hvis PowerShell nekter å kjøre skript, bruk `powersh
 ## Sikkerhet
 
 - Demodata legges **aldri** inn automatisk. Det skjer bare med kommandoen `--seed-demo`, som skriptet kjører.
-- Kommandoen krever at `Database__Path` peker på en eksplisitt fil som **ikke** er den ordinære databasen. Ellers avslutter den med feilmelding før noe åpnes.
-- Kommandoen fyller bare en **tom** database (eller gjør ingenting hvis demoen alt finnes). En database med andre data blir ikke endret, og kommandoen avslutter med feilmelding.
+- Kommandoen kjører **bare** mot den dedikerte demodatabasen `%LOCALAPPDATA%\SameieHubDemo\sameiehub-demo.db`. Stien i `Database__Path` gjøres om til en absolutt, normalisert sti (`..`, `.` og store/små bokstaver spiller ingen rolle) og sammenlignes med demostien. Den ordinære databasen, andre filer og manglende sti avvises med en melding før noe åpnes eller opprettes. Vanlig programstart bruker fortsatt den ordinære databasen eller `Database__Path`, uendret.
+- Kommandoen skiller mellom fire tilstander:
+
+| Databasen inneholder | Resultat |
+|---|---|
+| ingenting | Demoen opprettes. |
+| hele demoen (8 boenheter med riktige adresser, 12 styresaker og 20 oppgaver, med den siste styresaken og den siste oppgaven som kontroll) | Ingenting skjer: «The demo data is already in the database.» |
+| en del av demoen (for eksempel 8 boenheter og 5 styresaker, uten oppgaver) | Feilmelding om delvis opprettet demo. Ingenting endres. Kjør `reset`. |
+| noe annet (egne boenheter, styresaker eller oppgaver, eller andre antall) | Feilmelding. Ingenting endres. |
+
+- Dataene opprettes boenheter først, så styresaker og så oppgaver, så en delvis opprettet demo kan kjennes igjen på at den bare har første del av rekkefølgen. Skjer det en feil underveis, fjernes alt som er opprettet, slik at databasen blir tom og kommandoen kan kjøres på nytt. Feiler også opprydningen (eller avsluttes programmet brått), står demoen igjen som delvis opprettet, og neste kjøring sier det tydelig i stedet for å påstå at den er ferdig.
 - Dataene opprettes med de ekte tjenestene (`HousingUnitService`, `BoardCaseService`, `TaskItemService`) og EF Core-migreringene. Det brukes ingen direkte SQL, så alle valideringsregler gjelder.
-- Hvis du vil starte demoen på nytt manuelt: slett `%LOCALAPPDATA%\SameieHubDemo\` (bare demomappen) og kjør `create`.
+- **`reset` sletter bare demodatabasen:** `sameiehub-demo.db` og de tilhørende `-shm`-, `-wal`- og `-journal`-filene i `SameieHubDemo`-mappen, aldri mappen selv og aldri noe annet. Skriptet kontrollerer først at stien er demostien og ikke den ordinære. Kjører demoen fortsatt (porten 5100 er i bruk eller filen er åpen), avbryter `reset` med meldingen «The demo database is in use. Stop the demo …» uten å slette noe. Stopp demoen med Ctrl+C og prøv igjen.
 
 ## Innhold
 
