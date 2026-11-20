@@ -20,6 +20,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IHousingUnitRepository, EfHousingUnitRepository>();
         services.AddScoped<IBoardCaseRepository, EfBoardCaseRepository>();
         services.AddScoped<ITaskItemRepository, EfTaskItemRepository>();
+        services.AddScoped<IChargingFacilityRepository, EfChargingFacilityRepository>();
+        services.AddScoped<IEvChargerRepository, EfEvChargerRepository>();
+        services.AddScoped<IMeterRepository, EfMeterRepository>();
+        services.AddScoped<IMeterReadingRepository, EfMeterReadingRepository>();
 
         return services;
     }

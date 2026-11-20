@@ -15,6 +15,45 @@ public static class SqliteConstraintErrors
     // all triggers, so the message must also name the foreign key.
     private const int ForeignKeyRestrictExtendedCode = 1811;
 
+    // SQLITE_CONSTRAINT_UNIQUE and SQLITE_CONSTRAINT_PRIMARYKEY.
+    private const int UniqueExtendedCode = 2067;
+    private const int PrimaryKeyExtendedCode = 1555;
+
+    // SQLITE_CONSTRAINT_CHECK.
+    private const int CheckExtendedCode = 275;
+
+    /// <summary>
+    /// True when a unique index (or primary key) was violated. The message of a unique violation names the
+    /// table and columns, for example "UNIQUE constraint failed: EvChargers.HousingUnitId", so
+    /// <paramref name="tableAndColumns"/> tells which index it was.
+    /// </summary>
+    public static bool IsUniqueViolation(DbUpdateException exception, string tableAndColumns)
+    {
+        if (exception.InnerException is not SqliteException sqliteException)
+        {
+            return false;
+        }
+
+        var isUnique = sqliteException.SqliteErrorCode == SqliteConstraintErrorCode
+            && (sqliteException.SqliteExtendedErrorCode == UniqueExtendedCode
+                || sqliteException.SqliteExtendedErrorCode == PrimaryKeyExtendedCode);
+
+        return isUnique && sqliteException.Message.Contains(tableAndColumns, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>True when a CHECK constraint was violated. <paramref name="constraintName"/> is the name of the constraint.</summary>
+    public static bool IsCheckViolation(DbUpdateException exception, string constraintName)
+    {
+        if (exception.InnerException is not SqliteException sqliteException)
+        {
+            return false;
+        }
+
+        return sqliteException.SqliteErrorCode == SqliteConstraintErrorCode
+            && sqliteException.SqliteExtendedErrorCode == CheckExtendedCode
+            && sqliteException.Message.Contains(constraintName, StringComparison.OrdinalIgnoreCase);
+    }
+
     /// <summary>
     /// Tells a foreign key violation from other constraint errors (unique, not null and so on) by SQLite's
     /// extended error code, which is more reliable than the text of the error message.

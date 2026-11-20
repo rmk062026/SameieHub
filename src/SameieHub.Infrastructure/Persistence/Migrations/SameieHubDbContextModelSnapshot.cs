@@ -66,6 +66,77 @@ namespace SameieHub.Infrastructure.Persistence.Migrations
                     b.ToTable("BoardCases");
                 });
 
+            modelBuilder.Entity("SameieHub.Domain.ChargingFacility", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("ChargingFacilities", t =>
+                        {
+                            t.HasCheckConstraint("CK_ChargingFacilities_OneFacility", "\"Id\" = 1");
+                        });
+                });
+
+            modelBuilder.Entity("SameieHub.Domain.EvCharger", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ChargerNumber")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("ChargingFacilityId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool?>("HasElectricVehicle")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("HousingUnitId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Manufacturer")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Model")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ChargingFacilityId");
+
+                    b.HasIndex("HousingUnitId")
+                        .IsUnique();
+
+                    b.ToTable("EvChargers");
+                });
+
             modelBuilder.Entity("SameieHub.Domain.HousingUnit", b =>
                 {
                     b.Property<int>("Id")
@@ -115,6 +186,85 @@ namespace SameieHub.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("HousingUnits");
+                });
+
+            modelBuilder.Entity("SameieHub.Domain.Meter", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("CabinetNumber")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("ChargingFacilityId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("EvChargerId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ChargingFacilityId")
+                        .IsUnique()
+                        .HasFilter("\"Kind\" = 'Main'");
+
+                    b.HasIndex("EvChargerId")
+                        .IsUnique();
+
+                    b.ToTable("Meters", t =>
+                        {
+                            t.HasCheckConstraint("CK_Meters_KindFields", "(\"Kind\" = 'Main' AND \"EvChargerId\" IS NULL AND \"CabinetNumber\" IS NULL) OR (\"Kind\" = 'Sub' AND \"EvChargerId\" IS NOT NULL AND \"CabinetNumber\" IS NOT NULL AND \"CabinetNumber\" IN (1, 2))");
+                        });
+                });
+
+            modelBuilder.Entity("SameieHub.Domain.MeterReading", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal>("Kwh")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("MeterId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("ReadAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("RegisteredAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MeterId", "ReadAt")
+                        .IsUnique();
+
+                    b.ToTable("MeterReadings", t =>
+                        {
+                            t.HasCheckConstraint("CK_MeterReadings_NonNegativeKwh", "CAST(\"Kwh\" AS REAL) >= 0");
+                        });
                 });
 
             modelBuilder.Entity("SameieHub.Domain.TaskItem", b =>
@@ -181,6 +331,44 @@ namespace SameieHub.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("HousingUnitId")
                         .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("SameieHub.Domain.EvCharger", b =>
+                {
+                    b.HasOne("SameieHub.Domain.ChargingFacility", null)
+                        .WithMany()
+                        .HasForeignKey("ChargingFacilityId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SameieHub.Domain.HousingUnit", null)
+                        .WithMany()
+                        .HasForeignKey("HousingUnitId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SameieHub.Domain.Meter", b =>
+                {
+                    b.HasOne("SameieHub.Domain.ChargingFacility", null)
+                        .WithMany()
+                        .HasForeignKey("ChargingFacilityId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SameieHub.Domain.EvCharger", null)
+                        .WithMany()
+                        .HasForeignKey("EvChargerId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("SameieHub.Domain.MeterReading", b =>
+                {
+                    b.HasOne("SameieHub.Domain.Meter", null)
+                        .WithMany()
+                        .HasForeignKey("MeterId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("SameieHub.Domain.TaskItem", b =>
