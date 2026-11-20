@@ -1,6 +1,7 @@
 @page "/"
 @using SameieHub.Web.Components.Pages.BoardCases
 @using SameieHub.Web.Components.Pages.TaskItems
+@using SameieHub.Web.Components.Pages.Charging
 @inject HousingUnitService HousingUnitService
 @inject BoardCaseService BoardCaseService
 @inject TaskItemService TaskService
@@ -139,6 +140,8 @@ else if (_overview != null)
                 </div>
             }
         </section>
+
+        <DashboardChargingSection />
 
         <section class="surface-card" aria-labelledby="upcoming-title">
             <h2 id="upcoming-title">Kommende datoer</h2>

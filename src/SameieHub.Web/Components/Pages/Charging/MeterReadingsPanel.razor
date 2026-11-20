@@ -1,0 +1,343 @@
+@inject ChargingService ChargingService
+@inject ILogger<MeterReadingsPanel> Logger
+
+<section class="surface-card detail-wide" aria-labelledby="@($"readings-title-{MeterId}")">
+    <div class="section-heading">
+        <h2 id="@($"readings-title-{MeterId}")">Avlesninger</h2>
+        <a class="btn btn-outline-primary btn-sm" href="/elbillading/avlesning">Registrer avlesning</a>
+    </div>
+
+    @if (_message != null)
+    {
+        <div class="alert alert-success" role="status">@_message</div>
+    }
+    @if (_errorMessage != null)
+    {
+        <div class="alert alert-danger" role="alert">@_errorMessage</div>
+    }
+
+    @if (_isLoading)
+    {
+        <p role="status" class="mb-0"><span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Laster avlesninger …</p>
+    }
+    else if (_loadError != null)
+    {
+        <div class="alert alert-danger" role="alert">
+            <p>@_loadError</p>
+            <button type="button" class="btn btn-outline-danger btn-sm" @onclick="LoadAsync">Prøv igjen</button>
+        </div>
+    }
+    else if (_readings.Count == 0)
+    {
+        <p class="text-muted mb-0">Ingen avlesninger er registrert for denne måleren. Den første avlesningen blir startverdien.</p>
+    }
+    else
+    {
+        <p class="text-muted">Målerstanden er akkumulert. Forbruket er differansen mellom to avlesninger.</p>
+        <div class="table-responsive">
+            <table class="table data-table">
+                <caption class="visually-hidden">Avlesninger, nyeste først</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Avlest</th>
+                        <th scope="col">Målerstand</th>
+                        <th scope="col">Forbruk siden forrige</th>
+                        <th scope="col"><span class="visually-hidden">Handlinger</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in _rows)
+                    {
+                        <tr>
+                            <td>
+                                @ChargingText.Time(row.Reading.ReadAt)
+                                @if (row.Reading.Notes != null)
+                                {
+                                    <div class="unit-sub">@row.Reading.Notes</div>
+                                }
+                            </td>
+                            <td>@ChargingText.Kwh(row.Reading.Kwh)</td>
+                            <td>
+                                @if (row.Previous == null)
+                                {
+                                    <span class="text-muted">Startverdi</span>
+                                }
+                                else
+                                {
+                                    @ChargingText.SignedKwh(row.Reading.Kwh - row.Previous.Kwh)
+                                }
+                            </td>
+                            <td class="text-end">
+                                <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="() => StartCorrection(row.Reading)">Korriger</button>
+                                <button type="button" class="btn btn-outline-danger btn-sm" @onclick="() => AskForDelete(row.Reading)">Slett</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    @if (_correcting != null)
+    {
+        <form class="correction-form" @onsubmit="SaveCorrectionAsync" novalidate aria-labelledby="correction-title">
+            <h3 id="correction-title">Korriger avlesning</h3>
+            <p class="text-muted">Bruk korrigering bare når avlesningen er registrert feil. Verdien må passe mellom avlesningen før og etter.</p>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <ReadingTimeField Id="@($"correct-time-{MeterId}")" @bind-Value="_correctTime" @bind-AmbiguousIsDaylightTime="_correctAmbiguous" Error="@_timeError" />
+                </div>
+                <div class="col-md-6">
+                    <label for="@($"correct-kwh-{MeterId}")" class="form-label">Målerstand (kWh) <span class="required-mark" aria-hidden="true">*</span></label>
+                    <input id="@($"correct-kwh-{MeterId}")" class="form-control" inputmode="decimal" autocomplete="off"
+                           @bind="_correctKwh" @bind:event="oninput" aria-required="true" />
+                    @if (_kwhError != null)
+                    {
+                        <div class="validation-message" role="alert">@_kwhError</div>
+                    }
+                </div>
+                <div class="col-12">
+                    <label for="@($"correct-notes-{MeterId}")" class="form-label">Merknad</label>
+                    <input id="@($"correct-notes-{MeterId}")" class="form-control" @bind="_correctNotes"
+                           maxlength="@MeterReading.MaxNotesLength" autocomplete="off" />
+                    @if (_notesError != null)
+                    {
+                        <div class="validation-message" role="alert">@_notesError</div>
+                    }
+                </div>
+            </div>
+            <div class="form-actions mt-3">
+                <button type="submit" class="btn btn-primary" disabled="@_isSaving">@(_isSaving ? "Lagrer …" : "Lagre korrigering")</button>
+                <button type="button" class="btn btn-outline-secondary" disabled="@_isSaving" @onclick="CancelCorrection">Avbryt</button>
+            </div>
+        </form>
+    }
+
+    @if (_deleting != null)
+    {
+        <div class="danger-zone mt-3" role="alertdialog" aria-labelledby="delete-reading-title" aria-describedby="delete-reading-text">
+            <h3 id="delete-reading-title">Slette avlesningen @ChargingText.Time(_deleting.ReadAt)?</h3>
+            <p id="delete-reading-text">
+                <strong>Dette kan ikke angres.</strong> Avlesningen på @ChargingText.Kwh(_deleting.Kwh) blir slettet for alltid.
+                Forbruket mellom avlesningene før og etter regnes da ut fra de gjenværende avlesningene.
+            </p>
+            <div class="form-actions">
+                <button type="button" class="btn btn-danger" disabled="@_isDeleting" @onclick="DeleteAsync">@(_isDeleting ? "Sletter …" : "Ja, slett avlesningen")</button>
+                <button type="button" class="btn btn-outline-secondary" disabled="@_isDeleting" @onclick="CancelDelete">Avbryt</button>
+            </div>
+        </div>
+    }
+</section>
+
+@code {
+    private sealed record Row(MeterReading Reading, MeterReading? Previous);
+
+    private List<Row> _rows = [];
+    private IReadOnlyList<MeterReading> _readings = [];
+    private bool _isLoading = true;
+    private string? _loadError;
+    private string? _message;
+    private string? _errorMessage;
+
+    private MeterReading? _correcting;
+    private string? _correctTime;
+    private bool? _correctAmbiguous;
+    private string? _correctKwh;
+    private string? _correctNotes;
+    private string? _timeError;
+    private string? _kwhError;
+    private string? _notesError;
+    private bool _isSaving;
+
+    private MeterReading? _deleting;
+    private bool _isDeleting;
+
+    [Parameter, EditorRequired]
+    public int MeterId { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _isLoading = true;
+        _loadError = null;
+
+        try
+        {
+            _readings = await ChargingService.GetReadingsAsync(MeterId);
+            BuildRows();
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Could not load readings of meter {MeterId}.", MeterId);
+            _loadError = "Kunne ikke hente avlesningene. Kontroller at databasen er tilgjengelig og prøv igjen.";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void BuildRows()
+    {
+        var rows = new List<Row>();
+        for (var index = 0; index < _readings.Count; index++)
+        {
+            var previous = index == 0 ? null : _readings[index - 1];
+            rows.Add(new Row(_readings[index], previous));
+        }
+
+        rows.Reverse();
+        _rows = rows;
+    }
+
+    private void StartCorrection(MeterReading reading)
+    {
+        _message = null;
+        _errorMessage = null;
+        _deleting = null;
+        ClearFieldErrors();
+        _correcting = reading;
+        _correctTime = ChargingInput.ToInputValue(reading.ReadAt);
+        _correctAmbiguous = NorwegianTime.IsAmbiguous(NorwegianTime.FromUtc(reading.ReadAt))
+            ? NorwegianTime.IsDaylightTime(reading.ReadAt)
+            : null;
+        _correctKwh = ChargingText.Number(reading.Kwh);
+        _correctNotes = reading.Notes;
+    }
+
+    private void CancelCorrection()
+    {
+        _correcting = null;
+        ClearFieldErrors();
+    }
+
+    private void ClearFieldErrors()
+    {
+        _timeError = null;
+        _kwhError = null;
+        _notesError = null;
+    }
+
+    private async Task SaveCorrectionAsync()
+    {
+        if (_isSaving || _correcting == null)
+        {
+            return;
+        }
+
+        _isSaving = true;
+        _message = null;
+        _errorMessage = null;
+        ClearFieldErrors();
+
+        try
+        {
+            _timeError = ChargingInput.TryConvertToUtc(_correctTime, _correctAmbiguous, out var readAt);
+            _kwhError = ChargingInput.TryParseKwh(_correctKwh, out var kwh);
+            if (kwh == null && _kwhError == null)
+            {
+                _kwhError = "Oppgi målerstanden. Skriv 0 hvis måleren viser 0.";
+            }
+
+            if (_timeError != null || _kwhError != null)
+            {
+                return;
+            }
+
+            await ChargingService.CorrectReadingAsync(_correcting.Id, new MeterReadingDetails { ReadAt = readAt, Kwh = kwh!.Value, Notes = _correctNotes });
+
+            _correcting = null;
+            _message = "Avlesningen er korrigert.";
+            await LoadAsync();
+        }
+        catch (MeterReadingSequenceException exception)
+        {
+            _kwhError = ChargingErrorText.Sequence(exception);
+        }
+        catch (ArgumentException exception) when (ChargingErrorText.ForReadingField(exception.ParamName) != null)
+        {
+            ShowArgumentError(exception.ParamName);
+        }
+        catch (KeyNotFoundException)
+        {
+            _correcting = null;
+            _errorMessage = "Avlesningen finnes ikke lenger.";
+            await LoadAsync();
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Could not correct a reading of meter {MeterId}.", MeterId);
+            _errorMessage = "Kunne ikke lagre korrigeringen. Kontroller at databasen er tilgjengelig og prøv på nytt.";
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private void ShowArgumentError(string? paramName)
+    {
+        var message = ChargingErrorText.ForReadingField(paramName);
+        if (paramName == nameof(MeterReadingDetails.ReadAt))
+        {
+            _timeError = message;
+        }
+        else if (paramName == nameof(MeterReadingDetails.Notes))
+        {
+            _notesError = message;
+        }
+        else
+        {
+            _kwhError = message;
+        }
+    }
+
+    private void AskForDelete(MeterReading reading)
+    {
+        _message = null;
+        _errorMessage = null;
+        _correcting = null;
+        _deleting = reading;
+    }
+
+    private void CancelDelete()
+    {
+        _deleting = null;
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (_isDeleting || _deleting == null)
+        {
+            return;
+        }
+
+        _isDeleting = true;
+
+        try
+        {
+            await ChargingService.DeleteReadingAsync(_deleting.Id);
+            _message = "Avlesningen er slettet.";
+        }
+        catch (KeyNotFoundException)
+        {
+            _errorMessage = "Avlesningen finnes ikke lenger.";
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Could not delete a reading of meter {MeterId}.", MeterId);
+            _errorMessage = "Kunne ikke slette avlesningen. Kontroller at databasen er tilgjengelig og prøv på nytt.";
+        }
+        finally
+        {
+            _deleting = null;
+            _isDeleting = false;
+        }
+
+        await LoadAsync();
+    }
+}

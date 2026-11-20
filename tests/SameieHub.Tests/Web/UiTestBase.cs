@@ -19,7 +19,22 @@ public abstract class UiTestBase : BunitContext
         Services.AddSingleton<BoardCaseService>();
         Services.AddSingleton<ITaskItemRepository>(TaskRepository);
         Services.AddSingleton<TaskItemService>();
+        Services.AddSingleton<IChargingFacilityRepository>(new FakeChargingFacilityRepository(Meters));
+        Services.AddSingleton<IEvChargerRepository>(ChargerRepository);
+        Services.AddSingleton<IMeterRepository>(Meters);
+        Services.AddSingleton<IMeterReadingRepository>(Readings);
+        Services.AddSingleton<ChargingService>();
     }
+
+    protected FakeMeterRepository Meters { get; } = new();
+
+    protected FakeMeterReadingRepository Readings { get; } = new();
+
+    protected FakeEvChargerRepository ChargerRepository => _chargerRepository ??= new FakeEvChargerRepository(Meters);
+
+    private FakeEvChargerRepository? _chargerRepository;
+
+    protected ChargingService Charging => Services.GetRequiredService<ChargingService>();
 
     protected FailableHousingUnitRepository Repository { get; } = new();
 

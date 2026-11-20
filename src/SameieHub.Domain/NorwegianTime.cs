@@ -24,6 +24,13 @@ public static class NorwegianTime
         return TimeZoneInfo.ConvertTimeFromUtc(utcTime, TimeZone);
     }
 
+    /// <summary>True when the UTC time falls in Norwegian summer time (daylight saving time).</summary>
+    public static bool IsDaylightTime(DateTime utcTime)
+    {
+        // A UTC time is converted unambiguously, unlike the repeated local hour in autumn.
+        return TimeZone.IsDaylightSavingTime(DateTime.SpecifyKind(utcTime, DateTimeKind.Utc));
+    }
+
     public static DateOnly DateOf(DateTimeOffset utcNow)
     {
         return DateOnly.FromDateTime(FromUtc(utcNow.UtcDateTime));

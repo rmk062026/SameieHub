@@ -161,8 +161,16 @@ public class FakeMeterReadingRepository : IMeterReadingRepository
         return Task.FromResult(readings);
     }
 
+    /// <summary>Simulates a database failure when readings are read.</summary>
+    public bool FailOnRead { get; set; }
+
     public Task<IReadOnlyList<MeterReading>> GetAllAsync()
     {
+        if (FailOnRead)
+        {
+            throw new IOException("The database is unavailable.");
+        }
+
         IReadOnlyList<MeterReading> readings = _readings.Values.ToList();
 
         return Task.FromResult(readings);

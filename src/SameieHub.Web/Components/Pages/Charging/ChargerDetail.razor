@@ -1,0 +1,148 @@
+@page "/elbillading/{Id:int}"
+@inject ChargingService ChargingService
+@inject HousingUnitService HousingUnitService
+@inject ILogger<ChargerDetail> Logger
+
+<PageTitle>@(_unit?.Address ?? "Lader") – SameieHub</PageTitle>
+
+@if (_isLoading)
+{
+    <PageHeader Title="Elbillader" BackHref="/elbillading" BackText="Elbillading" />
+    <div class="surface-card" role="status">
+        <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Laster lader …
+    </div>
+}
+else if (_loadError != null)
+{
+    <PageHeader Title="Elbillader" BackHref="/elbillading" BackText="Elbillading" />
+    <div class="alert alert-danger" role="alert">
+        <p>@_loadError</p>
+        <button type="button" class="btn btn-outline-danger btn-sm" @onclick="LoadAsync">Prøv igjen</button>
+    </div>
+}
+else if (_charger == null)
+{
+    <PageHeader Title="Elbillader" BackHref="/elbillading" BackText="Elbillading" />
+    <div class="surface-card empty-state">
+        <h2>Fant ikke laderen</h2>
+        <p>Laderen finnes ikke.</p>
+        <a class="btn btn-primary" href="/elbillading">Tilbake til elbillading</a>
+    </div>
+}
+else
+{
+    <PageHeader Title="@(_unit?.Address ?? "Elbillader")" BackHref="/elbillading" BackText="Elbillading">
+        <a class="btn btn-primary" href="/elbillading/@_charger.Id/rediger">Rediger</a>
+    </PageHeader>
+
+    @if (_message != null)
+    {
+        <div class="alert alert-success" role="status">@_message</div>
+    }
+
+    <div class="detail-meta">
+        <ChargerStatusBadge Status="_charger.Status" />
+        <span class="text-muted">Statusen er administrativ. Målerne kan leses av uansett status.</span>
+    </div>
+
+    <div class="detail-grid">
+        <section class="surface-card">
+            <h2>Lader</h2>
+            <dl class="detail-list">
+                <DetailItem Label="Boenhet" Value="@_unit?.Address" />
+                <DetailItem Label="Ladernummer" Value="@_charger.ChargerNumber" />
+                <DetailItem Label="Produsent" Value="@_charger.Manufacturer" />
+                <DetailItem Label="Modell" Value="@_charger.Model" />
+                <DetailItem Label="Har elbil" Value="@ChargingText.VehicleText(_charger.HasElectricVehicle)" />
+            </dl>
+            @if (_unit != null)
+            {
+                <a class="btn btn-outline-secondary btn-sm" href="/boenheter/@_unit.Id">Gå til boenheten</a>
+            }
+        </section>
+
+        <section class="surface-card">
+            <h2>Undermåler</h2>
+            @if (_subMeter == null)
+            {
+                <p class="text-muted mb-0">Undermåleren finnes ikke.</p>
+            }
+            else
+            {
+                <dl class="detail-list">
+                    <DetailItem Label="Navn" Value="@_subMeter.Name" />
+                    <DetailItem Label="Sikringsskap" Value="@_subMeter.CabinetNumber?.ToString()" />
+                </dl>
+            }
+        </section>
+
+        <section class="surface-card detail-wide">
+            <h2>Merknader</h2>
+            @if (string.IsNullOrWhiteSpace(_charger.Notes))
+            {
+                <p class="text-muted mb-0">Ikke registrert</p>
+            }
+            else
+            {
+                <p class="notes-text mb-0">@_charger.Notes</p>
+            }
+        </section>
+
+        @if (_subMeter != null)
+        {
+            <MeterReadingsPanel MeterId="_subMeter.Id" />
+        }
+    </div>
+}
+
+@code {
+    private EvCharger? _charger;
+    private Meter? _subMeter;
+    private HousingUnit? _unit;
+    private bool _isLoading = true;
+    private string? _loadError;
+    private string? _message;
+
+    [Parameter]
+    public int Id { get; set; }
+
+    [SupplyParameterFromQuery(Name = "status")]
+    public string? Status { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _message = Status switch
+        {
+            "opprettet" => "Laderen er registrert.",
+            "endret" => "Endringene er lagret.",
+            _ => null
+        };
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _isLoading = true;
+        _loadError = null;
+
+        try
+        {
+            _charger = await ChargingService.GetChargerAsync(Id);
+            if (_charger != null)
+            {
+                _subMeter = await ChargingService.GetSubMeterAsync(Id);
+                _unit = await HousingUnitService.GetByIdAsync(_charger.HousingUnitId);
+            }
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Could not load charger {Id}.", Id);
+            _loadError = "Kunne ikke hente laderen. Kontroller at databasen er tilgjengelig og prøv igjen.";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+}

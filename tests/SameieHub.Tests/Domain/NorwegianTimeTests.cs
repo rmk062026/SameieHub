@@ -119,4 +119,16 @@ public class NorwegianTimeTests
 
         Assert.Equal(utc, back);
     }
+
+    [Theory]
+    [InlineData(2027, 7, 1, 6, true)]
+    [InlineData(2027, 1, 15, 6, false)]
+    [InlineData(2027, 10, 31, 0, true)]
+    [InlineData(2027, 10, 31, 1, false)]
+    public void IsDaylightTime_UsesTheUtcInstant_AlsoInTheRepeatedHour(int year, int month, int day, int hour, bool expected)
+    {
+        var utc = new DateTime(year, month, day, hour, 30, 0, DateTimeKind.Utc);
+
+        Assert.Equal(expected, NorwegianTime.IsDaylightTime(utc));
+    }
 }

@@ -1,0 +1,217 @@
+@inject ILogger<ChargerForm> Logger
+
+<EditForm EditContext="_editContext" OnValidSubmit="SaveAsync" novalidate>
+    <DataAnnotationsValidator />
+
+    @if (_errorMessage != null)
+    {
+        <div class="alert alert-danger" role="alert">@_errorMessage</div>
+    }
+
+    <section class="surface-card form-section">
+        <h2>Lader og boenhet</h2>
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label for="housingUnitId" class="form-label">Boenhet <span class="required-mark" aria-hidden="true">*</span></label>
+                @if (IsEditing)
+                {
+                    <input id="housingUnitId" class="form-control" value="@_unitAddress" disabled aria-describedby="unit-help" />
+                    <div id="unit-help" class="form-text">Laderen kan ikke flyttes til en annen boenhet.</div>
+                }
+                else
+                {
+                    <InputSelect id="housingUnitId" class="form-select" @bind-Value="_model.HousingUnitId" aria-required="true">
+                        <option value="">Velg boenhet</option>
+                        @foreach (var unit in AvailableHousingUnits)
+                        {
+                            <option value="@unit.Id">@unit.Address@(unit.IsActive ? "" : " (inaktiv)")</option>
+                        }
+                    </InputSelect>
+                    <ValidationMessage For="() => _model.HousingUnitId" />
+                    <div class="form-text">Bare boenheter som ikke har en lader vises. Hver boenhet kan ha én lader.</div>
+                }
+            </div>
+            <div class="col-md-6">
+                <label for="cabinetNumber" class="form-label">Sikringsskap for undermåleren <span class="required-mark" aria-hidden="true">*</span></label>
+                <InputSelect id="cabinetNumber" class="form-select" @bind-Value="_model.CabinetNumber" aria-required="true">
+                    <option value="">Velg skap</option>
+                    <option value="1">Sikringsskap 1</option>
+                    <option value="2">Sikringsskap 2</option>
+                </InputSelect>
+                <ValidationMessage For="() => _model.CabinetNumber" />
+            </div>
+            <div class="col-md-6">
+                <label for="chargerNumber" class="form-label">Ladernummer eller plassnummer</label>
+                <InputText id="chargerNumber" class="form-control" @bind-Value="_model.ChargerNumber"
+                           maxlength="@EvCharger.MaxChargerNumberLength" autocomplete="off" />
+                <ValidationMessage For="() => _model.ChargerNumber" />
+            </div>
+            <div class="col-md-6">
+                <label for="status" class="form-label">Administrativ status</label>
+                <InputSelect id="status" class="form-select" @bind-Value="_model.Status" aria-describedby="status-help">
+                    @foreach (var status in ChargingText.AllStatuses)
+                    {
+                        <option value="@status">@ChargingText.StatusText(status)</option>
+                    }
+                </InputSelect>
+                <div id="status-help" class="form-text">Statusen er administrativ. Den styrer ikke laderen, og målerne kan leses uansett.</div>
+                <ValidationMessage For="() => _model.Status" />
+            </div>
+            <div class="col-md-6">
+                <label for="manufacturer" class="form-label">Produsent</label>
+                <InputText id="manufacturer" class="form-control" @bind-Value="_model.Manufacturer"
+                           maxlength="@EvCharger.MaxManufacturerLength" autocomplete="off" />
+                <ValidationMessage For="() => _model.Manufacturer" />
+            </div>
+            <div class="col-md-6">
+                <label for="model" class="form-label">Modell</label>
+                <InputText id="model" class="form-control" @bind-Value="_model.Model"
+                           maxlength="@EvCharger.MaxModelLength" autocomplete="off" />
+                <ValidationMessage For="() => _model.Model" />
+            </div>
+            <div class="col-md-6">
+                <label for="hasElectricVehicle" class="form-label">Har husstanden elbil?</label>
+                <InputSelect id="hasElectricVehicle" class="form-select" @bind-Value="_model.HasElectricVehicle">
+                    <option value="">Ikke registrert</option>
+                    <option value="yes">Ja</option>
+                    <option value="no">Nei</option>
+                </InputSelect>
+            </div>
+        </div>
+    </section>
+
+    <section class="surface-card form-section">
+        <h2>Merknader</h2>
+        <label for="notes" class="form-label">Merknader</label>
+        <InputTextArea id="notes" class="form-control" rows="3" @bind-Value="_model.Notes" maxlength="@EvCharger.MaxNotesLength" />
+        <ValidationMessage For="() => _model.Notes" />
+    </section>
+
+    <div class="form-actions">
+        <button type="submit" class="btn btn-primary" disabled="@_isSaving">
+            @if (_isSaving)
+            {
+                <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
+                <span>Lagrer …</span>
+            }
+            else
+            {
+                @SubmitText
+            }
+        </button>
+        <a class="btn btn-outline-secondary" href="@CancelHref">Avbryt</a>
+    </div>
+</EditForm>
+
+@code {
+    private ChargerFormModel _model = new();
+    private EditContext _editContext = default!;
+    private ValidationMessageStore _messageStore = default!;
+    private string _unitAddress = string.Empty;
+    private bool _isSaving;
+    private string? _errorMessage;
+
+    [Parameter]
+    public EvCharger? Existing { get; set; }
+
+    /// <summary>The cabinet of the existing charger's sub meter.</summary>
+    [Parameter]
+    public int? ExistingCabinetNumber { get; set; }
+
+    [Parameter]
+    public string ExistingUnitAddress { get; set; } = string.Empty;
+
+    /// <summary>The housing units without a charger. The page decides which ones are offered.</summary>
+    [Parameter]
+    public IReadOnlyList<HousingUnit> AvailableHousingUnits { get; set; } = [];
+
+    [Parameter]
+    public int? InitialHousingUnitId { get; set; }
+
+    [Parameter, EditorRequired]
+    public string SubmitText { get; set; } = string.Empty;
+
+    [Parameter]
+    public string CancelHref { get; set; } = "/elbillading";
+
+    /// <summary>Saves the charger. Receives the housing unit (new chargers only), the cabinet and the details.</summary>
+    [Parameter, EditorRequired]
+    public Func<ChargerFormModel, Task> OnSave { get; set; } = _ => Task.CompletedTask;
+
+    private bool IsEditing => Existing != null;
+
+    protected override void OnInitialized()
+    {
+        _unitAddress = ExistingUnitAddress;
+        _model = Existing == null
+            ? new ChargerFormModel { HousingUnitId = InitialHousingUnitId }
+            : ChargerFormModel.From(Existing, ExistingCabinetNumber);
+
+        _editContext = new EditContext(_model);
+        _messageStore = new ValidationMessageStore(_editContext);
+        _editContext.OnValidationRequested += (_, _) => _messageStore.Clear();
+        _editContext.OnFieldChanged += (_, e) => _messageStore.Clear(e.FieldIdentifier);
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_isSaving)
+        {
+            return;
+        }
+
+        _isSaving = true;
+        _errorMessage = null;
+
+        try
+        {
+            await OnSave(_model);
+        }
+        catch (EvChargerAlreadyExistsException)
+        {
+            ShowFieldMessage(nameof(ChargerFormModel.HousingUnitId), "Denne boenheten har allerede en lader. Hver boenhet kan ha én lader.");
+        }
+        catch (ArgumentException exception) when (ChargerFieldMessages.TryGet(exception.ParamName, out _))
+        {
+            ChargerFieldMessages.TryGet(exception.ParamName, out var message);
+            ShowFieldMessage(exception.ParamName!, message);
+        }
+        catch (ArgumentException)
+        {
+            _errorMessage = "En av verdiene er ugyldig. Kontroller skjemaet og prøv på nytt.";
+        }
+        catch (InvalidOperationException)
+        {
+            _errorMessage = "Ladeanlegget er ikke opprettet. Opprett ladeanlegget på oversiktssiden først.";
+        }
+        catch (KeyNotFoundException)
+        {
+            _errorMessage = "Laderen finnes ikke lenger. Gå tilbake til oversikten.";
+        }
+        catch (Exception exception)
+        {
+            // Only the exception is logged, never the form values.
+            Logger.LogError(exception, "Could not save charger.");
+            _errorMessage = "Kunne ikke lagre. Kontroller at databasen er tilgjengelig og prøv på nytt.";
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private void ShowFieldMessage(string fieldName, string message)
+    {
+        // A property name in the domain may differ from the form model; unknown names fall back to a general message.
+        var fieldExists = _model.GetType().GetProperty(fieldName) != null;
+        if (!fieldExists)
+        {
+            _errorMessage = message;
+
+            return;
+        }
+
+        _messageStore.Add(_editContext.Field(fieldName), message);
+        _editContext.NotifyValidationStateChanged();
+    }
+}

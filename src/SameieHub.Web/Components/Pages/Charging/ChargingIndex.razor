@@ -1,0 +1,257 @@
+@page "/elbillading"
+@inject ChargingService ChargingService
+@inject HousingUnitService HousingUnitService
+@inject ILogger<ChargingIndex> Logger
+
+<PageTitle>Elbillading – SameieHub</PageTitle>
+
+<PageHeader Title="Elbillading" Description="Ladere, målere og manuelle avlesninger. Strømforbruket regnes ut fra avlesningene.">
+    @if (_facility != null)
+    {
+        <a class="btn btn-primary" href="/elbillading/avlesning">Registrer avlesning</a>
+        <a class="btn btn-outline-primary" href="/elbillading/ny">Registrer lader</a>
+    }
+</PageHeader>
+
+@if (_isLoading)
+{
+    <div class="surface-card" role="status">
+        <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Laster elbillading …
+    </div>
+}
+else if (_loadError != null)
+{
+    <div class="alert alert-danger" role="alert">
+        <p>@_loadError</p>
+        <button type="button" class="btn btn-outline-danger btn-sm" @onclick="LoadAsync">Prøv igjen</button>
+    </div>
+}
+else if (_facility == null)
+{
+    <section class="surface-card" aria-labelledby="setup-title">
+        <h2 id="setup-title">Sett opp ladeanlegget</h2>
+        <p>
+            Ladeanlegget har én felles hovedmåler og én undermåler per lader (åtte undermålere, fire i hvert av to sikringsskap).
+            Hovedmåleren opprettes automatisk. Ladere og undermålere registrerer du etterpå.
+        </p>
+        @if (_setupError != null)
+        {
+            <div class="alert alert-danger" role="alert">@_setupError</div>
+        }
+        <form @onsubmit="SetUpFacilityAsync" novalidate>
+            <label for="facilityName" class="form-label">Navn på ladeanlegget <span class="required-mark" aria-hidden="true">*</span></label>
+            <input id="facilityName" class="form-control" @bind="_facilityName" @bind:event="oninput"
+                   maxlength="@ChargingFacility.MaxNameLength" autocomplete="off" aria-required="true" />
+            <div class="form-actions mt-3">
+                <button type="submit" class="btn btn-primary" disabled="@_isSettingUp">
+                    @(_isSettingUp ? "Oppretter …" : "Opprett ladeanlegg")
+                </button>
+            </div>
+        </form>
+    </section>
+}
+else if (_overview != null)
+{
+    <div class="stat-row stat-row-wide">
+        <div class="stat-card">
+            <span class="stat-value">@_overview.RegisteredChargers</span>
+            <span class="stat-label">Registrerte ladere</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-value">@_overview.InUse</span>
+            <span class="stat-label">I bruk</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-value">@_overview.NotInUse</span>
+            <span class="stat-label">Ikke i bruk</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-value">@_overview.TemporarilyDisabled</span>
+            <span class="stat-label">Midlertidig deaktivert</span>
+        </div>
+    </div>
+
+    <div class="detail-grid">
+        <section class="surface-card" aria-labelledby="main-meter-title">
+            <h2 id="main-meter-title">Hovedmåler</h2>
+            @if (_overview.MainMeter == null)
+            {
+                <p class="text-muted mb-0">Hovedmåleren er ikke satt opp.</p>
+            }
+            else if (_overview.MainMeterLastReading == null)
+            {
+                <p class="text-muted">Ingen avlesninger er registrert.</p>
+                <a class="btn btn-outline-primary btn-sm" href="/elbillading/avlesning">Registrer første avlesning</a>
+            }
+            else
+            {
+                <p class="mb-1"><strong>@ChargingText.Kwh(_overview.MainMeterLastReading.Kwh)</strong></p>
+                <p class="text-muted">Avlest @ChargingText.Time(_overview.MainMeterLastReading.ReadAt)</p>
+                <a class="btn btn-outline-primary btn-sm" href="/elbillading/maler/@_overview.MainMeter.Id">Avlesningshistorikk</a>
+            }
+        </section>
+
+        <section class="surface-card" aria-labelledby="reconciliation-title">
+            <div class="section-heading">
+                <h2 id="reconciliation-title">Siste avstemming</h2>
+                <a class="btn btn-outline-primary btn-sm" href="/elbillading/avstemming">Se avstemming</a>
+            </div>
+            @if (_reconciliation == null)
+            {
+                <p class="text-muted mb-0">Avstemming krever minst to avlesninger av hovedmåleren.</p>
+            }
+            else
+            {
+                <ReconciliationView Reconciliation="_reconciliation" Units="_units" />
+            }
+        </section>
+
+        <section class="surface-card detail-wide" aria-labelledby="chargers-title">
+            <h2 id="chargers-title">Ladere</h2>
+            @if (_overview.Rows.Count == 0)
+            {
+                <p class="text-muted mb-0">Ingen ladere er registrert ennå.</p>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table data-table">
+                        <caption class="visually-hidden">Ladere med undermåler og siste avlesning</caption>
+                        <thead>
+                            <tr>
+                                <th scope="col">Boenhet</th>
+                                <th scope="col" class="d-none d-md-table-cell">Skap</th>
+                                <th scope="col">Status</th>
+                                <th scope="col">Siste avlesning</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var row in _overview.Rows)
+                            {
+                                <tr>
+                                    <td>
+                                        <a class="unit-link" href="/elbillading/@row.Charger.Id">@row.Unit.Address</a>
+                                        @if (row.Charger.ChargerNumber != null)
+                                        {
+                                            <div class="unit-sub">Lader @row.Charger.ChargerNumber</div>
+                                        }
+                                    </td>
+                                    <td class="d-none d-md-table-cell">@(row.SubMeter?.CabinetNumber?.ToString() ?? "–")</td>
+                                    <td><ChargerStatusBadge Status="row.Charger.Status" /></td>
+                                    <td>
+                                        @if (row.LastReading == null)
+                                        {
+                                            <span class="text-muted">Ingen avlesning</span>
+                                        }
+                                        else
+                                        {
+                                            @ChargingText.Kwh(row.LastReading.Kwh)
+                                            <div class="unit-sub">@ChargingText.Time(row.LastReading.ReadAt)</div>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+
+        @if (_overview.UnitsWithoutCharger.Count > 0)
+        {
+            <section class="surface-card detail-wide" aria-labelledby="without-title">
+                <h2 id="without-title">Boenheter uten lader</h2>
+                <ul class="plain-list mb-0">
+                    @foreach (var unit in _overview.UnitsWithoutCharger)
+                    {
+                        <li>
+                            <a class="unit-link" href="/boenheter/@unit.Id">@unit.Address</a>
+                            – <a href="/elbillading/ny?boenhet=@unit.Id">registrer lader</a>
+                        </li>
+                    }
+                </ul>
+            </section>
+        }
+    </div>
+}
+
+@code {
+    private ChargingFacility? _facility;
+    private ChargingOverview? _overview;
+    private ChargingReconciliation? _reconciliation;
+    private IReadOnlyList<HousingUnit> _units = [];
+    private bool _isLoading = true;
+    private string? _loadError;
+    private string _facilityName = string.Empty;
+    private string? _setupError;
+    private bool _isSettingUp;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _isLoading = true;
+        _loadError = null;
+
+        try
+        {
+            _facility = await ChargingService.GetFacilityAsync();
+            if (_facility != null)
+            {
+                _units = await HousingUnitService.GetAllAsync();
+                var chargers = await ChargingService.GetChargersAsync();
+                var meters = await ChargingService.GetMetersAsync();
+                var readings = await ChargingService.GetAllReadingsAsync();
+
+                _overview = ChargingOverview.Create(_units, chargers, meters, readings);
+                _reconciliation = await ChargingService.ReconcileLatestPeriodAsync();
+            }
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Could not load the charging overview.");
+            _loadError = "Kunne ikke hente elbillading. Kontroller at databasen er tilgjengelig og prøv igjen.";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task SetUpFacilityAsync()
+    {
+        if (_isSettingUp)
+        {
+            return;
+        }
+
+        _isSettingUp = true;
+        _setupError = null;
+
+        try
+        {
+            await ChargingService.SetUpFacilityAsync(_facilityName);
+            await LoadAsync();
+        }
+        catch (ArgumentException)
+        {
+            _setupError = $"Oppgi et navn på ladeanlegget, med maks {ChargingFacility.MaxNameLength} tegn.";
+        }
+        catch (ChargingFacilityAlreadyExistsException)
+        {
+            await LoadAsync();
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Could not set up the charging facility.");
+            _setupError = "Kunne ikke opprette ladeanlegget. Kontroller at databasen er tilgjengelig og prøv på nytt.";
+        }
+        finally
+        {
+            _isSettingUp = false;
+        }
+    }
+}

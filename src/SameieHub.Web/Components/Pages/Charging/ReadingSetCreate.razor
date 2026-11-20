@@ -1,0 +1,462 @@
+@page "/elbillading/avlesning"
+@inject ChargingService ChargingService
+@inject HousingUnitService HousingUnitService
+@inject TimeProvider TimeProvider
+@inject ILogger<ReadingSetCreate> Logger
+
+<PageTitle>Registrer avlesning – SameieHub</PageTitle>
+
+<PageHeader Title="Registrer avlesning" Description="Les av hovedmåleren og undermålerne samme dag og registrer alt på én gang."
+            BackHref="/elbillading" BackText="Elbillading" />
+
+@if (_isLoading)
+{
+    <div class="surface-card" role="status">
+        <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Laster målere …
+    </div>
+}
+else if (_loadError != null)
+{
+    <div class="alert alert-danger" role="alert">
+        <p>@_loadError</p>
+        <button type="button" class="btn btn-outline-danger btn-sm" @onclick="LoadAsync">Prøv igjen</button>
+    </div>
+}
+else if (_mainMeter == null)
+{
+    <section class="surface-card empty-state">
+        <h2>Ladeanlegget er ikke opprettet</h2>
+        <p>Opprett ladeanlegget først. Da opprettes også hovedmåleren.</p>
+        <a class="btn btn-primary" href="/elbillading">Gå til elbillading</a>
+    </section>
+}
+else if (_result != null)
+{
+    <section class="surface-card" aria-labelledby="confirmation-title" role="status">
+        <h2 id="confirmation-title">Avlesningen er registrert</h2>
+        <p>Avlest @ChargingText.Time(_result.ReadAt).</p>
+        <div class="table-responsive">
+            <table class="table data-table">
+                <caption class="visually-hidden">Registrerte målerstander</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Måler</th>
+                        <th scope="col">Målerstand</th>
+                        <th scope="col">Forbruk siden forrige</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var line in _result.Lines)
+                    {
+                        <tr>
+                            <td>@LabelOf(line.Meter)</td>
+                            <td>@(line.Reading == null ? "Ikke avlest" : ChargingText.Kwh(line.Reading.Kwh))</td>
+                            <td>
+                                @if (line.Reading == null)
+                                {
+                                    <span class="text-muted">–</span>
+                                }
+                                else if (line.IsStartValue)
+                                {
+                                    <span class="text-muted">Startverdi</span>
+                                }
+                                else
+                                {
+                                    @ChargingText.SignedKwh(line.ConsumptionKwh!.Value)
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        @if (_result.MetersNotRead.Count > 0)
+        {
+            <div class="alert alert-info" role="status">
+                @_result.MetersNotRead.Count måler@(_result.MetersNotRead.Count == 1 ? "" : "e") ble ikke avlest og er ikke lagret.
+                Du kan registrere dem senere med samme tidspunkt.
+            </div>
+        }
+
+        @if (_result.Reconciliation != null)
+        {
+            <h3>Avstemming for perioden som ble avsluttet</h3>
+            <ReconciliationView Reconciliation="_result.Reconciliation" Units="_units" />
+        }
+
+        <div class="form-actions mt-3">
+            <button type="button" class="btn btn-primary" @onclick="StartNew">Registrer en ny avlesning</button>
+            <a class="btn btn-outline-secondary" href="/elbillading/avstemming">Se avstemming</a>
+            <a class="btn btn-outline-secondary" href="/elbillading">Til oversikten</a>
+        </div>
+    </section>
+}
+else
+{
+    <form @onsubmit="SaveAsync" novalidate aria-label="Registrer avlesning">
+        @if (_summaryError != null)
+        {
+            <div class="alert alert-danger" role="alert">@_summaryError</div>
+        }
+
+        <section class="surface-card form-section">
+            <h2>Tidspunkt</h2>
+            <ReadingTimeField Id="readAt" @bind-Value="_readAtText" @bind-AmbiguousIsDaylightTime="_ambiguous" Error="@_timeError" />
+        </section>
+
+        <section class="surface-card form-section">
+            <h2>Hovedmåler</h2>
+            <p class="text-muted">La feltet stå tomt hvis måleren ikke ble avlest. Tomt er ikke det samme som 0.</p>
+            @MeterField(_mainMeter)
+        </section>
+
+        @foreach (var cabinet in _cabinets)
+        {
+            <section class="surface-card form-section" aria-labelledby="@($"cabinet-{cabinet.Number}")">
+                <h2 id="@($"cabinet-{cabinet.Number}")">Sikringsskap @cabinet.Number</h2>
+                @if (cabinet.Meters.Count != ExpectedPerCabinet)
+                {
+                    <p class="text-muted">@cabinet.Meters.Count av @ExpectedPerCabinet undermålere er registrert i dette skapet.</p>
+                }
+                @foreach (var meter in cabinet.Meters)
+                {
+                    @MeterField(meter)
+                }
+            </section>
+        }
+
+        <section class="surface-card form-section">
+            <h2>Merknad</h2>
+            <label for="notes" class="form-label">Merknad til avlesningen</label>
+            <input id="notes" class="form-control" @bind="_notes" maxlength="@MeterReading.MaxNotesLength" autocomplete="off" />
+            @if (_notesError != null)
+            {
+                <div class="validation-message" role="alert">@_notesError</div>
+            }
+            <div class="form-text">Valgfritt. Merknaden lagres på hver avlesning i denne registreringen.</div>
+        </section>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary" disabled="@_isSaving">
+                @if (_isSaving)
+                {
+                    <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
+                    <span>Lagrer …</span>
+                }
+                else
+                {
+                    @:Registrer avlesning
+                }
+            </button>
+            <a class="btn btn-outline-secondary" href="/elbillading">Avbryt</a>
+        </div>
+    </form>
+}
+
+@code {
+    private const int ExpectedPerCabinet = 4;
+
+    private sealed record Cabinet(int Number, List<Meter> Meters);
+
+    private Meter? _mainMeter;
+    private List<Cabinet> _cabinets = [];
+    private IReadOnlyList<HousingUnit> _units = [];
+    private Dictionary<int, EvCharger> _chargersById = [];
+    private Dictionary<int, MeterReading?> _latestByMeter = [];
+
+    private readonly Dictionary<int, string?> _values = [];
+    private readonly Dictionary<int, string?> _fieldErrors = [];
+    private string? _readAtText;
+    private bool? _ambiguous;
+    private string? _notes;
+    private string? _timeError;
+    private string? _notesError;
+    private string? _summaryError;
+
+    private ReadingSetResult? _result;
+    private bool _isLoading = true;
+    private bool _isSaving;
+    private string? _loadError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _isLoading = true;
+        _loadError = null;
+
+        try
+        {
+            _units = await HousingUnitService.GetAllAsync();
+            _chargersById = (await ChargingService.GetChargersAsync()).ToDictionary(charger => charger.Id);
+
+            var meters = await ChargingService.GetMetersAsync();
+            _mainMeter = meters.FirstOrDefault(meter => meter.IsMain);
+
+            var readings = await ChargingService.GetAllReadingsAsync();
+            _latestByMeter = [];
+            foreach (var meter in meters)
+            {
+                var sorted = MeterHistory.Sort(readings.Where(reading => reading.MeterId == meter.Id));
+                _latestByMeter[meter.Id] = sorted.Count == 0 ? null : sorted[^1];
+            }
+
+            BuildCabinets(meters);
+            ResetForm();
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Could not load the reading form.");
+            _loadError = "Kunne ikke hente målerne. Kontroller at databasen er tilgjengelig og prøv igjen.";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void BuildCabinets(IReadOnlyList<Meter> meters)
+    {
+        _cabinets = [];
+        for (var number = Meter.MinCabinetNumber; number <= Meter.MaxCabinetNumber; number++)
+        {
+            var inCabinet = meters.Where(meter => !meter.IsMain && meter.CabinetNumber == number).OrderBy(meter => LabelOf(meter)).ToList();
+            _cabinets.Add(new Cabinet(number, inCabinet));
+        }
+    }
+
+    private void ResetForm()
+    {
+        _values.Clear();
+        _fieldErrors.Clear();
+        _readAtText = ChargingInput.ToInputValue(TimeProvider.GetUtcNow().UtcDateTime);
+        _ambiguous = null;
+        _notes = null;
+        _timeError = null;
+        _notesError = null;
+        _summaryError = null;
+    }
+
+    private string LabelOf(Meter meter)
+    {
+        EvCharger? charger = null;
+        if (meter.EvChargerId is { } chargerId)
+        {
+            _chargersById.TryGetValue(chargerId, out charger);
+        }
+
+        var unit = charger == null ? null : _units.FirstOrDefault(existing => existing.Id == charger.HousingUnitId);
+
+        return ChargingText.MeterLabel(meter, charger, unit);
+    }
+
+    private string ValueOf(int meterId) => _values.TryGetValue(meterId, out var text) ? text ?? string.Empty : string.Empty;
+
+    private void SetValue(int meterId, string? text)
+    {
+        _values[meterId] = text;
+        _fieldErrors.Remove(meterId);
+    }
+
+    private string? DifferenceText(int meterId)
+    {
+        if (ChargingInput.TryParseKwh(ValueOf(meterId), out var kwh) != null || kwh == null)
+        {
+            return null;
+        }
+
+        var previous = _latestByMeter.GetValueOrDefault(meterId);
+        if (previous == null)
+        {
+            return "Dette blir startverdien.";
+        }
+
+        var difference = kwh.Value - previous.Kwh;
+
+        return difference < 0
+            ? $"Lavere enn forrige avlesning ({ChargingText.SignedKwh(difference)}). Målerstanden kan ikke gå ned."
+            : $"Forbruk siden forrige: {ChargingText.SignedKwh(difference)}";
+    }
+
+    private RenderFragment MeterField(Meter meter) => builder =>
+    {
+        var id = $"kwh-{meter.Id}";
+        var previous = _latestByMeter.GetValueOrDefault(meter.Id);
+        var difference = DifferenceText(meter.Id);
+        _fieldErrors.TryGetValue(meter.Id, out var error);
+
+        builder.OpenElement(0, "div");
+        builder.AddAttribute(1, "class", "meter-field");
+
+        builder.OpenElement(2, "label");
+        builder.AddAttribute(3, "for", id);
+        builder.AddAttribute(4, "class", "form-label");
+        builder.AddContent(5, $"{LabelOf(meter)} (kWh)");
+        builder.CloseElement();
+
+        builder.OpenElement(6, "input");
+        builder.AddAttribute(7, "id", id);
+        builder.AddAttribute(8, "class", "form-control");
+        builder.AddAttribute(9, "inputmode", "decimal");
+        builder.AddAttribute(10, "autocomplete", "off");
+        builder.AddAttribute(11, "value", ValueOf(meter.Id));
+        builder.AddAttribute(12, "oninput", EventCallback.Factory.Create<ChangeEventArgs>(this, e => SetValue(meter.Id, e.Value?.ToString())));
+        if (error != null)
+        {
+            builder.AddAttribute(13, "aria-invalid", "true");
+        }
+
+        builder.CloseElement();
+
+        builder.OpenElement(14, "div");
+        builder.AddAttribute(15, "class", "form-text");
+        builder.AddContent(16, previous == null
+            ? "Forrige: ingen avlesning ennå."
+            : $"Forrige: {ChargingText.Kwh(previous.Kwh)} ({ChargingText.Time(previous.ReadAt)})");
+        builder.CloseElement();
+
+        if (difference != null)
+        {
+            builder.OpenElement(17, "div");
+            builder.AddAttribute(18, "class", "form-text");
+            builder.AddContent(19, difference);
+            builder.CloseElement();
+        }
+
+        if (error != null)
+        {
+            builder.OpenElement(20, "div");
+            builder.AddAttribute(21, "class", "validation-message");
+            builder.AddAttribute(22, "role", "alert");
+            builder.AddContent(23, error);
+            builder.CloseElement();
+        }
+
+        builder.CloseElement();
+    };
+
+    private void StartNew()
+    {
+        _result = null;
+        ResetForm();
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_isSaving)
+        {
+            return;
+        }
+
+        _isSaving = true;
+        _summaryError = null;
+        _timeError = null;
+        _notesError = null;
+        _fieldErrors.Clear();
+
+        try
+        {
+            var details = ReadForm();
+            if (details == null)
+            {
+                return;
+            }
+
+            _result = await ChargingService.RegisterReadingSetAsync(details);
+            await LoadAsync();
+        }
+        catch (MeterReadingSequenceException exception)
+        {
+            if (exception.MeterId is { } meterId)
+            {
+                _fieldErrors[meterId] = ChargingErrorText.Sequence(exception);
+            }
+            else
+            {
+                _summaryError = ChargingErrorText.Sequence(exception);
+            }
+        }
+        catch (ArgumentException exception) when (exception.ParamName == nameof(MeterReadingSetDetails.ReadAt))
+        {
+            _timeError = ChargingErrorText.ReadAtMessage;
+        }
+        catch (ArgumentException exception) when (exception.ParamName == nameof(MeterReadingSetDetails.Notes))
+        {
+            _notesError = ChargingErrorText.ForReadingField(nameof(MeterReadingDetails.Notes));
+        }
+        catch (ArgumentException)
+        {
+            _summaryError = "Kontroller målerstandene og prøv på nytt. Minst én måler må ha en verdi.";
+        }
+        catch (InvalidOperationException)
+        {
+            _summaryError = "Ladeanlegget er ikke opprettet.";
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Could not register a reading set.");
+            _summaryError = "Kunne ikke lagre avlesningen. Ingenting er lagret. Kontroller at databasen er tilgjengelig og prøv på nytt.";
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private MeterReadingSetDetails? ReadForm()
+    {
+        var hasError = false;
+
+        _timeError = ChargingInput.TryConvertToUtc(_readAtText, _ambiguous, out var readAt);
+        hasError |= _timeError != null;
+
+        decimal? mainKwh = null;
+        var mainError = ChargingInput.TryParseKwh(ValueOf(_mainMeter!.Id), out mainKwh);
+        if (mainError != null)
+        {
+            _fieldErrors[_mainMeter.Id] = mainError;
+            hasError = true;
+        }
+
+        var subValues = new Dictionary<int, decimal?>();
+        foreach (var cabinet in _cabinets)
+        {
+            foreach (var meter in cabinet.Meters)
+            {
+                var error = ChargingInput.TryParseKwh(ValueOf(meter.Id), out var kwh);
+                if (error != null)
+                {
+                    _fieldErrors[meter.Id] = error;
+                    hasError = true;
+                }
+
+                subValues[meter.Id] = kwh;
+            }
+        }
+
+        if (!hasError && mainKwh == null && subValues.Values.All(value => value == null))
+        {
+            _summaryError = "Fyll inn minst én målerstand. Tomme felt lagres ikke.";
+            hasError = true;
+        }
+
+        if (hasError)
+        {
+            _summaryError ??= "Rett feilene som er markert og prøv på nytt. Ingenting er lagret.";
+
+            return null;
+        }
+
+        return new MeterReadingSetDetails
+        {
+            ReadAt = readAt,
+            MainMeterKwh = mainKwh,
+            SubMeterKwh = subValues,
+            Notes = _notes
+        };
+    }
+}

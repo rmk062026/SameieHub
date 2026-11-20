@@ -1,0 +1,93 @@
+@inject ChargingService ChargingService
+@inject ILogger<UnitChargingSection> Logger
+
+<section class="surface-card detail-wide" aria-labelledby="unit-charging-title">
+    <div class="section-heading">
+        <h2 id="unit-charging-title">Elbillader</h2>
+        @if (_state == State.NoCharger && IsUnitActive)
+        {
+            <a class="btn btn-outline-primary btn-sm" href="/elbillading/ny?boenhet=@HousingUnitId">Registrer lader</a>
+        }
+    </div>
+
+    @switch (_state)
+    {
+        case State.Loading:
+            <p class="mb-0" role="status">Laster …</p>
+            break;
+        case State.Failed:
+            <p class="text-muted mb-0">Kunne ikke hente laderen.</p>
+            break;
+        case State.NoCharger:
+            <p class="text-muted mb-0">Ingen elbillader er registrert for denne boenheten.</p>
+            break;
+        default:
+            <div class="detail-meta">
+                <ChargerStatusBadge Status="_charger!.Status" />
+                @if (_charger.ChargerNumber != null)
+                {
+                    <span>Lader @_charger.ChargerNumber</span>
+                }
+                @if (_subMeter?.CabinetNumber is { } cabinet)
+                {
+                    <span>Sikringsskap @cabinet</span>
+                }
+            </div>
+            <p class="mb-2">
+                @if (_lastReading == null)
+                {
+                    <span class="text-muted">Ingen avlesninger er registrert.</span>
+                }
+                else
+                {
+                    <span>Siste avlesning: <strong>@ChargingText.Kwh(_lastReading.Kwh)</strong> (@ChargingText.Time(_lastReading.ReadAt))</span>
+                }
+            </p>
+            <a class="btn btn-outline-primary btn-sm" href="/elbillading/@_charger.Id">Se laderen og avlesninger</a>
+            break;
+    }
+</section>
+
+@code {
+    private enum State { Loading, Failed, NoCharger, HasCharger }
+
+    private State _state = State.Loading;
+    private EvCharger? _charger;
+    private Meter? _subMeter;
+    private MeterReading? _lastReading;
+
+    [Parameter, EditorRequired]
+    public int HousingUnitId { get; set; }
+
+    [Parameter]
+    public bool IsUnitActive { get; set; } = true;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _charger = await ChargingService.GetChargerForHousingUnitAsync(HousingUnitId);
+            if (_charger == null)
+            {
+                _state = State.NoCharger;
+
+                return;
+            }
+
+            _subMeter = await ChargingService.GetSubMeterAsync(_charger.Id);
+            _lastReading = null;
+            if (_subMeter != null)
+            {
+                var readings = await ChargingService.GetReadingsAsync(_subMeter.Id);
+                _lastReading = readings.Count == 0 ? null : readings[^1];
+            }
+
+            _state = State.HasCharger;
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Could not load the charger of housing unit {HousingUnitId}.", HousingUnitId);
+            _state = State.Failed;
+        }
+    }
+}

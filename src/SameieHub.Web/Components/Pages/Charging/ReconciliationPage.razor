@@ -1,0 +1,128 @@
+@page "/elbillading/avstemming"
+@inject ChargingService ChargingService
+@inject HousingUnitService HousingUnitService
+@inject ILogger<ReconciliationPage> Logger
+
+<PageTitle>Avstemming – SameieHub</PageTitle>
+
+<PageHeader Title="Avstemming" Description="Sammenligner hovedmåleren med summen av undermålerne i en periode mellom to avlesninger av hovedmåleren."
+            BackHref="/elbillading" BackText="Elbillading" />
+
+@if (_isLoading)
+{
+    <div class="surface-card" role="status">
+        <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Laster avstemming …
+    </div>
+}
+else if (_loadError != null)
+{
+    <div class="alert alert-danger" role="alert">
+        <p>@_loadError</p>
+        <button type="button" class="btn btn-outline-danger btn-sm" @onclick="LoadAsync">Prøv igjen</button>
+    </div>
+}
+else if (_periods.Count == 0)
+{
+    <section class="surface-card empty-state">
+        <h2>Ingen perioder å avstemme</h2>
+        <p>En periode går mellom to avlesninger av hovedmåleren. Registrer minst to avlesninger.</p>
+        <a class="btn btn-primary" href="/elbillading/avlesning">Registrer avlesning</a>
+    </section>
+}
+else
+{
+    <section class="surface-card form-section">
+        <label for="period" class="form-label">Periode</label>
+        <select id="period" class="form-select" value="@_selectedIndex" @onchange="OnPeriodChanged">
+            @for (var index = _periods.Count - 1; index >= 0; index--)
+            {
+                <option value="@index">@ChargingText.Period(_periods[index].From, _periods[index].To)</option>
+            }
+        </select>
+        <div class="form-text">
+            Periodene er mellom avlesningene av hovedmåleren. Hver undermåler bruker avlesningen nærmest start og slutt,
+            høyst @((int)MeterHistory.DefaultTolerance.TotalHours) timer unna. Er den ikke avlest nøyaktig, markeres avstemmingen som tilnærmet.
+        </div>
+    </section>
+
+    @if (_reconciliation != null)
+    {
+        <section class="surface-card" aria-label="Resultat">
+            <ReconciliationView Reconciliation="_reconciliation" Units="_units" ShowDetails="true" />
+        </section>
+    }
+}
+
+@code {
+    private List<ReconciliationPeriod> _periods = [];
+    private IReadOnlyList<HousingUnit> _units = [];
+    private ChargingReconciliation? _reconciliation;
+    private int _selectedIndex;
+    private bool _isLoading = true;
+    private string? _loadError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _isLoading = true;
+        _loadError = null;
+
+        try
+        {
+            _units = await HousingUnitService.GetAllAsync();
+
+            var main = await ChargingService.GetMainMeterAsync();
+            _periods = main == null
+                ? []
+                : ChargingReconciler.MainMeterPeriods(await ChargingService.GetReadingsAsync(main.Id));
+
+            _selectedIndex = _periods.Count - 1;
+            await ReconcileSelectedAsync();
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Could not load the reconciliation.");
+            _loadError = "Kunne ikke hente avstemmingen. Kontroller at databasen er tilgjengelig og prøv igjen.";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task OnPeriodChanged(ChangeEventArgs e)
+    {
+        if (!int.TryParse(e.Value?.ToString(), out var index) || index < 0 || index >= _periods.Count)
+        {
+            return;
+        }
+
+        _selectedIndex = index;
+
+        try
+        {
+            await ReconcileSelectedAsync();
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Could not reconcile the selected period.");
+            _loadError = "Kunne ikke hente avstemmingen. Kontroller at databasen er tilgjengelig og prøv igjen.";
+        }
+    }
+
+    private async Task ReconcileSelectedAsync()
+    {
+        _reconciliation = null;
+        if (_selectedIndex < 0 || _selectedIndex >= _periods.Count)
+        {
+            return;
+        }
+
+        var period = _periods[_selectedIndex];
+        _reconciliation = await ChargingService.ReconcileAsync(period.From, period.To);
+    }
+}

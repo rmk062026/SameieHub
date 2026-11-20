@@ -1,0 +1,123 @@
+@page "/elbillading/ny"
+@inject ChargingService ChargingService
+@inject HousingUnitService HousingUnitService
+@inject NavigationManager Navigation
+@inject ILogger<ChargerCreate> Logger
+
+<PageTitle>Registrer lader – SameieHub</PageTitle>
+
+<PageHeader Title="Registrer elbillader" Description="Hver boenhet kan ha én lader. Undermåleren opprettes samtidig i sikringsskapet du velger."
+            BackHref="/elbillading" BackText="Elbillading" />
+
+@if (_isLoading)
+{
+    <div class="surface-card" role="status">
+        <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Laster skjema …
+    </div>
+}
+else if (_loadError != null)
+{
+    <div class="alert alert-danger" role="alert">
+        <p>@_loadError</p>
+        <button type="button" class="btn btn-outline-danger btn-sm" @onclick="LoadAsync">Prøv igjen</button>
+    </div>
+}
+else if (!_hasFacility)
+{
+    <section class="surface-card empty-state">
+        <h2>Ladeanlegget er ikke opprettet</h2>
+        <p>Opprett ladeanlegget først. Da opprettes også den felles hovedmåleren.</p>
+        <a class="btn btn-primary" href="/elbillading">Gå til elbillading</a>
+    </section>
+}
+else if (_availableUnits.Count == 0)
+{
+    <section class="surface-card empty-state">
+        <h2>Alle boenheter har en lader</h2>
+        <p>Det finnes ingen boenheter uten lader. Hver boenhet kan ha én lader.</p>
+        <a class="btn btn-primary" href="/elbillading">Til oversikten</a>
+    </section>
+}
+else
+{
+    @if (_preselectNotice != null)
+    {
+        <div class="alert alert-warning" role="status">@_preselectNotice</div>
+    }
+
+    <ChargerForm AvailableHousingUnits="_availableUnits" InitialHousingUnitId="_preselectedUnitId"
+                 SubmitText="Registrer lader" OnSave="RegisterAsync" />
+}
+
+@code {
+    private IReadOnlyList<HousingUnit> _availableUnits = [];
+    private int? _preselectedUnitId;
+    private string? _preselectNotice;
+    private bool _hasFacility;
+    private bool _isLoading = true;
+    private string? _loadError;
+
+    /// <summary>Set by the shortcut on the housing unit page. It is only a suggestion and is checked below.</summary>
+    [SupplyParameterFromQuery(Name = "boenhet")]
+    public string? HousingUnitParameter { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _isLoading = true;
+        _loadError = null;
+
+        try
+        {
+            _hasFacility = await ChargingService.GetFacilityAsync() != null;
+
+            var units = await HousingUnitService.GetAllAsync();
+            var chargers = await ChargingService.GetChargersAsync();
+            var unitsWithCharger = chargers.Select(charger => charger.HousingUnitId).ToHashSet();
+
+            _availableUnits = units.Where(unit => !unitsWithCharger.Contains(unit.Id)).OrderBy(unit => unit.Address).ToList();
+            Preselect();
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Could not load the charger form.");
+            _loadError = "Kunne ikke hente skjemaet. Kontroller at databasen er tilgjengelig og prøv igjen.";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void Preselect()
+    {
+        _preselectedUnitId = null;
+        _preselectNotice = null;
+
+        if (HousingUnitParameter == null)
+        {
+            return;
+        }
+
+        var unit = int.TryParse(HousingUnitParameter, out var id) ? _availableUnits.FirstOrDefault(existing => existing.Id == id) : null;
+        if (unit == null)
+        {
+            _preselectNotice = "Boenheten fra lenken finnes ikke, eller den har allerede en lader, så den er ikke valgt.";
+        }
+        else
+        {
+            _preselectedUnitId = unit.Id;
+        }
+    }
+
+    private async Task RegisterAsync(ChargerFormModel model)
+    {
+        var charger = await ChargingService.RegisterChargerAsync(model.HousingUnitId!.Value, model.ToDetails(), model.CabinetNumber!.Value);
+
+        Navigation.NavigateTo($"/elbillading/{charger.Id}?status=opprettet");
+    }
+}

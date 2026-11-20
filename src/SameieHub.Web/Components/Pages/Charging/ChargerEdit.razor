@@ -1,0 +1,91 @@
+@page "/elbillading/{Id:int}/rediger"
+@inject ChargingService ChargingService
+@inject HousingUnitService HousingUnitService
+@inject NavigationManager Navigation
+@inject ILogger<ChargerEdit> Logger
+
+<PageTitle>Rediger lader – SameieHub</PageTitle>
+
+<PageHeader Title="Rediger elbillader" Description="Endre de administrative opplysningene. Statusen styrer ikke laderen."
+            BackHref="@($"/elbillading/{Id}")" BackText="Tilbake til laderen" />
+
+@if (_isLoading)
+{
+    <div class="surface-card" role="status">
+        <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Laster lader …
+    </div>
+}
+else if (_loadError != null)
+{
+    <div class="alert alert-danger" role="alert">
+        <p>@_loadError</p>
+        <button type="button" class="btn btn-outline-danger btn-sm" @onclick="LoadAsync">Prøv igjen</button>
+    </div>
+}
+else if (_charger == null)
+{
+    <div class="surface-card empty-state">
+        <h2>Fant ikke laderen</h2>
+        <p>Laderen finnes ikke.</p>
+        <a class="btn btn-primary" href="/elbillading">Tilbake til elbillading</a>
+    </div>
+}
+else
+{
+    <ChargerForm Existing="_charger" ExistingCabinetNumber="_cabinetNumber" ExistingUnitAddress="@_unitAddress"
+                 SubmitText="Lagre endringer" CancelHref="@($"/elbillading/{Id}")" OnSave="UpdateAsync" />
+}
+
+@code {
+    private EvCharger? _charger;
+    private int? _cabinetNumber;
+    private string _unitAddress = string.Empty;
+    private bool _isLoading = true;
+    private string? _loadError;
+
+    [Parameter]
+    public int Id { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _isLoading = true;
+        _loadError = null;
+
+        try
+        {
+            _charger = await ChargingService.GetChargerAsync(Id);
+            if (_charger != null)
+            {
+                _cabinetNumber = (await ChargingService.GetSubMeterAsync(Id))?.CabinetNumber;
+                var unit = await HousingUnitService.GetByIdAsync(_charger.HousingUnitId);
+                _unitAddress = unit?.Address ?? $"Boenhet {_charger.HousingUnitId}";
+            }
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Could not load charger {Id}.", Id);
+            _loadError = "Kunne ikke hente laderen. Kontroller at databasen er tilgjengelig og prøv igjen.";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task UpdateAsync(ChargerFormModel model)
+    {
+        await ChargingService.UpdateChargerDetailsAsync(Id, model.ToDetails());
+
+        if (model.CabinetNumber != _cabinetNumber)
+        {
+            await ChargingService.ChangeCabinetNumberAsync(Id, model.CabinetNumber!.Value);
+        }
+
+        Navigation.NavigateTo($"/elbillading/{Id}?status=endret");
+    }
+}

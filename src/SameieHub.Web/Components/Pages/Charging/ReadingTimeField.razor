@@ -1,0 +1,65 @@
+<div class="reading-time-field">
+    <label for="@Id" class="form-label">@Label <span class="required-mark" aria-hidden="true">*</span></label>
+    <input id="@Id" type="datetime-local" class="form-control date-time-input" value="@Value" aria-required="true"
+           @onchange="OnValueChanged" />
+    <div class="form-text">Norsk tid (klokkeslettet slik det var på stedet).</div>
+
+    @if (ChargingInput.IsAmbiguous(Value))
+    {
+        <fieldset class="mt-2" role="radiogroup" aria-label="Sommertid eller vintertid">
+            <legend class="form-label">Klokkeslettet forekommer to ganger denne natten. Når ble målerne avlest?</legend>
+            <div class="form-check">
+                <input id="@(Id)-summer" type="radio" class="form-check-input" name="@(Id)-choice" checked="@(AmbiguousIsDaylightTime == true)"
+                       @onchange="() => OnChoiceChanged(true)" />
+                <label for="@(Id)-summer" class="form-check-label">Før klokken ble stilt tilbake (sommertid)</label>
+            </div>
+            <div class="form-check">
+                <input id="@(Id)-winter" type="radio" class="form-check-input" name="@(Id)-choice" checked="@(AmbiguousIsDaylightTime == false)"
+                       @onchange="() => OnChoiceChanged(false)" />
+                <label for="@(Id)-winter" class="form-check-label">Etter klokken ble stilt tilbake (vintertid)</label>
+            </div>
+        </fieldset>
+    }
+
+    @if (Error != null)
+    {
+        <div class="validation-message" role="alert">@Error</div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Id { get; set; } = "readAt";
+
+    [Parameter]
+    public string Label { get; set; } = "Dato og klokkeslett for avlesningen";
+
+    /// <summary>The text of the datetime-local input, for example 2026-11-18T08:00.</summary>
+    [Parameter]
+    public string? Value { get; set; }
+
+    [Parameter]
+    public EventCallback<string?> ValueChanged { get; set; }
+
+    /// <summary>Only used when the time happens twice: true for summer time, false for winter time, null when not chosen.</summary>
+    [Parameter]
+    public bool? AmbiguousIsDaylightTime { get; set; }
+
+    [Parameter]
+    public EventCallback<bool?> AmbiguousIsDaylightTimeChanged { get; set; }
+
+    [Parameter]
+    public string? Error { get; set; }
+
+    private async Task OnValueChanged(ChangeEventArgs e)
+    {
+        Value = e.Value?.ToString();
+        await ValueChanged.InvokeAsync(Value);
+    }
+
+    private async Task OnChoiceChanged(bool isDaylightTime)
+    {
+        AmbiguousIsDaylightTime = isDaylightTime;
+        await AmbiguousIsDaylightTimeChanged.InvokeAsync(isDaylightTime);
+    }
+}

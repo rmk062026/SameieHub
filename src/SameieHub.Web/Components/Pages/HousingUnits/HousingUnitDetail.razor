@@ -1,6 +1,7 @@
 @page "/boenheter/{Id:int}"
 @using SameieHub.Web.Components.Pages.BoardCases
 @using SameieHub.Web.Components.Pages.TaskItems
+@using SameieHub.Web.Components.Pages.Charging
 @inject HousingUnitService HousingUnitService
 @inject BoardCaseService BoardCaseService
 @inject TaskItemService TaskService
@@ -191,6 +192,7 @@ else
                 </div>
             }
         </section>
+        <UnitChargingSection HousingUnitId="_unit.Id" IsUnitActive="_unit.IsActive" />
     </div>
 
     <section class="surface-card danger-zone">

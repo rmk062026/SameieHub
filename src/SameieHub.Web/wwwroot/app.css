@@ -608,3 +608,46 @@ a:focus-visible,
 .table-responsive {
     position: relative;
 }
+
+/* Elbillading */
+.meter-field {
+    margin-bottom: 1rem;
+}
+
+.meter-field:last-child {
+    margin-bottom: 0;
+}
+
+.correction-form {
+    margin-top: 1rem;
+    padding: 1rem;
+    border: 1px solid var(--border-color, #d0d5dd);
+    border-radius: 0.5rem;
+}
+
+.plain-list {
+    list-style: none;
+    padding-left: 0;
+}
+
+.plain-list li {
+    padding: 0.25rem 0;
+}
+
+.reconciliation-status {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.reconciliation-period {
+    color: var(--text-muted, #667085);
+}
+
+@media (max-width: 575.98px) {
+    .meter-field input {
+        font-size: 1rem;
+    }
+}

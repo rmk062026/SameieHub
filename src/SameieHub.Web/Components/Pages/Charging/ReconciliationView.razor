@@ -1,0 +1,154 @@
+<div class="reconciliation" data-testid="reconciliation">
+    <div class="reconciliation-status">
+        @if (Reconciliation.IsComplete)
+        {
+            <span class="status-badge status-decided">Fullstendig</span>
+        }
+        else
+        {
+            <span class="status-badge status-in-progress">Ufullstendig</span>
+        }
+        @if (Reconciliation.HasApproximateReadings)
+        {
+            <span class="status-badge status-new">Tilnærmet</span>
+        }
+        <span class="reconciliation-period">Periode: @ChargingText.Period(Reconciliation.From, Reconciliation.To)</span>
+    </div>
+
+    <div class="stat-row stat-row-wide">
+        <div class="stat-card">
+            <span class="stat-value">@(Reconciliation.MainKwh is { } main ? ChargingText.Kwh(main) : "–")</span>
+            <span class="stat-label">Hovedmåler (forbruk)</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-value">@ChargingText.Kwh(Reconciliation.SubMeterKwh)</span>
+            <span class="stat-label">Undermålere (sum@(Reconciliation.IsComplete ? "" : ", bare dokumenterte"))</span>
+        </div>
+        <div class="stat-card @(Reconciliation.Difference == null ? "" : "stat-link")">
+            <span class="stat-value" data-testid="difference">@(Reconciliation.Difference is { } difference ? ChargingText.SignedKwh(difference) : "Ikke beregnet")</span>
+            <span class="stat-label">Differanse (hovedmåler − undermålere)</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-value" data-testid="difference-percent">@(Reconciliation.DifferencePercent is { } percent ? ChargingText.Percent(percent) : "–")</span>
+            <span class="stat-label">Differanse i prosent@(PercentNote)</span>
+        </div>
+    </div>
+
+    @if (!Reconciliation.IsComplete)
+    {
+        <div class="alert alert-warning" role="status">
+            <strong>Avstemmingen er ufullstendig, så differansen er ikke beregnet.</strong> Manglende verdier estimeres ikke og regnes aldri som 0.
+            <ul class="mb-0 mt-2">
+                @if (Reconciliation.Main == null)
+                {
+                    <li>Hovedmåleren er ikke satt opp.</li>
+                }
+                @if (Reconciliation.MissingSubMeterCount > 0)
+                {
+                    <li>Bare @Reconciliation.ConfiguredSubMeterCount av @Reconciliation.ExpectedSubMeterCount undermålere er satt opp. @Reconciliation.MissingSubMeterCount mangler (registrer flere ladere).</li>
+                }
+                @if (Reconciliation.ConfiguredSubMeterCount > Reconciliation.ExpectedSubMeterCount || Reconciliation.SubMeters.Count > Reconciliation.ExpectedSubMeterCount)
+                {
+                    <li>Det er flere undermålere enn de @Reconciliation.ExpectedSubMeterCount som er forventet. Kontroller oppsettet.</li>
+                }
+                @foreach (var line in Reconciliation.MissingMeters)
+                {
+                    <li><strong>@Label(line)</strong>: @ChargingText.StateText(line.Consumption.State).ToLowerInvariant().</li>
+                }
+            </ul>
+        </div>
+    }
+
+    @if (Reconciliation.HasApproximateReadings)
+    {
+        <div class="alert alert-info" role="status">
+            <strong>Tilnærmet:</strong> noen målere er ikke avlest nøyaktig ved periodens start eller slutt, men innenfor
+            @((int)Reconciliation.Tolerance.TotalHours) timer. Forbruket for dem gjelder da tiden mellom de faktiske avlesningene, ikke nøyaktig perioden.
+        </div>
+    }
+
+    @if (ShowDetails)
+    {
+        <div class="table-responsive">
+            <table class="table data-table">
+                <caption class="visually-hidden">Forbruk per måler i perioden</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Måler</th>
+                        <th scope="col" class="d-none d-md-table-cell">Skap</th>
+                        <th scope="col">Forbruk</th>
+                        <th scope="col">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var line in AllLines())
+                    {
+                        <tr>
+                            <td>
+                                @if (line.Meter.EvChargerId is { } chargerId)
+                                {
+                                    <a class="unit-link" href="/elbillading/@chargerId">@Label(line)</a>
+                                }
+                                else
+                                {
+                                    <a class="unit-link" href="/elbillading/maler/@line.Meter.Id">@Label(line)</a>
+                                }
+                            </td>
+                            <td class="d-none d-md-table-cell">@(line.Meter.CabinetNumber?.ToString() ?? "–")</td>
+                            <td>@(line.Consumption.Kwh is { } kwh ? ChargingText.Kwh(kwh) : "Mangler")</td>
+                            <td>
+                                @ChargingText.StateText(line.Consumption.State)
+                                @if (line.Consumption.State == MeterConsumptionState.Documented)
+                                {
+                                    <div class="unit-sub">
+                                        Avlest @ChargingText.Time(line.Consumption.StartReading!.ReadAt) og @ChargingText.Time(line.Consumption.EndReading!.ReadAt)
+                                    </div>
+                                    @if (line.Consumption.IsApproximate)
+                                    {
+                                        <span class="status-badge status-new">Tilnærmet</span>
+                                        <div class="unit-sub">Perioden er @ChargingText.Time(Reconciliation.From) – @ChargingText.Time(Reconciliation.To).</div>
+                                    }
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public ChargingReconciliation Reconciliation { get; set; } = default!;
+
+    /// <summary>Used for the addresses shown for the sub meters.</summary>
+    [Parameter]
+    public IReadOnlyList<HousingUnit> Units { get; set; } = [];
+
+    /// <summary>Shows the table with every meter. The overview page shows only the summary.</summary>
+    [Parameter]
+    public bool ShowDetails { get; set; }
+
+    private string PercentNote => Reconciliation.IsComplete && Reconciliation.DifferencePercent == null ? " (hovedmåler 0 kWh)" : string.Empty;
+
+    private IEnumerable<ReconciliationLine> AllLines()
+    {
+        if (Reconciliation.Main != null)
+        {
+            yield return Reconciliation.Main;
+        }
+
+        foreach (var line in Reconciliation.SubMeters)
+        {
+            yield return line;
+        }
+    }
+
+    private string Label(ReconciliationLine line)
+    {
+        var unit = line.Charger == null ? null : Units.FirstOrDefault(existing => existing.Id == line.Charger.HousingUnitId);
+
+        return ChargingText.MeterLabel(line.Meter, line.Charger, unit);
+    }
+}

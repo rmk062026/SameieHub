@@ -1,0 +1,98 @@
+@page "/elbillading/maler/{MeterId:int}"
+@inject ChargingService ChargingService
+@inject HousingUnitService HousingUnitService
+@inject ILogger<MeterHistoryPage> Logger
+
+<PageTitle>@(_title ?? "Måler") – SameieHub</PageTitle>
+
+@if (_isLoading)
+{
+    <PageHeader Title="Måler" BackHref="/elbillading" BackText="Elbillading" />
+    <div class="surface-card" role="status">
+        <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Laster måler …
+    </div>
+}
+else if (_loadError != null)
+{
+    <PageHeader Title="Måler" BackHref="/elbillading" BackText="Elbillading" />
+    <div class="alert alert-danger" role="alert">
+        <p>@_loadError</p>
+        <button type="button" class="btn btn-outline-danger btn-sm" @onclick="LoadAsync">Prøv igjen</button>
+    </div>
+}
+else if (_meter == null)
+{
+    <PageHeader Title="Måler" BackHref="/elbillading" BackText="Elbillading" />
+    <div class="surface-card empty-state">
+        <h2>Fant ikke måleren</h2>
+        <p>Måleren finnes ikke.</p>
+        <a class="btn btn-primary" href="/elbillading">Tilbake til elbillading</a>
+    </div>
+}
+else
+{
+    <PageHeader Title="@(_title ?? "Måler")" Description="@_description" BackHref="/elbillading" BackText="Elbillading">
+        @if (_meter.EvChargerId is { } chargerId)
+        {
+            <a class="btn btn-outline-secondary" href="/elbillading/@chargerId">Til laderen</a>
+        }
+    </PageHeader>
+
+    <div class="detail-grid">
+        <MeterReadingsPanel MeterId="_meter.Id" />
+    </div>
+}
+
+@code {
+    private Meter? _meter;
+    private string? _title;
+    private string? _description;
+    private bool _isLoading = true;
+    private string? _loadError;
+
+    [Parameter]
+    public int MeterId { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _isLoading = true;
+        _loadError = null;
+
+        try
+        {
+            var meters = await ChargingService.GetMetersAsync();
+            _meter = meters.FirstOrDefault(meter => meter.Id == MeterId);
+            if (_meter == null)
+            {
+                return;
+            }
+
+            EvCharger? charger = null;
+            HousingUnit? unit = null;
+            if (_meter.EvChargerId is { } chargerId)
+            {
+                charger = await ChargingService.GetChargerAsync(chargerId);
+                unit = charger == null ? null : await HousingUnitService.GetByIdAsync(charger.HousingUnitId);
+            }
+
+            _title = ChargingText.MeterLabel(_meter, charger, unit);
+            _description = _meter.IsMain
+                ? "Den felles hovedmåleren for ladeanlegget."
+                : $"Undermåler i sikringsskap {_meter.CabinetNumber}.";
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Could not load meter {MeterId}.", MeterId);
+            _loadError = "Kunne ikke hente måleren. Kontroller at databasen er tilgjengelig og prøv igjen.";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+}
