@@ -188,7 +188,7 @@ Domenelaget (M4E-A) og lagringen (M4E-B) er laget. Beslutningene under gjelder m
 | Backup og gjenoppretting, pakking uten .NET SDK | M5, ikke laget | Obligatorisk før v1.0 (`REQUIREMENTS.md`), men planlagt som egen milepæl. |
 | Økonomi og felleskostnader, innlogging/flere brukere, dokumentarkiv, ekstern tilgang, flere sameier, eksterne integrasjoner | Utenfor v1.0 | `REQUIREMENTS.md`, «Utenfor v1.0». |
 | Endringshistorikk for styresaker | Ikke laget | `UpdatedAt` viser når, ikke hva (`ARCHITECTURE.md`). |
-| Elbillading: UI og demodata | M4E-C og M4E-D, ikke laget (database og lagring er laget i M4E-B) | Delt i kontrollerbare delmilepæler etter eierens ønske. |
+| Elbillading: UI og demodata | UI er laget i M4E-C (beslutninger i ARCHITECTURE.md, «Elbillading: brukergrensesnitt»); demodata (M4E-D) er ikke laget | Delt i kontrollerbare delmilepæler etter eierens ønske. |
 | Integrasjon mot ladeleverandør, fjernstyring, fakturering, målerbytte | Utenfor nåværende plan | Eieren har uttrykkelig utelatt dem; modellen har ingen felt for eksterne nøkler. |
 
 Utsettelsene er gjort for å holde hver milepæl liten nok til å kontrollere og teste, og for å unngå å bygge ting som ikke er bestilt.

@@ -19,6 +19,9 @@ Components/
     BoardCases/    BoardCaseList, BoardCaseDetail, BoardCaseCreate, BoardCaseEdit,
                    BoardCaseForm, BoardCaseFormModel, BoardCaseFieldMessages,
                    BoardCaseStatusBadge, BoardCasePriorityBadge, BoardCaseText
+    Charging/      ChargingIndex, ChargerCreate/Edit/Detail/Form(+Model, FieldMessages), ReadingSetCreate,
+                   ReconciliationPage/View, MeterHistoryPage, MeterReadingsPanel, ReadingTimeField,
+                   UnitChargingSection, DashboardChargingSection, ChargingText/Input/ErrorText, ChargerStatusBadge
 wwwroot/app.css  designvariabler og felles stiler
 ```
 
@@ -38,6 +41,13 @@ wwwroot/app.css  designvariabler og felles stiler
 | `/oppgaver/ny` | Registrer (`?boenhet=` og `?styresak=` forhåndsvelger) | Funksjonell |
 | `/oppgaver/{id}` | Detaljvisning med status og sletting | Funksjonell |
 | `/oppgaver/{id}/rediger` | Rediger | Funksjonell |
+| `/elbillading` | Oversikt (oppsett av anlegg, tall, hovedmåler, siste avstemming, ladere) | Funksjonell |
+| `/elbillading/ny` | Registrer lader (`?boenhet=` forhåndsvelger) | Funksjonell |
+| `/elbillading/{id}` | Lader med undermåler og avlesninger | Funksjonell |
+| `/elbillading/{id}/rediger` | Rediger lader og sikringsskap | Funksjonell |
+| `/elbillading/avlesning` | Samlet avlesning: hovedmåler og undermålere | Funksjonell |
+| `/elbillading/avstemming` | Avstemming for valgt periode | Funksjonell |
+| `/elbillading/maler/{id}` | Historikk for en måler | Funksjonell |
 
 Sidemeny på bred skjerm (≥ 768 px); på smal skjerm en toppstripe med menyknapp.
 
@@ -90,6 +100,15 @@ Sidemeny på bred skjerm (≥ 768 px); på smal skjerm en toppstripe med menykna
 - **Oppdatering og feil:** «Oppdater oversikten» henter tallene på nytt. Kan data ikke leses, vises en feilmelding med «Prøv igjen», og ingen tall (ikke 0). Ingen timere eller sanntid.
 - **Tom database:** alle kort viser 0 (reelle tall), og hver seksjon har en tomtilstand: «Ingen åpne oppgaver. Registrer en oppgave …», «Ingen åpne styresaker.» og «Ingen kommende møter eller frister de neste 60 dagene.».
 - **Smal skjerm:** kortene ligger to og to. Nr.-kolonnen skjules i tabellene (prioritet skjules under bred skjerm), så fristen alltid er synlig uten at siden får vannrett rulling.
+
+## Elbillading (M4E-C)
+- **Oversikt:** tall per status, hovedmåler med siste avlesning, siste avstemming og en tabell over ladere (boenhet, skap, status, siste avlesning). Boenheter uten lader vises med lenke til registrering. Uten anlegg vises et oppsettskjema.
+- **Samlet avlesning:** ett skjema med tidspunkt, hovedmåler og de åtte undermålerne gruppert i sikringsskap 1 og 2. Ved hvert felt står forrige målerstand og forbruket siden forrige. Tomt felt betyr «ikke avlest» og lagres ikke; 0 er en ekte verdi. Alt lagres i én transaksjon, og feil vises ved riktig felt uten at noe lagres. Etter lagring vises en bekreftelse med forbruk per måler og eventuelle målere som ikke ble avlest.
+- **Norsk tid:** brukeren skriver norsk lokal tid (`datetime-local`). Tiden lagres som UTC. Klokkeslettet som ikke fantes (vår) avvises med forklaring, og klokkeslettet som forekommer to ganger (høst) krever at brukeren velger sommer- eller vintertid.
+- **Avstemming:** perioden velges blant eksisterende avlesninger av hovedmåleren (ingen fri datovelger). Siden viser start og slutt, hovedmålerens forbruk, summen av undermålerne, differanse i kWh og prosent og en tabell per måler med de faktiske avlesningstidene. Fullstendig krever hovedmåler og åtte undermålere med dokumentert forbruk. Ellers står det hva som mangler, og differansen vises ikke. Toleransen på 24 timer er forklart, og tilnærmede avlesninger er merket.
+- **Historikk, korrigering og sletting:** per måler, nyeste først, med forbruk siden forrige. Korrigering må passe mellom nabo-avlesningene. Sletting krever bekreftelse (`role="alertdialog"`).
+- **Boenhet og dashboard:** boenhetssiden har en kompakt seksjon «Elbillader», og dashboardet en liten seksjon med tall og siste avstemming.
+- **Smal skjerm:** verifisert i nettleser på 375 px: ingen vannrett rulling på noen elbillingside.
 
 ## Ikke laget ennå
 Endringshistorikk for styresaker.

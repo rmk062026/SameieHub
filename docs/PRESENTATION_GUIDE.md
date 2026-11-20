@@ -12,7 +12,7 @@ Bakgrunn: [ARCHITECTURE_EXPLAINED.md](ARCHITECTURE_EXPLAINED.md), [CODE_WALKTHRO
 
 - Et lite sameie trenger oversikt over **hvem som eier hva**, **hvilke saker styret behandler og hva som ble vedtatt**, og **hva som skal gjøres og når**.
 - Programmet er lokalt, uten innlogging og sky, fordi dataene inneholder personopplysninger og brukeren er én person (styret).
-- Elbillading (hovedmåler og undermålere, avstemming) er planlagt og delvis modellert, men ikke ferdig.
+- Elbillading (hovedmåler og undermålere, avstemming) har domene, lagring og sider; demodata mangler (M4E-D).
 - **Må bekreftes av prosjekteier:** hvordan problemet løses i dag, og hvorfor akkurat dette trengs.
 
 ## 3. Hvordan arkitekturen fungerer (to minutter)
@@ -138,7 +138,7 @@ Ikke fordi den er generert. Kontrollene er: (1) automatiske tester, også skreve
 Agenten skrev koden, testene og dokumentasjonen. Jeg definerte krav og avgrensninger, delte arbeidet i milepæler, godkjente eller ba om endringer, og satte reglene (personvern, kodestil, git). Eksempler på endringer jeg ba om: to eiere per boenhet, sikker sletting, trygg demo, og målermodellen for elbillading. **Må bekreftes av prosjekteier:** gjennomgå [MY_CONTRIBUTIONS.md](MY_CONTRIBUTIONS.md) og rett til det som faktisk stemmer.
 
 ### 18. Hva er svakhetene ved løsningen?
-Ærlig liste: ingen backup/gjenoppretting ennå (obligatorisk før v1.0), ingen innlogging eller flere brukere, ingen endringshistorikk (`UpdatedAt` viser bare *når*), programmet antar norsk tidssone, SQLite er begrenset til én bruker, elbilladingsmodulen har bare domene og lagring, ingen sider, og testantallet sier ikke alt om kvaliteten. Fire prosjekter er også mer struktur enn et så lite program strengt trenger.
+Ærlig liste: ingen backup/gjenoppretting ennå (obligatorisk før v1.0), ingen innlogging eller flere brukere, ingen endringshistorikk (`UpdatedAt` viser bare *når*), programmet antar norsk tidssone, SQLite er begrenset til én bruker, elbilladingsmodulen har ingen demodata ennå, og testantallet sier ikke alt om kvaliteten. Fire prosjekter er også mer struktur enn et så lite program strengt trenger.
 
 ### 19. Hvordan ville dere håndtert flere brukere?
 Det krever innlogging og autorisasjon, en database som støtter samtidighet (for eksempel SQL Server eller PostgreSQL i stedet for SQLite), konfliktløsning ved samtidige endringer og en revisjonslogg. Fordi Domain og Infrastructure er adskilt, ville bytte av database i hovedsak berøre Infrastructure og migreringer, men innlogging og samtidighet krever også endringer i Web.

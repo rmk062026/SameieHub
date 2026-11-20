@@ -454,7 +454,7 @@ Bare **endrede** koblinger kontrolleres (`details.HousingUnitId != task.HousingU
 
 ## Elbillading: domenemodell (M4E-A)
 
-Domenelaget og testene ble laget i M4E-A. Lagringen (database, migrering, repositories og atomiske transaksjoner) kom i M4E-B, beskrevet i neste avsnitt. Brukergrensesnitt (M4E-C) og demodata (M4E-D) er ikke laget, og demoen bruker fortsatt merknader for ladere.
+Domenelaget og testene ble laget i M4E-A. Lagringen (database, migrering, repositories og atomiske transaksjoner) kom i M4E-B, beskrevet i neste avsnitt. Brukergrensesnittet (M4E-C) er beskrevet i avsnittet «Elbillading: brukergrensesnitt (M4E-C)». Demodata (M4E-D) er ikke laget, og demoen bruker fortsatt merknader for ladere.
 
 **Det fysiske anlegget:** én felles hovedmåler, to sikringsskap med fire undermålere («minusmålere») i hvert, altså åtte undermålere, én til hver boenhets elbillader. Undermålerne er ikke innebygd i ladeboksene. Alle målerstander registreres for hånd. Ingen fjernstyring, API-integrasjon eller automatisk avlesning.
 
@@ -639,3 +639,21 @@ graph LR
 | Referansekontroll i tjenesten, bare for endrede koblinger | kontroll av alle koblinger hver gang | En senere deaktivert boenhet skal ikke blokkere redigering. |
 | Styresak kan være i alle statuser | bare åpne saker | Oppgaver kan følge opp et vedtak også etter at saken er avsluttet. |
 | Hjelpemetodene for referansekontroll er skrevet i `TaskItemService` | felles hjelper med `BoardCaseService` | To små metoder; en felles hjelper ville gitt endringer i M2. |
+
+## Elbillading: brukergrensesnitt (M4E-C)
+
+Sidene ligger i `Web/Components/Pages/Charging/`. Razor-sidene bruker bare `ChargingService`, `HousingUnitService` og `ChargingOverview`/`ChargingReconciler` fra Domain; ingen side kaller et repository direkte.
+
+**Domeneendring før UI:** en avstemming er bare **fullstendig** når hovedmåleren og nøyaktig åtte *ulike* undermålere (`ChargingFacility.ExpectedSubMeterCount`) er satt opp og har dokumentert forbruk. Med sju eller færre undermålere er avstemmingen ufullstendig, og differansen beregnes ikke. Regelen ligger i `ChargingReconciler` (testbar), ikke i Razor. `ChargingOverview` (tall og rader for oversikten) beregnes også i Domain.
+
+**Samlet registrering:** `ReadingSetCreate` leser skjemaet, kontrollerer hver målerstand med `MeterReading.CheckKwh` (så regelen finnes ett sted) og kaller `ChargingService.RegisterReadingSetAsync`. `MeterReadingSequenceException` har `MeterId`, så feilen vises ved riktig felt. Et avlesningssett lagres ikke som egen post; settet er avlesninger med samme `ReadAt`, og et delvis sett kan fullføres senere.
+
+**Tid:** `ChargingInput` konverterer norsk lokal tid til UTC via `NorwegianTime.TryConvertToUtc`. Blazor leverer verdien fra `datetime-local` med sekunder (`yyyy-MM-ddTHH:mm:ss`) selv om nettleseren viser `HH:mm`; parseren godtar begge formater. Dette ble oppdaget i nettlesertesten og ikke av bUnit, fordi bUnit sender teksten som den er.
+
+| Beslutning | Alternativ | Begrunnelse |
+|---|---|---|
+| Perioder til avstemming velges fra hovedmålerens avlesninger | Fri datovelger | Gir bare perioder som faktisk er avlest; ingen tilfeldige datoer som gir «mangler» overalt. |
+| Tomt felt = ikke avlest, aldri 0 | Tomt tolkes som 0 | Manglende verdi skal aldri bli et tall som endrer differansen. |
+| Statusen til laderen er administrativ og stopper ikke avlesninger | Blokkere avlesning for «Ikke i bruk» | Måleren teller strøm uansett; forbruket må kunne dokumenteres. |
+| Korrigering og sletting per avlesning med nabokontroll | Redigerbar hel tabell | Hver endring kontrolleres mot kronologien, og sletting krever bekreftelse. |
+| Ingen automatisk anslag av manglende verdier | Interpolere | Avstemmingen skal vise hva som er dokumentert, ikke hva som antas. |

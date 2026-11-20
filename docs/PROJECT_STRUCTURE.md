@@ -2,7 +2,7 @@
 
 Denne filen forklarer hva som ligger hvor i SameieHub, og hvorfor. Den er skrevet ut fra de faktiske filene i repoet (kontrollert mot `git ls-files`). For hvordan delene samarbeider, se [ARCHITECTURE_EXPLAINED.md](ARCHITECTURE_EXPLAINED.md). For kode, se [CODE_WALKTHROUGH.md](CODE_WALKTHROUGH.md).
 
-**Status for elbillading:** domenelaget (M4E-A) og lagringen (M4E-B: EF-mapping, migreringen `AddChargingFacility`, fire repositories og `ChargingService` i DI) finnes. Brukergrensesnitt og demodata for elbillading er **ikke** laget, så det er ingen elbilside i `Web` og ingen ladere i demoen.
+**Status for elbillading:** domenelaget (M4E-A) og lagringen (M4E-B: EF-mapping, migreringen `AddChargingFacility`, fire repositories og `ChargingService` i DI) finnes. Brukergrensesnittet (M4E-C) finnes i `Components/Pages/Charging/`. Demodata for elbillading (M4E-D) er **ikke** laget, så det er ingen ladere i demoen.
 
 ## Oversikt
 
@@ -157,6 +157,7 @@ Blazor Web App med Interactive Server. Avhenger av Domain og Infrastructure.
 | `Components/Pages/HousingUnits/` | Liste, opprett, rediger, detalj, felles skjema (`HousingUnitForm`), `HousingUnitFormModel`, `HousingUnitFieldMessages` (norske feilmeldinger per felt), merker og tekster. |
 | `Components/Pages/BoardCases/` | Tilsvarende for styresaker (`/styresaker...`). |
 | `Components/Pages/TaskItems/` | Tilsvarende for oppgaver (`/oppgaver...`) og `TaskDueDate` (forfalt/frist i dag). |
+| `Components/Pages/Charging/` | Elbillading (`/elbillading...`): oversikt, ladere (opprett, rediger, detalj), samlet avlesning, avstemming, målerhistorikk, og små seksjoner for boenhetssiden og dashboardet. |
 | `Components/Pages/Error.razor`, `NotFound.razor` | Feil- og ikke-funnet-sider. |
 | `wwwroot/app.css`, `favicon.png` | Egen CSS (mørk meny, lys flate, blå aksent) og ikon. `wwwroot/lib/` er Bootstrap (ikke gjennomgått fil for fil; tredjepartskode). |
 

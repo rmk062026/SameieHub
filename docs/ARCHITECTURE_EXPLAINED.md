@@ -225,6 +225,6 @@ Sikkerhetsreglene (alle testet i `DemoDatabaseSeederTests`): seeding kjører bar
 
 ## 16. Hva som mangler (ærlig status)
 
-- Elbillading: domenelag (M4E-A) og lagring (M4E-B) finnes med tester. Sider (M4E-C) og demodata (M4E-D) gjenstår.
+- Elbillading: domenelag (M4E-A), lagring (M4E-B) og sider (M4E-C) finnes med tester. Demodata (M4E-D) gjenstår.
 - Backup/gjenoppretting og pakking for kjøring uten .NET SDK (M5) er ikke laget, selv om det er et krav for v1.0.
 - Ingen endringshistorikk: `UpdatedAt` viser bare *når*, ikke *hva* som ble endret.
