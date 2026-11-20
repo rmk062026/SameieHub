@@ -31,5 +31,5 @@ Disse ble skrevet i samme endring som koden, milepæl for milepæl, og beskriver
 ## Status (kontrollert mot koden)
 
 - Ferdig gjennom alle lag: boenheter, styresaker, oppgaver, dashboard, demodata.
-- Bare domenelag og tester: elbillading (M4E-A). Database, UI og demodata for elbillading er ikke laget.
+- Domene og lagring med tester: elbillading (M4E-A og M4E-B). Brukergrensesnitt og demodata for elbillading er ikke laget.
 - Ikke laget: backup/gjenoppretting og pakking (M5).

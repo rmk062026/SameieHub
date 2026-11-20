@@ -2,7 +2,7 @@
 
 Dette dokumentet forklarer hvordan SameieHub er bygd, fra bunnen av, med konkrete eksempler fra koden. Mappestrukturen står i [PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md), kodedetaljer i [CODE_WALKTHROUGH.md](CODE_WALKTHROUGH.md), og begrunnelsene i [DESIGN_DECISIONS.md](DESIGN_DECISIONS.md). Den korte, historiske arkitekturdokumentasjonen som ble skrevet underveis ligger i [ARCHITECTURE.md](ARCHITECTURE.md) og er ikke endret.
 
-Elbillading finnes foreløpig bare som domenelag (M4E-A). Alt som står her om database, DI og sider gjelder boenheter, styresaker og oppgaver, som er ferdige gjennom alle lag.
+Elbillading finnes som domenelag (M4E-A) og lagring (M4E-B), men uten brukergrensesnitt. Eksemplene her bruker boenheter, styresaker og oppgaver, som er ferdige gjennom alle lag. Elbilladelagringen følger de samme mønstrene og er beskrevet i [ARCHITECTURE.md](ARCHITECTURE.md), avsnittet «Elbillading: lagring (M4E-B)».
 
 ## 1. Det store bildet
 
@@ -225,6 +225,6 @@ Sikkerhetsreglene (alle testet i `DemoDatabaseSeederTests`): seeding kjører bar
 
 ## 16. Hva som mangler (ærlig status)
 
-- Elbillading: domenelag og tester finnes (M4E-A). Databasemapping, repositories, sider og demodata gjenstår (M4E-B–D).
+- Elbillading: domenelag (M4E-A) og lagring (M4E-B) finnes med tester. Sider (M4E-C) og demodata (M4E-D) gjenstår.
 - Backup/gjenoppretting og pakking for kjøring uten .NET SDK (M5) er ikke laget, selv om det er et krav for v1.0.
 - Ingen endringshistorikk: `UpdatedAt` viser bare *når*, ikke *hva* som ble endret.

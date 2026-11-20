@@ -454,7 +454,7 @@ Bare **endrede** koblinger kontrolleres (`details.HousingUnitId != task.HousingU
 
 ## Elbillading: domenemodell (M4E-A)
 
-Bare domenelaget og testene er laget (M4E-A). Database (M4E-B), brukergrensesnitt (M4E-C) og demodata (M4E-D) er ikke laget, og demoen bruker fortsatt merknader for ladere.
+Domenelaget og testene ble laget i M4E-A. Lagringen (database, migrering, repositories og atomiske transaksjoner) kom i M4E-B, beskrevet i neste avsnitt. Brukergrensesnitt (M4E-C) og demodata (M4E-D) er ikke laget, og demoen bruker fortsatt merknader for ladere.
 
 **Det fysiske anlegget:** én felles hovedmåler, to sikringsskap med fire undermålere («minusmålere») i hvert, altså åtte undermålere, én til hver boenhets elbillader. Undermålerne er ikke innebygd i ladeboksene. Alle målerstander registreres for hånd. Ingen fjernstyring, API-integrasjon eller automatisk avlesning.
 
@@ -501,6 +501,61 @@ graph TD
 | Ingen proratering av forbruk på kalenderdager | Fordele forbruk | Ville gitt anslag som ser ut som målinger. Eventuelt senere som eksplisitt valg. |
 
 **Fremtidig integrasjon:** modellen har ingen felt for eksterne nøkler eller leverandører. En senere integrasjon kan registrere avlesninger gjennom `RegisterReadingAsync` med de samme reglene. Målerbytte er ikke støttet (en ny måler må i dag behandles som ny startverdi etter en avklaring).
+
+## Elbillading: lagring (M4E-B)
+
+Domenemodellen fra M4E-A er lagret med EF Core 10 og SQLite. Ingen brukergrensesnitt og ingen demodata er laget.
+
+### Tabellene
+
+```mermaid
+erDiagram
+    HousingUnits ||--o| EvChargers : "én lader per boenhet (unik)"
+    ChargingFacilities ||--o{ EvChargers : "anlegg"
+    ChargingFacilities ||--o{ Meters : "anlegg"
+    EvChargers ||--o| Meters : "én undermåler per lader (unik)"
+    Meters ||--o{ MeterReadings : "avlesninger"
+```
+
+| Tabell | Viktige kolonner | Håndheves av databasen |
+|---|---|---|
+| `ChargingFacilities` | `Id`, `Name`, `Notes`, `CreatedAt` | `CHECK (Id = 1)`: bare ett anlegg (autoinkrement starter på 1 og gjenbruker ikke Id-er, så et andre anlegg ville fått Id 2 og avvises) |
+| `EvChargers` | `ChargingFacilityId`, `HousingUnitId`, `ChargerNumber`, `Manufacturer`, `Model`, `Status` (tekst), `HasElectricVehicle` (nullbar), `Notes`, `CreatedAt`, `UpdatedAt` | Unik indeks på `HousingUnitId` (én lader per boenhet) |
+| `Meters` | `ChargingFacilityId`, `Kind` (`Main`/`Sub`, tekst), `EvChargerId` (null for hovedmåler), `CabinetNumber`, `Name`, `Notes`, `CreatedAt` | Unik indeks på `EvChargerId` (én undermåler per lader; flere NULL er tillatt i SQLite, så hovedmåleren påvirkes ikke). Unik delvis indeks på `ChargingFacilityId` `WHERE Kind = 'Main'` (én hovedmåler). `CHECK`: hovedmåler har ingen lader og intet skap, undermåler har lader og skap 1 eller 2 |
+| `MeterReadings` | `MeterId`, `ReadAt` (UTC), `Kwh` (tekst, se under), `RegisteredAt`, `UpdatedAt`, `Notes` | Unik indeks på (`MeterId`, `ReadAt`): ingen duplikater. `CHECK (CAST(Kwh AS REAL) >= 0)` |
+
+Alle fremmednøkler er `DeleteBehavior.Restrict`, uten cascade. Det betyr at en boenhet med lader, en lader med måler, en måler med avlesninger og et anlegg med innhold ikke kan slettes. Å slette en boenhet som har en lader gir den samme `HousingUnitInUseException` som for styresaker og oppgaver, fordi `EfHousingUnitRepository` oversetter alle fremmednøkkelbrudd. En avlesning kan slettes uten at måleren forsvinner.
+
+Under utviklingen avdekket testen `Database_RefusesMetersThatBreakTheKindCabinetAndChargerRules` en hullet regel: `"CabinetNumber" IN (1, 2)` er ikke usant for `NULL` i SQL, så en undermåler uten skapnummer slapp gjennom. Kontrollen har derfor også `"CabinetNumber" IS NOT NULL`. Migreringen var ikke committet da, så den ble laget på nytt i stedet for å lage en ekstra rettelsesmigrering.
+
+### Desimaler uten presisjonstap
+SQLite har ingen eksakt desimaltype (bare heltall, flyttall, tekst og blob). EF Core-leverandøren for SQLite lagrer derfor `decimal` som **TEXT** med den eksakte verdien, for eksempel `'1234.567'`. Null skrives `'0.0'`, og tall med færre desimaler får ikke tilføyd nuller (`'10.5'`). Det er derfor ingen avrunding eller flyttallsfeil (`0.1 + 0.2` blir ikke `0.30000000000000004`). Domenet tillater høyst tre desimaler, og testene leser tilbake `0`, `0.001`, `0.125`, `10.5`, `1234.567` og `9999999.999` uten tap, og kontrollerer at kolonnen har typen `text`.
+
+Begrensning: siden verdiene er tekst, kan SQLite ikke sortere eller summere dem riktig. Det gjør vi heller ikke i databasen: forbruk beregnes i C# (`MeterHistory`) av verdier som er hentet ut. `CHECK`-kontrollen mot negative verdier bruker `CAST(... AS REAL)`, som er nøyaktig nok til å skille negative fra ikke-negative.
+
+### Atomisk lagring
+Kravet var at en feil aldri skal etterlate halve data. Løsningen er liten og spesifikk i stedet for en generell Unit of Work:
+
+| Operasjon | Hvordan |
+|---|---|
+| Avlesningssett for opptil ni målere | `IMeterReadingRepository.AddRangeAsync(readings)`: alle avlesningene settes inn i **én eksplisitt databasetransaksjon** (`BeginTransactionAsync`, `SaveChangesAsync`, `CommitAsync`). `ChargingService.RegisterReadingSetAsync` validerer alt først (som i M4E-A), og lagrer så med ett kall. |
+| Lader og undermåler | `IEvChargerRepository.AddWithSubMeterAsync(charger, createSubMeter)`: laderen lagres, Id-en brukes til å lage undermåleren, og begge committes sammen. |
+| Anlegg og hovedmåler | `IChargingFacilityRepository.AddWithMainMeterAsync(facility, createMainMeter)`: samme mønster. |
+
+Hvorfor en `Func<int, Meter>` i kontrakten? Undermåleren trenger laderens Id, som databasen deler ut ved lagring. Funksjonen lar repositoryet gi Id-en videre uten at tjenesten må lagre først og så lagre igjen (to trinn kan feile hver for seg). Alternativene var en generell Unit of Work eller transaksjoner i tjenesten, som ville krevd at Domain kjente til databasetransaksjoner.
+
+**Dette er en endring i domenekontraktene fra M4E-A, med en konkret grunn:** `IEvChargerRepository.AddAsync` og `IChargingFacilityRepository.AddAsync` er erstattet av `AddWithSubMeterAsync` og `AddWithMainMeterAsync` (en lader eller et anlegg skal aldri finnes uten måler), og `IMeterReadingRepository` fikk `AddRangeAsync`. Den tidligere «rydd opp etterpå»-koden i `ChargingService` (som slettet allerede lagrede avlesninger ved feil) er fjernet, siden databasen nå ruller tilbake.
+
+Unntak fra databasen oversettes i repositoryene: unik indeks på `EvChargers.HousingUnitId` gir `EvChargerAlreadyExistsException`, `CHECK` på anleggstabellen gir `ChargingFacilityAlreadyExistsException`, og en duplisert (måler, tidspunkt) gir `ArgumentException` med `ParamName = "ReadAt"`, samme feil som tjenesten gir når den oppdager duplikatet først. `SqliteConstraintErrors` fikk `IsUniqueViolation` (koder 2067/1555 og indeksnavn i meldingen) og `IsCheckViolation` (kode 275 og navn).
+
+### Avstemming og «tilnærmet» (liten endring i Domain)
+`MeterConsumption` fikk `IsApproximate`, og `ChargingReconciliation` fikk `HasApproximateReadings`. En avlesning regnes som tilnærmet når den ikke er nøyaktig på periodens start eller slutt (den ble funnet innenfor 24-timers toleransen). Tallene gjelder da intervallet mellom avlesningene, ikke nøyaktig perioden. Avstemmingen er fortsatt fullstendig hvis alle målere har avlesninger innenfor toleransen. Ingenting estimeres, og manglende avlesning er aldri null. Målerbytte er ikke støttet.
+
+### Migrering
+`AddChargingFacility` (20261120…) oppretter bare de fire tabellene og indeksene. Ingen eksisterende tabeller berøres, og ingen data opprettes. Den fungerer på en tom database og på en database med boenheter, styresaker og oppgaver (testet i `ChargingMigrationTests`).
+
+### Oppstart og DI
+`AddSameieHubInfrastructure` registrerer de fire repositoryene (scoped), og `Program.cs` registrerer `ChargingService` (scoped). Vanlig oppstart oppretter ingen anlegg, ladere eller målere: tabellene er tomme, og det er testet. Oppstarten ble også kontrollert manuelt mot en isolert database. Brukerens ordinære database ble ikke brukt.
 
 ## Demodata (M4D)
 

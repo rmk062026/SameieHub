@@ -491,5 +491,5 @@ Komponenter rendres i minnet: `var cut = Render<TaskList>();` gir en «component
 ## Hvor bør du lese videre?
 
 - Vil du se et helt forløp: følg `Registrer oppgave` i sekvensdiagrammet i [ARCHITECTURE_EXPLAINED.md](ARCHITECTURE_EXPLAINED.md), og åpne filene i denne rekkefølgen: `TaskForm.razor` → `TaskCreate.razor` → `TaskItemService.cs` → `TaskItem.cs` → `EfTaskItemRepository.cs` → `SameieHubDbContext.cs`.
-- Vil du se elbilladeregnestykket: `MeterHistory.cs` → `ChargingReconciliation.cs` → `ChargingService.cs` (bare domenelaget finnes).
+- Vil du se elbilladeregnestykket: `MeterHistory.cs` → `ChargingReconciliation.cs` → `ChargingService.cs` (domenelaget) og `EfChargingRepositories.cs` for transaksjonene (lagring, M4E-B).
 - Vil du se hvorfor: [DESIGN_DECISIONS.md](DESIGN_DECISIONS.md).

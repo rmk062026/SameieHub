@@ -2,7 +2,7 @@
 
 Denne filen forklarer hva som ligger hvor i SameieHub, og hvorfor. Den er skrevet ut fra de faktiske filene i repoet (kontrollert mot `git ls-files`). For hvordan delene samarbeider, se [ARCHITECTURE_EXPLAINED.md](ARCHITECTURE_EXPLAINED.md). For kode, se [CODE_WALKTHROUGH.md](CODE_WALKTHROUGH.md).
 
-**Status for elbillading:** bare domenelaget (M4E-A) finnes (klassene `EvCharger`, `Meter`, `MeterReading`, `ChargingService` med flere og tester). Databasemapping, migrering, repository-implementasjoner, brukergrensesnitt og demodata for elbillading er **ikke** laget. Det er derfor ingen elbilside i `Web`, ingen elbilladetabell i migreringene og ingen elbilladetjeneste i `Program.cs`.
+**Status for elbillading:** domenelaget (M4E-A) og lagringen (M4E-B: EF-mapping, migreringen `AddChargingFacility`, fire repositories og `ChargingService` i DI) finnes. Brukergrensesnitt og demodata for elbillading er **ikke** laget, så det er ingen elbilside i `Web` og ingen ladere i demoen.
 
 ## Oversikt
 
@@ -96,7 +96,7 @@ Mønsteret går igjen per område (boenhet, styresak, oppgave, elbillading): en 
 | `DashboardOverview.cs` | Ren beregning av dashboard-tall og lister (`DashboardOverview.Create(...)`). Ingen avhengigheter. |
 | `TextRules.cs` | `internal` hjelpeklasse for tekstvalidering som deles av elbilladeklassene. |
 
-### Elbillading (bare domene, M4E-A)
+### Elbillading (domene, M4E-A)
 | Fil | Innhold |
 |---|---|
 | `ChargingFacility.cs` | Det ene ladeanlegget. |
@@ -107,7 +107,7 @@ Mønsteret går igjen per område (boenhet, styresak, oppgave, elbillading): en 
 | `ChargingReconciliation.cs` | Avstemming: hovedmåler mot summen av undermålere, uten å estimere manglende data. |
 | `ChargingReadingSet.cs` | Records for samlet registrering av hovedmåler og undermålere. |
 | `ChargingService.cs` | Oppsett, registrering, korrigering og avstemming. |
-| `ChargingRepositories.cs` | Fire grensesnitt (anlegg, lader, måler, avlesning). **Ingen implementasjon i Infrastructure ennå.** |
+| `ChargingRepositories.cs` | Fire grensesnitt (anlegg, lader, måler, avlesning). Implementert i `Infrastructure/Persistence/EfChargingRepositories.cs` (M4E-B). |
 | `ChargingExceptions.cs` | `EvChargerAlreadyExistsException`, `ChargingFacilityAlreadyExistsException`, `MeterReadingSequenceException`. |
 
 ## `src/SameieHub.Infrastructure`
@@ -120,6 +120,7 @@ Kobler Domain til en ekte database. Avhenger av Domain og av pakkene `Microsoft.
 | `Persistence/SameieHubDbContext.cs` | EF Core-kartet: tre `DbSet`, enum som tekst, UTC-konvertering, tre fremmednøkler med `DeleteBehavior.Restrict`. Endring her krever ny migrering. | Alle EF-repositories |
 | `Persistence/EfHousingUnitRepository.cs`, `EfBoardCaseRepository.cs`, `EfTaskItemRepository.cs` | Implementerer repository-grensesnittene med en kortlivet `DbContext` per operasjon. `Delete` oversetter fremmednøkkelbrudd til `…InUseException`. | Tjenestene i Domain (via DI) |
 | `Persistence/SqliteConstraintErrors.cs` | Kjenner igjen et fremmednøkkelbrudd i SQLite på feilkoden (19 med 787, eller 1811 når meldingen også nevner FOREIGN KEY). | Repositoryene |
+| `Persistence/EfChargingRepositories.cs` | De fire elbilladerepositoryene (`EfChargingFacilityRepository`, `EfEvChargerRepository`, `EfMeterRepository`, `EfMeterReadingRepository`). Operasjoner som lagrer flere rader sammen bruker en eksplisitt databasetransaksjon. | Elbilladetjenesten via DI |
 | `Persistence/DatabaseLocation.cs` | Standardsti: `%LOCALAPPDATA%\SameieHub\sameiehub.db`. | `Program.cs` |
 | `Persistence/DesignTimeDbContextFactory.cs` | Brukes bare av `dotnet ef` når migreringer lages (`design-time.db`, åpnes aldri for ekte data). | Verktøyet `dotnet ef` |
 | `Demo/DemoDatabaseSeeder.cs` | Oppretter det fiktive Fiktivdalen Sameie via de ekte tjenestene. Inneholder også `DemoDatabaseLocation` og unntakene. | `Program.cs` (bare med `--seed-demo`), tester |
@@ -134,6 +135,7 @@ Genererte filer (`dotnet ef migrations add`). Hver migrering har en `Up` (gjør 
 | `20261118120607_AddBoardCases` | `BoardCases` med fremmednøkkel til `HousingUnits` (Restrict). |
 | `20261118130406_AddBoardCaseDecisionDate` | Vedtaksdato. |
 | `20261119083132_AddTaskItems` | `TaskItems` med to valgfrie fremmednøkler (Restrict) og to indekser. |
+| `AddChargingFacility` (20261120…) | `ChargingFacilities`, `EvChargers`, `Meters` og `MeterReadings` med fremmednøkler (Restrict), unike indekser og `CHECK`-regler (M4E-B). |
 
 **Ikke endre en migrering som allerede er brukt.** En database som har kjørt den vil ikke kjøre den på nytt, og skjemaene vil da divergere. Endringer gjøres med en ny migrering. Fordi filene er genererte, leses de, men redigeres ikke for hånd (unntaket var en bevisst standardverdi for `IsActive`, gjort før migreringen ble brukt).
 

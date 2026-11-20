@@ -44,7 +44,7 @@ Bruk demoen (den vanlige databasen din berøres ikke):
 Åpne http://localhost:5100. Forslag til rekkefølge:
 
 1. **Dashboard:** statistikkort, oppfølgingslisten (forfalt, frist i dag), kommende møter. Klikk «Forfalte oppgaver» (åpner filtrert liste).
-2. **Boenheter:** åtte boenheter, åpne en med to eiere. Vis at elbillader og carport står i *merknader* (og forklar at en egen elbilladermodul er planlagt, men bare domenelaget er laget).
+2. **Boenheter:** åtte boenheter, åpne en med to eiere. Vis at elbillader og carport står i *merknader* (og forklar at en egen elbilladermodul er planlagt, men bare domenelaget og lagringen er laget, ikke sidene).
 3. **Styresaker:** en vedtatt sak med vedtaksdato, og oppgavene som hører til.
 4. **Oppgaver:** søk («Ola Eksempel»), filter, sortering. Marker en forfalt oppgave som fullført og gå tilbake til dashboardet: tallet endres («Oppdater oversikten»).
 5. **Sikker sletting:** prøv å slette en boenhet som har oppgaver. Vis meldingen, og forklar `RESTRICT`.
@@ -80,7 +80,7 @@ Forslag til punkter, **må bekreftes av prosjekteier:** lagdeling og Dependency 
 
 ## 9. Planlagt videreutvikling
 
-- Elbillading ferdig: database og migrering (M4E-B), UI med samlet registrering av hovedmåler og åtte undermålere og avstemming (M4E-C), demodata (M4E-D). Bare domenelaget finnes i dag.
+- Elbillading ferdig: database og migrering (M4E-B), UI med samlet registrering av hovedmåler og åtte undermålere og avstemming (M4E-C), demodata (M4E-D). Domenelaget og lagringen finnes i dag (M4E-A og M4E-B).
 - Backup/gjenoppretting og pakking uten .NET SDK (M5): obligatorisk før v1.0.
 - Mulige senere ideer: integrasjon mot ladeleverandør, endringshistorikk.
 
@@ -138,7 +138,7 @@ Ikke fordi den er generert. Kontrollene er: (1) automatiske tester, også skreve
 Agenten skrev koden, testene og dokumentasjonen. Jeg definerte krav og avgrensninger, delte arbeidet i milepæler, godkjente eller ba om endringer, og satte reglene (personvern, kodestil, git). Eksempler på endringer jeg ba om: to eiere per boenhet, sikker sletting, trygg demo, og målermodellen for elbillading. **Må bekreftes av prosjekteier:** gjennomgå [MY_CONTRIBUTIONS.md](MY_CONTRIBUTIONS.md) og rett til det som faktisk stemmer.
 
 ### 18. Hva er svakhetene ved løsningen?
-Ærlig liste: ingen backup/gjenoppretting ennå (obligatorisk før v1.0), ingen innlogging eller flere brukere, ingen endringshistorikk (`UpdatedAt` viser bare *når*), programmet antar norsk tidssone, SQLite er begrenset til én bruker, elbillingsmodulen er bare domenelag, og testantallet sier ikke alt om kvaliteten. Fire prosjekter er også mer struktur enn et så lite program strengt trenger.
+Ærlig liste: ingen backup/gjenoppretting ennå (obligatorisk før v1.0), ingen innlogging eller flere brukere, ingen endringshistorikk (`UpdatedAt` viser bare *når*), programmet antar norsk tidssone, SQLite er begrenset til én bruker, elbilladingsmodulen har bare domene og lagring, ingen sider, og testantallet sier ikke alt om kvaliteten. Fire prosjekter er også mer struktur enn et så lite program strengt trenger.
 
 ### 19. Hvordan ville dere håndtert flere brukere?
 Det krever innlogging og autorisasjon, en database som støtter samtidighet (for eksempel SQL Server eller PostgreSQL i stedet for SQLite), konfliktløsning ved samtidige endringer og en revisjonslogg. Fordi Domain og Infrastructure er adskilt, ville bytte av database i hovedsak berøre Infrastructure og migreringer, men innlogging og samtidighet krever også endringer i Web.
@@ -152,4 +152,4 @@ Dette må være **ditt eget svar**, basert på hva du faktisk opplevde. Ting rep
 - [ ] Demodatabasen er nullstilt (`.\scripts\demo.ps1 reset`) slik at datoene passer til i dag.
 - [ ] Du kan forklare ett komplett forløp fra klikk til database (sekvensdiagrammet i [ARCHITECTURE_EXPLAINED.md](ARCHITECTURE_EXPLAINED.md)).
 - [ ] Du har lest og rettet [MY_CONTRIBUTIONS.md](MY_CONTRIBUTIONS.md), og kan stå inne for hvert punkt.
-- [ ] Du er klar over hva som **ikke** er ferdig (elbillading utover domenelaget, backup, pakking).
+- [ ] Du er klar over hva som **ikke** er ferdig (elbillading utover domene og lagring, backup, pakking).
