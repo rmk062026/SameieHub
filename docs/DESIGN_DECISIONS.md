@@ -29,6 +29,7 @@ Se også [ARCHITECTURE_EXPLAINED.md](ARCHITECTURE_EXPLAINED.md) (hvordan det vir
 14. [Elbillading: modellvalg (M4E-A)](#14-elbillading-modellvalg-m4e-a)
 15. [Funksjoner som er utsatt](#15-funksjoner-som-er-utsatt)
 16. [AI-agenten implementerer, eieren godkjenner](#16-ai-agenten-implementerer-eieren-godkjenner)
+17. [Eldre demoer og ladedata (M4E-D)](#17-eldre-demoer-og-ladedata-m4e-d)
 
 ---
 
@@ -188,7 +189,7 @@ Domenelaget (M4E-A) og lagringen (M4E-B) er laget. Beslutningene under gjelder m
 | Backup og gjenoppretting, pakking uten .NET SDK | M5, ikke laget | Obligatorisk før v1.0 (`REQUIREMENTS.md`), men planlagt som egen milepæl. |
 | Økonomi og felleskostnader, innlogging/flere brukere, dokumentarkiv, ekstern tilgang, flere sameier, eksterne integrasjoner | Utenfor v1.0 | `REQUIREMENTS.md`, «Utenfor v1.0». |
 | Endringshistorikk for styresaker | Ikke laget | `UpdatedAt` viser når, ikke hva (`ARCHITECTURE.md`). |
-| Elbillading: UI og demodata | UI er laget i M4E-C (beslutninger i ARCHITECTURE.md, «Elbillading: brukergrensesnitt»); demodata (M4E-D) er ikke laget | Delt i kontrollerbare delmilepæler etter eierens ønske. |
+| Elbillading: UI og demodata | UI er laget i M4E-C (beslutninger i ARCHITECTURE.md, «Elbillading: brukergrensesnitt»), demodata i M4E-D | Delt i kontrollerbare delmilepæler etter eierens ønske. |
 | Integrasjon mot ladeleverandør, fjernstyring, fakturering, målerbytte | Utenfor nåværende plan | Eieren har uttrykkelig utelatt dem; modellen har ingen felt for eksterne nøkler. |
 
 Utsettelsene er gjort for å holde hver milepæl liten nok til å kontrollere og teste, og for å unngå å bygge ting som ikke er bestilt.
@@ -202,3 +203,11 @@ Utsettelsene er gjort for å holde hver milepæl liten nok til å kontrollere og
 - **Ulemper:** Eieren har ikke skrevet koden selv, og må derfor aktivt lære den (dette dokumentsettet er laget for det). AI-generert kode må kontrolleres: ved at eieren godkjenner milepæler, av testene og CI, og av gjennomgang. Dokumentasjonen skal ikke påstå at eieren skrev koden.
 - **Alternativer:** Eieren skriver koden selv med agenten som veileder (tidlig i M1A prøvde arbeidsmåten med «studentoppgaver», men ble endret til dagens, se commit-historikken og `CLAUDE.md`).
 - **Må bekreftes av prosjekteier:** hvordan dette skal presenteres overfor lærerne i forhold til kursets regler for bruk av AI.
+
+## 17. Eldre demoer og ladedata (M4E-D)
+
+- **Valg:** En eldre demo uten ladedata oppdateres aldri automatisk. Brukeren får en klar beskjed og velger selv å nullstille (`reset`), som sletter hele demofilen.
+- **Problem:** En demo kan ha egne endringer, og ladedata kan ikke slettes gjennom programmets repositories. En automatisk «oppgradering» kunne gi en blanding av gammelt og nytt eller overskrive endringer.
+- **Fullstendighet:** Kontrollen sammenligner innholdet med `DemoChargingPlan` i stedet for å telle rader eller lagre en versjonsmarkør. En markør i databasen krever nytt skjema og kan påstå at alt er ferdig selv om data mangler.
+- **Ulempe:** En korrigert eller slettet demoavlesning gjør at demoen ikke lenger regnes som komplett. Det er riktig for en seed-kontroll, og feilmeldingen sier at `reset` gir en ny demo.
+- **Alternativer:** Slette ladedata med egen slettelogikk (avvist: åpner for sletting av målerhistorikk i produksjonskoden), eller seede ladedata inn i en eldre demo (avvist: gir en demo med blandet og ukjent tilstand).

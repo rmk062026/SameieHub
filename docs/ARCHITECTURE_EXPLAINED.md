@@ -221,10 +221,10 @@ graph LR
     Seed -.avvises mot.-> O
 ```
 
-Sikkerhetsreglene (alle testet i `DemoDatabaseSeederTests`): seeding kjører bare hvis stien er nøyaktig demostien (normalisert), bare mot en tom database eller en komplett demo (ingen endring), en delvis opprettet demo gir feil, og `reset` nekter å slette en demo som kjører. Vanlig oppstart seeder aldri. Detaljer: [DEMO.md](DEMO.md).
+Sikkerhetsreglene (alle testet i `DemoDatabaseSeederTests` og `DemoChargingSeedTests`): seeding kjører bare hvis stien er nøyaktig demostien (normalisert), bare mot en tom database eller en komplett demo (ingen endring), en eldre demo uten ladedata eller en delvis opprettet demo gir feil uten å endre noe, og `reset` nekter å slette en demo som kjører. Vanlig oppstart seeder aldri. Detaljer: [DEMO.md](DEMO.md).
 
 ## 16. Hva som mangler (ærlig status)
 
-- Elbillading: domenelag (M4E-A), lagring (M4E-B) og sider (M4E-C) finnes med tester. Demodata (M4E-D) gjenstår.
+- Elbillading: domenelag (M4E-A), lagring (M4E-B) og sider (M4E-C) finnes med tester. Demodata (M4E-D) finnes med et komplett ladeanlegg.
 - Backup/gjenoppretting og pakking for kjøring uten .NET SDK (M5) er ikke laget, selv om det er et krav for v1.0.
 - Ingen endringshistorikk: `UpdatedAt` viser bare *når*, ikke *hva* som ble endret.

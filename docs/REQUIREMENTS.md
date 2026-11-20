@@ -42,6 +42,12 @@ Startsiden viser reelle tall fra databasen: aktive boenheter, åpne styresaker, 
 ### Oppgaver og vedlikehold (M3A–M3D)
 En oppgave har tittel (obligatorisk), beskrivelse, kategori (Generell eller Vedlikehold), status (Ikke startet, Pågår, Fullført), prioritet (Lav, Normal, Høy), frist (dato), ansvarlig (navn), valgfri kobling til én boenhet og/eller én styresak, merknader, opprettet, sist endret og fullført-tidspunkt. En oppgave er forfalt når den ikke er fullført og fristen er før dagens dato. Regler og begrunnelser står i [ARCHITECTURE.md](ARCHITECTURE.md). Repository og tjeneste (M3B) er på plass: oppgaver kan registreres, endres, få status, kobles til en aktiv boenhet og/eller en eksisterende styresak, slettes, og forfalte oppgaver kan hentes ut (fristen regnes mot norsk dato). Oppgaver lagres i SQLite (M3C): boenhet og styresak med oppgaver kan ikke slettes før koblingene er fjernet. Brukergrensesnittet (M3D) gir oversikt med statistikk, søk, filtre og sortering (standard: ikke fullførte, nærmeste frist først), registrering, redigering, statusendring med «Marker som fullført» og «Gjenåpne», forfalt- og «Frist i dag»-merker, kobling til boenhet og styresak (også fra boenhetens og styresakens side), og permanent sletting med bekreftelse.
 
+### Elbillading (M4E)
+- Ett felles ladeanlegg med én hovedmåler og én lader med egen undermåler per boenhet (åtte undermålere i to sikringsskap). Alle målerstander registreres manuelt som akkumulerte verdier; forbruk regnes ut fra differansen mellom avlesninger.
+- Samlet registrering av en avlesningsrunde (tomt felt = ikke avlest, aldri 0), norsk tid lagret som UTC, korrigering og sletting med kontroll av kronologien.
+- Avstemming per periode mellom to avlesninger av hovedmåleren: differanse = hovedmåler − sum av undermålere. Fullstendig bare med hovedmåler og åtte undermålere som alle har dokumentert forbruk; ellers vises hva som mangler og differansen beregnes ikke. Manglende verdier estimeres aldri.
+- Demoen (Fiktivdalen) har et komplett ladeanlegg med komplette og ufullstendige avstemminger. Eldre demoer uten ladedata oppdateres aldri automatisk, og de nullstilles bare bevisst. Se [DEMO.md](DEMO.md).
+
 ## Ikke-funksjonelle krav
 - Kjører lokalt på Windows uten Visual Studio, .NET SDK eller internett (selvstendig publisering, M5).
 - Én lokal bruker; ingen innlogging.
@@ -49,4 +55,4 @@ En oppgave har tittel (obligatorisk), beskrivelse, kategori (Generell eller Vedl
 - Data forblir lokalt og committes aldri.
 
 ## Utenfor v1.0
-Økonomi og felleskostnader · flere brukere/innlogging · dokumentarkiv · ekstern tilgang · flere sameier · eksterne integrasjoner · egen modell for carport og elbillader (laderens modell og status, kobling til ladesystem, forbruk og ladehistorikk; i demodataene står dette i boenhetens merknader, se [DEMO.md](DEMO.md)).
+Økonomi og felleskostnader · flere brukere/innlogging · dokumentarkiv · ekstern tilgang · flere sameier · eksterne integrasjoner · egen modell for carport, kobling til eksternt ladesystem, automatisk avlesning, fjernstyring og fakturering av ladestrøm (elbilladere og målere finnes som egen modell, se Elbillading over).

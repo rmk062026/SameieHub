@@ -12,7 +12,7 @@ Bakgrunn: [ARCHITECTURE_EXPLAINED.md](ARCHITECTURE_EXPLAINED.md), [CODE_WALKTHRO
 
 - Et lite sameie trenger oversikt over **hvem som eier hva**, **hvilke saker styret behandler og hva som ble vedtatt**, og **hva som skal gjøres og når**.
 - Programmet er lokalt, uten innlogging og sky, fordi dataene inneholder personopplysninger og brukeren er én person (styret).
-- Elbillading (hovedmåler og undermålere, avstemming) har domene, lagring og sider; demodata mangler (M4E-D).
+- Elbillading (hovedmåler og undermålere, avstemming) er ferdig gjennom alle lag, også demodata (M4E-D).
 - **Må bekreftes av prosjekteier:** hvordan problemet løses i dag, og hvorfor akkurat dette trengs.
 
 ## 3. Hvordan arkitekturen fungerer (to minutter)
@@ -38,13 +38,14 @@ Si det slik:
 Bruk demoen (den vanlige databasen din berøres ikke):
 
 ```powershell
-.\scripts\demo.ps1 create
-.\scripts\demo.ps1 start
+Dobbeltklikk scripts\Start-demo.cmd
 ```
+
+(eller `.\scripts\demo.ps1 create` og `.\scripts\demo.ps1 start`)
 Åpne http://localhost:5100. Forslag til rekkefølge:
 
 1. **Dashboard:** statistikkort, oppfølgingslisten (forfalt, frist i dag), kommende møter. Klikk «Forfalte oppgaver» (åpner filtrert liste).
-2. **Boenheter:** åtte boenheter, åpne en med to eiere. Vis at elbillader og carport står i *merknader* (og forklar at en egen elbilladermodul er planlagt, men bare domenelaget og lagringen er laget, ikke sidene).
+2. **Boenheter:** åtte boenheter, åpne en med to eiere. Åpne laderen fra boenhetssiden og vis ladeanlegget: **Elbillading** med åtte ladere, avstemmingen med +30 kWh (+2,4 %), og en ufullstendig periode der 14B mangler.
 3. **Styresaker:** en vedtatt sak med vedtaksdato, og oppgavene som hører til.
 4. **Oppgaver:** søk («Ola Eksempel»), filter, sortering. Marker en forfalt oppgave som fullført og gå tilbake til dashboardet: tallet endres («Oppdater oversikten»).
 5. **Sikker sletting:** prøv å slette en boenhet som har oppgaver. Vis meldingen, og forklar `RESTRICT`.
@@ -80,7 +81,7 @@ Forslag til punkter, **må bekreftes av prosjekteier:** lagdeling og Dependency 
 
 ## 9. Planlagt videreutvikling
 
-- Elbillading ferdig: database og migrering (M4E-B), UI med samlet registrering av hovedmåler og åtte undermålere og avstemming (M4E-C), demodata (M4E-D). Domenelaget og lagringen finnes i dag (M4E-A og M4E-B).
+- Elbillading er ferdig: domene (M4E-A), database (M4E-B), sider med samlet registrering og avstemming (M4E-C) og demodata (M4E-D).
 - Backup/gjenoppretting og pakking uten .NET SDK (M5): obligatorisk før v1.0.
 - Mulige senere ideer: integrasjon mot ladeleverandør, endringshistorikk.
 
@@ -138,7 +139,7 @@ Ikke fordi den er generert. Kontrollene er: (1) automatiske tester, også skreve
 Agenten skrev koden, testene og dokumentasjonen. Jeg definerte krav og avgrensninger, delte arbeidet i milepæler, godkjente eller ba om endringer, og satte reglene (personvern, kodestil, git). Eksempler på endringer jeg ba om: to eiere per boenhet, sikker sletting, trygg demo, og målermodellen for elbillading. **Må bekreftes av prosjekteier:** gjennomgå [MY_CONTRIBUTIONS.md](MY_CONTRIBUTIONS.md) og rett til det som faktisk stemmer.
 
 ### 18. Hva er svakhetene ved løsningen?
-Ærlig liste: ingen backup/gjenoppretting ennå (obligatorisk før v1.0), ingen innlogging eller flere brukere, ingen endringshistorikk (`UpdatedAt` viser bare *når*), programmet antar norsk tidssone, SQLite er begrenset til én bruker, elbilladingsmodulen har ingen demodata ennå, og testantallet sier ikke alt om kvaliteten. Fire prosjekter er også mer struktur enn et så lite program strengt trenger.
+Ærlig liste: ingen backup/gjenoppretting ennå (obligatorisk før v1.0), ingen innlogging eller flere brukere, ingen endringshistorikk (`UpdatedAt` viser bare *når*), programmet antar norsk tidssone, SQLite er begrenset til én bruker, ladere og målere kan ikke slettes i programmet (bevisst), og testantallet sier ikke alt om kvaliteten. Fire prosjekter er også mer struktur enn et så lite program strengt trenger.
 
 ### 19. Hvordan ville dere håndtert flere brukere?
 Det krever innlogging og autorisasjon, en database som støtter samtidighet (for eksempel SQL Server eller PostgreSQL i stedet for SQLite), konfliktløsning ved samtidige endringer og en revisjonslogg. Fordi Domain og Infrastructure er adskilt, ville bytte av database i hovedsak berøre Infrastructure og migreringer, men innlogging og samtidighet krever også endringer i Web.

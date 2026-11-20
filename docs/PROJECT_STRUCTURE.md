@@ -2,7 +2,7 @@
 
 Denne filen forklarer hva som ligger hvor i SameieHub, og hvorfor. Den er skrevet ut fra de faktiske filene i repoet (kontrollert mot `git ls-files`). For hvordan delene samarbeider, se [ARCHITECTURE_EXPLAINED.md](ARCHITECTURE_EXPLAINED.md). For kode, se [CODE_WALKTHROUGH.md](CODE_WALKTHROUGH.md).
 
-**Status for elbillading:** domenelaget (M4E-A) og lagringen (M4E-B: EF-mapping, migreringen `AddChargingFacility`, fire repositories og `ChargingService` i DI) finnes. Brukergrensesnittet (M4E-C) finnes i `Components/Pages/Charging/`. Demodata for elbillading (M4E-D) er **ikke** laget, så det er ingen ladere i demoen.
+**Status for elbillading:** domenelaget (M4E-A) og lagringen (M4E-B: EF-mapping, migreringen `AddChargingFacility`, fire repositories og `ChargingService` i DI) finnes. Brukergrensesnittet (M4E-C) finnes i `Components/Pages/Charging/`. Demodata for elbillading (M4E-D) finnes: Fiktivdalen-demoen har et komplett ladeanlegg.
 
 ## Oversikt
 
@@ -16,7 +16,9 @@ SameieHub/
 ├── dotnet-tools.json               låser verktøyet dotnet-ef til 10.0.15
 ├── .github/workflows/ci.yml        GitHub Actions: restore, build, test
 ├── docs/                           dokumentasjon (se docs/README.md)
-├── scripts/demo.ps1                demokommandoer (create/start/reset/info)
+├── scripts/demo.ps1                demokommandoer (create/start/launch/reset/info)
+├── scripts/Start-demo.cmd          dobbeltklikk: oppretter ved behov, starter demoen og åpner nettleseren
+├── scripts/Nullstill-demo.cmd      dobbeltklikk: nullstiller demoen (med bekreftelse)
 ├── src/
 │   ├── SameieHub.Domain/           forretningsregler, uten EF/Blazor
 │   ├── SameieHub.Infrastructure/   EF Core, SQLite, migreringer, demo-seeder
@@ -64,7 +66,7 @@ Ulempen er flere filer og litt mer «pynt» (grensesnitt, mapping mellom lagene)
 Kjører ved push til `main` og på pull requests, på `windows-latest`: `actions/checkout@v4`, `actions/setup-dotnet@v4` (10.0.x), så `dotnet restore SameieHub.slnx`, `dotnet build ... --configuration Release` og `dotnet test ... --no-build --configuration Release`. Dette er det automatiske sikkerhetsnettet: en rød CI betyr at noe ikke bygger eller at en test feiler på en ren maskin (ikke bare på min).
 
 ### `scripts/demo.ps1`
-PowerShell-skript med fire kommandoer: `create` (kjører `dotnet run ... -- --seed-demo` mot demodatabasen), `start` (kjører appen mot demodatabasen på port 5100), `reset` (sletter demodatabasen, men bare hvis den ikke er i bruk, og lager den på nytt) og `info`. Skriptet setter `Database__Path` midlertidig og setter miljøvariablene tilbake etterpå. Se [DEMO.md](DEMO.md).
+PowerShell-skript med fem kommandoer (`launch` oppretter demoen ved behov, starter den og åpner nettleseren når serveren svarer; `Start-demo.cmd` og `Nullstill-demo.cmd` kaller det med `-ExecutionPolicy Bypass` for én prosess): `create` (kjører `dotnet run ... -- --seed-demo` mot demodatabasen), `start` (kjører appen mot demodatabasen på port 5100), `reset` (sletter demodatabasen, men bare hvis den ikke er i bruk, og lager den på nytt) og `info`. Skriptet setter `Database__Path` midlertidig og setter miljøvariablene tilbake etterpå. Se [DEMO.md](DEMO.md).
 
 ## `src/SameieHub.Domain`
 
@@ -123,7 +125,8 @@ Kobler Domain til en ekte database. Avhenger av Domain og av pakkene `Microsoft.
 | `Persistence/EfChargingRepositories.cs` | De fire elbilladerepositoryene (`EfChargingFacilityRepository`, `EfEvChargerRepository`, `EfMeterRepository`, `EfMeterReadingRepository`). Operasjoner som lagrer flere rader sammen bruker en eksplisitt databasetransaksjon. | Elbilladetjenesten via DI |
 | `Persistence/DatabaseLocation.cs` | Standardsti: `%LOCALAPPDATA%\SameieHub\sameiehub.db`. | `Program.cs` |
 | `Persistence/DesignTimeDbContextFactory.cs` | Brukes bare av `dotnet ef` når migreringer lages (`design-time.db`, åpnes aldri for ekte data). | Verktøyet `dotnet ef` |
-| `Demo/DemoDatabaseSeeder.cs` | Oppretter det fiktive Fiktivdalen Sameie via de ekte tjenestene. Inneholder også `DemoDatabaseLocation` og unntakene. | `Program.cs` (bare med `--seed-demo`), tester |
+| `Demo/DemoDatabaseSeeder.cs` | Oppretter det fiktive Fiktivdalen Sameie, inkludert ladeanlegget, via de ekte tjenestene, og avgjør om en database er tom, komplett, eldre, delvis eller annet (`InspectAsync`). Inneholder også `DemoDatabaseLocation`, tilstanden og unntakene. | `Program.cs` (bare med `--seed-demo` og `--check-demo`), tester |
+| `Demo/DemoChargingPlan.cs` | Det faste ladeinnholdet i demoen (ladere, skap, status, målerstander, rundenes tidspunkt). Brukes både til å opprette og til å kontrollere. | `DemoDatabaseSeeder` |
 
 ### Migreringene (`Persistence/Migrations/`)
 Genererte filer (`dotnet ef migrations add`). Hver migrering har en `Up` (gjør endringen) og en `Down`, og en `.Designer.cs`-fil med et øyeblikksbilde av modellen den gangen. `SameieHubDbContextModelSnapshot.cs` er det nyeste bildet av hele modellen; EF sammenligner modellen med det for å lage neste migrering.

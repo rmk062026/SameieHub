@@ -2,13 +2,13 @@
 
 Lokalt administrasjonsprogram for små sameier: oversikt over boenheter, styresaker og oppgaver/vedlikehold. Bygget med C#, .NET 10, Blazor (Interactive Server) og SQLite. Kodehode-prosjekt og porteføljeeksempel.
 
-**Status:** M0–M1E ferdig: boenhetsregisteret (registrere, vise, redigere, søke, deaktivere og slette (M1F), med opptil to eiere per boenhet) i et norsk Blazor-grensesnitt med SQLite-lagring. Styresaker (M2): registrere, redigere, søke, filtrere, endre status, registrere vedtak (med vedtaksdato) og slette, med kobling til boenheter og snarvei fra boenhetens side. Dashboard (M4): reelle tall for boenheter, åpne styresaker, åpne og forfalte oppgaver, oppfølgingsliste, kommende møter og frister og hurtighandlinger. Elbillading (M4E-C): ladeanlegg med felles hovedmåler og åtte undermålere (to sikringsskap), ladere per boenhet, samlet manuell avlesning med norsk tid, avstemming per periode med toleranse, historikk med korrigering og sletting, og seksjoner på boenhetssiden og dashboardet (demodata for elbillading kommer i M4E-D). Oppgaver og vedlikehold (M3): domenemodell, tjeneste, SQLite-lagring med fremmednøkler til boenheter og styresaker, og et komplett norsk grensesnitt med oversikt, søk, filtre, sortering, forfalt/frist i dag, statusendring, kobling til boenheter og styresaker og sletting (M3D).
+**Status:** M0–M1E ferdig: boenhetsregisteret (registrere, vise, redigere, søke, deaktivere og slette (M1F), med opptil to eiere per boenhet) i et norsk Blazor-grensesnitt med SQLite-lagring. Styresaker (M2): registrere, redigere, søke, filtrere, endre status, registrere vedtak (med vedtaksdato) og slette, med kobling til boenheter og snarvei fra boenhetens side. Dashboard (M4): reelle tall for boenheter, åpne styresaker, åpne og forfalte oppgaver, oppfølgingsliste, kommende møter og frister og hurtighandlinger. Elbillading (M4E-C): ladeanlegg med felles hovedmåler og åtte undermålere (to sikringsskap), ladere per boenhet, samlet manuell avlesning med norsk tid, avstemming per periode med toleranse, historikk med korrigering og sletting, og seksjoner på boenhetssiden og dashboardet og demodata med komplett ladeanlegg (M4E-D). Oppgaver og vedlikehold (M3): domenemodell, tjeneste, SQLite-lagring med fremmednøkler til boenheter og styresaker, og et komplett norsk grensesnitt med oversikt, søk, filtre, sortering, forfalt/frist i dag, statusendring, kobling til boenheter og styresaker og sletting (M3D).
 
 ![CI](https://github.com/rmk062026/SameieHub/actions/workflows/ci.yml/badge.svg)
 
 ## Demo
 
-En fiktiv demodatabase (Fiktivdalen Sameie) viser programmet med realistiske data: `.\scripts\demo.ps1 create` og `.\scripts\demo.ps1 start`. Den vanlige databasen berøres aldri. Se [docs/DEMO.md](docs/DEMO.md).
+En fiktiv demodatabase (Fiktivdalen Sameie, med ladeanlegg og avstemminger) viser programmet med realistiske data. Dobbeltklikk `scripts\Start-demo.cmd` (oppretter demoen ved behov og åpner nettleseren), eller bruk `.\scripts\demo.ps1 create` og `.\scripts\demo.ps1 start`. Den vanlige databasen berøres aldri. Se [docs/DEMO.md](docs/DEMO.md).
 
 ## Kom i gang
 
