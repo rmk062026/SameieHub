@@ -37,6 +37,12 @@ public record ChargingReconciliation
     /// <summary>True when the main meter and every sub meter are documented in the period.</summary>
     public bool IsComplete { get; init; }
 
+    /// <summary>
+    /// True when at least one documented meter was read at a time other than exactly the start or end of the period.
+    /// The figures are then for the intervals between the readings, not for exactly the period.
+    /// </summary>
+    public bool HasApproximateReadings { get; init; }
+
     /// <summary>Main meter consumption minus the sum of the sub meters. Null when the reconciliation is incomplete.</summary>
     public decimal? Difference { get; init; }
 
@@ -91,6 +97,8 @@ public static class ChargingReconciler
         decimal? difference = isComplete ? mainKwh - subMeterKwh : null;
         decimal? percent = isComplete && mainKwh != 0m ? difference / mainKwh * 100m : null;
 
+        var hasApproximateReadings = lines.Any(line => line.Consumption.State == MeterConsumptionState.Documented && line.Consumption.IsApproximate);
+
         return new ChargingReconciliation
         {
             From = from,
@@ -102,6 +110,7 @@ public static class ChargingReconciler
             SubMeterKwh = subMeterKwh,
             MissingMeters = missing,
             IsComplete = isComplete,
+            HasApproximateReadings = hasApproximateReadings,
             Difference = difference,
             DifferencePercent = percent
         };

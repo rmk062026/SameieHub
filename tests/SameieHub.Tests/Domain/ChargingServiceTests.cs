@@ -17,10 +17,11 @@ public class ChargingServiceTests
     public ChargingServiceTests()
     {
         _unitService = new HousingUnitService(_housingUnits);
+        var meterRepository = new FakeMeterRepository();
         _service = new ChargingService(
-            new FakeChargingFacilityRepository(),
-            new FakeEvChargerRepository(),
-            new FakeMeterRepository(),
+            new FakeChargingFacilityRepository(meterRepository),
+            new FakeEvChargerRepository(meterRepository),
+            meterRepository,
             _readings,
             _housingUnits,
             _time);

@@ -34,6 +34,12 @@ public enum MeterConsumptionState
 public record MeterConsumption(MeterConsumptionState State, MeterReading? StartReading, MeterReading? EndReading)
 {
     public decimal? Kwh => State == MeterConsumptionState.Documented ? EndReading!.Kwh - StartReading!.Kwh : null;
+
+    /// <summary>
+    /// True when a reading used is not at exactly the start or end of the period (it was found within the tolerance).
+    /// The consumption is then for the interval between the two readings, which is a little different from the period.
+    /// </summary>
+    public bool IsApproximate { get; init; }
 }
 
 /// <summary>
@@ -135,7 +141,10 @@ public static class MeterHistory
             return new MeterConsumption(MeterConsumptionState.SameReading, start, end);
         }
 
-        return new MeterConsumption(MeterConsumptionState.Documented, start, end);
+        return new MeterConsumption(MeterConsumptionState.Documented, start, end)
+        {
+            IsApproximate = start.ReadAt != from || end.ReadAt != to
+        };
     }
 
     /// <summary>

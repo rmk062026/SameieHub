@@ -43,10 +43,9 @@ public class ChargingService
         }
 
         var facility = new ChargingFacility(name, null, GetUtcNow());
-        await _facilityRepository.AddAsync(facility);
 
-        var mainMeter = Meter.CreateMain(facility.Id, MainMeterName, GetUtcNow());
-        await _meterRepository.AddAsync(mainMeter);
+        // The facility and its main meter are stored together, or neither is.
+        await _facilityRepository.AddWithMainMeterAsync(facility, facilityId => Meter.CreateMain(facilityId, MainMeterName, GetUtcNow()));
 
         return facility;
     }
@@ -81,10 +80,10 @@ public class ChargingService
         var charger = new EvCharger(facility.Id, housingUnitId, details, GetUtcNow());
         Meter.EnsureCabinetNumber(cabinetNumber);
 
-        await _chargerRepository.AddAsync(charger);
-
-        var subMeter = Meter.CreateSub(facility.Id, charger.Id, $"Undermåler {housingUnit.Address}", cabinetNumber, GetUtcNow());
-        await _meterRepository.AddAsync(subMeter);
+        // The charger and its sub meter are stored together, or neither is.
+        await _chargerRepository.AddWithSubMeterAsync(
+            charger,
+            chargerId => Meter.CreateSub(facility.Id, chargerId, $"Undermåler {housingUnit.Address}", cabinetNumber, GetUtcNow()));
 
         return charger;
     }
@@ -232,7 +231,8 @@ public class ChargingService
             }
         }
 
-        await StoreAllOrNothingAsync(newReadings.Values);
+        // One database transaction for all the readings in the set.
+        await _readingRepository.AddRangeAsync(newReadings.Values.ToList());
 
         return await BuildReadingSetResultAsync(details.ReadAt, meters, readingsBefore, newReadings);
     }
@@ -350,37 +350,6 @@ public class ChargingService
             var field = meter.IsMain ? nameof(MeterReadingSetDetails.MainMeterKwh) : nameof(MeterReadingSetDetails.SubMeterKwh);
 
             throw new ArgumentException(exception.Message, field, exception);
-        }
-    }
-
-    /// <summary>If storing one reading fails, the ones already stored are removed again.</summary>
-    private async Task StoreAllOrNothingAsync(IEnumerable<MeterReading> readings)
-    {
-        var stored = new List<MeterReading>();
-
-        try
-        {
-            foreach (var reading in readings)
-            {
-                await _readingRepository.AddAsync(reading);
-                stored.Add(reading);
-            }
-        }
-        catch (Exception storeError)
-        {
-            try
-            {
-                foreach (var reading in stored)
-                {
-                    await _readingRepository.DeleteAsync(reading.Id);
-                }
-            }
-            catch (Exception cleanupError)
-            {
-                throw new AggregateException("Storing the readings failed, and removing the stored ones failed too.", storeError, cleanupError);
-            }
-
-            throw;
         }
     }
 

@@ -4,14 +4,20 @@ namespace SameieHub.Tests.Fakes;
 
 public class FakeChargingFacilityRepository : IChargingFacilityRepository
 {
+    private readonly FakeMeterRepository _meters;
     private ChargingFacility? _facility;
 
-    public Task AddAsync(ChargingFacility facility)
+    public FakeChargingFacilityRepository(FakeMeterRepository meters)
+    {
+        _meters = meters;
+    }
+
+    public async Task AddWithMainMeterAsync(ChargingFacility facility, Func<int, Meter> createMainMeter)
     {
         facility.AssignId(1);
-        _facility = facility;
 
-        return Task.CompletedTask;
+        await _meters.AddAsync(createMainMeter(facility.Id));
+        _facility = facility;
     }
 
     public Task<ChargingFacility?> GetAsync()
@@ -22,20 +28,33 @@ public class FakeChargingFacilityRepository : IChargingFacilityRepository
 
 public class FakeEvChargerRepository : IEvChargerRepository
 {
+    private readonly FakeMeterRepository _meters;
     private readonly Dictionary<int, EvCharger> _chargers = [];
     private int _nextId = 1;
 
-    public Task AddAsync(EvCharger charger)
+    public FakeEvChargerRepository(FakeMeterRepository meters)
+    {
+        _meters = meters;
+    }
+
+    /// <summary>Simulates a database failure while the charger and its meter are stored. Nothing is stored then.</summary>
+    public bool FailOnAdd { get; set; }
+
+    public async Task AddWithSubMeterAsync(EvCharger charger, Func<int, Meter> createSubMeter)
     {
         if (_chargers.Values.Any(existing => existing.HousingUnitId == charger.HousingUnitId))
         {
             throw new EvChargerAlreadyExistsException(charger.HousingUnitId);
         }
 
-        charger.AssignId(_nextId++);
-        _chargers[charger.Id] = charger;
+        if (FailOnAdd)
+        {
+            throw new IOException("The database is unavailable.");
+        }
 
-        return Task.CompletedTask;
+        charger.AssignId(_nextId++);
+        await _meters.AddAsync(createSubMeter(charger.Id));
+        _chargers[charger.Id] = charger;
     }
 
     public Task<EvCharger?> GetByIdAsync(int id)
@@ -100,6 +119,25 @@ public class FakeMeterReadingRepository : IMeterReadingRepository
 {
     private readonly Dictionary<int, MeterReading> _readings = [];
     private int _nextId = 1;
+
+    /// <summary>Simulates a database failure when a set of readings is stored. Nothing is stored then.</summary>
+    public bool FailOnAddRange { get; set; }
+
+    public Task AddRangeAsync(IReadOnlyList<MeterReading> readings)
+    {
+        if (FailOnAddRange)
+        {
+            throw new IOException("The database is unavailable.");
+        }
+
+        foreach (var reading in readings)
+        {
+            reading.AssignId(_nextId++);
+            _readings[reading.Id] = reading;
+        }
+
+        return Task.CompletedTask;
+    }
 
     public Task AddAsync(MeterReading reading)
     {
