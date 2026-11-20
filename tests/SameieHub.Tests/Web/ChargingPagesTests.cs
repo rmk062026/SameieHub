@@ -25,6 +25,25 @@ public class ChargingPagesTests : ChargingUiTestBase
         Assert.Equal("elbillading", link.GetAttribute("href")!.TrimStart('/'));
     }
 
+    [Theory]
+    [InlineData("2026-11-10T08:00")]
+    [InlineData("2026-11-10T08:00:00")]
+    public void ChargingInput_AcceptsTimeWithAndWithoutSeconds(string text)
+    {
+        var error = ChargingInput.TryConvertToUtc(text, null, out var utc);
+
+        Assert.Null(error);
+        Assert.Equal(new DateTime(2026, 11, 10, 7, 0, 0, DateTimeKind.Utc), utc);
+    }
+
+    [Theory]
+    [InlineData("2027-10-31T02:30")]
+    [InlineData("2027-10-31T02:30:00")]
+    public void ChargingInput_RepeatedHourIsAmbiguousWithAndWithoutSeconds(string text)
+    {
+        Assert.True(ChargingInput.IsAmbiguous(text));
+    }
+
     // Overview
 
     [Fact]
@@ -275,6 +294,22 @@ public class ChargingPagesTests : ChargingUiTestBase
         var cut = Render<ReadingSetCreate>();
         cut.WaitForElement("#readAt");
         cut.Find("#readAt").Change("2026-11-10T08:00");
+        cut.Find($"#kwh-{MainMeter.Id}").Input("500");
+        cut.Find("form").Submit();
+
+        cut.WaitForElement("[role=status] h2");
+        var reading = Assert.Single(await Charging.GetReadingsAsync(MainMeter.Id));
+        Assert.Equal(new DateTime(2026, 11, 10, 7, 0, 0, DateTimeKind.Utc), reading.ReadAt);
+    }
+
+    [Fact]
+    public async Task ReadingSetCreate_TimeWithSecondsFromTheBrowser_IsAccepted()
+    {
+        await SeedFacilityAsync(1);
+
+        var cut = Render<ReadingSetCreate>();
+        cut.WaitForElement("#readAt");
+        cut.Find("#readAt").Change("2026-11-10T08:00:00");
         cut.Find($"#kwh-{MainMeter.Id}").Input("500");
         cut.Find("form").Submit();
 

@@ -8,6 +8,9 @@ public static class ChargingInput
 {
     public const string DateTimeFormat = "yyyy-MM-dd'T'HH:mm";
 
+    // The browser gives HH:mm, but Blazor adds seconds to the value of a datetime-local field (HH:mm:ss).
+    private static readonly string[] AcceptedDateTimeFormats = [DateTimeFormat, "yyyy-MM-dd'T'HH:mm:ss"];
+
     /// <summary>
     /// Reads a meter value. Empty text means «not read» and gives null with no error. The text 0 is a real value.
     /// Both comma and point are accepted as decimal separator.
@@ -60,7 +63,7 @@ public static class ChargingInput
         utc = default;
 
         if (string.IsNullOrWhiteSpace(text)
-            || !DateTime.TryParseExact(text, DateTimeFormat, CultureInfo.InvariantCulture, DateTimeStyles.None, out var local))
+            || !DateTime.TryParseExact(text, AcceptedDateTimeFormats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var local))
         {
             return "Oppgi dato og klokkeslett for avlesningen.";
         }
@@ -78,7 +81,7 @@ public static class ChargingInput
     /// <summary>True when the text is a time that happens twice, so the form must ask which one is meant.</summary>
     public static bool IsAmbiguous(string? text)
     {
-        return DateTime.TryParseExact(text, DateTimeFormat, CultureInfo.InvariantCulture, DateTimeStyles.None, out var local)
+        return DateTime.TryParseExact(text, AcceptedDateTimeFormats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var local)
             && NorwegianTime.IsAmbiguous(local);
     }
 }
