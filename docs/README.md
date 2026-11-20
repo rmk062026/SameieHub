@@ -1,0 +1,35 @@
+# Dokumentasjon
+
+Indeks over dokumentene i `docs/`. Den korte oversikten over prosjektet står i [../README.md](../README.md), og arbeidsreglene for AI-agenten i [../CLAUDE.md](../CLAUDE.md).
+
+## Anbefalt leserekkefølge (for å forstå og kunne presentere prosjektet)
+
+| # | Dokument | Les det for å … |
+|---|---|---|
+| 1 | [../README.md](../README.md) | få det raske overblikket og status |
+| 2 | [PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md) | vite hva som ligger hvor, og hvorfor det er fire prosjekter |
+| 3 | [ARCHITECTURE_EXPLAINED.md](ARCHITECTURE_EXPLAINED.md) | forstå hvordan delene samarbeider, fra klikk til database |
+| 4 | [CODE_WALKTHROUGH.md](CODE_WALKTHROUGH.md) | lese den faktiske C#-koden linje for linje |
+| 5 | [DESIGN_DECISIONS.md](DESIGN_DECISIONS.md) | kunne forklare *hvorfor* valgene ble tatt, med alternativer |
+| 6 | [DEMO.md](DEMO.md) | kjøre demoen med fiktive data |
+| 7 | [MY_CONTRIBUTIONS.md](MY_CONTRIBUTIONS.md) | gjennomgå og bekrefte prosjektfortellingen (inneholder punkter som må bekreftes av eieren) |
+| 8 | [PRESENTATION_GUIDE.md](PRESENTATION_GUIDE.md) | forberede presentasjon og øve på spørsmål |
+
+## Prosjektdokumentasjon som er skrevet underveis (historisk)
+
+Disse ble skrevet i samme endring som koden, milepæl for milepæl, og beskriver hva som ble gjort og hvorfor *da*. De er ikke omskrevet i ettertid.
+
+| Dokument | Innhold |
+|---|---|
+| [REQUIREMENTS.md](REQUIREMENTS.md) | Krav, regler per område og avgrensninger |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Arkitektur, beslutninger og regler per milepæl (M1–M4E-A) |
+| [UI_DESIGN.md](UI_DESIGN.md) | Sider, ruter og designregler |
+| [TESTING.md](TESTING.md) | Teststrategi og hva testene dekker |
+| [DEVELOPMENT.md](DEVELOPMENT.md) | Kommandoer, database, git-arbeidsflyt, hvordan legge til et felt |
+| [DEMO.md](DEMO.md) | Demodatabasen, kommandoer og sikkerhetsregler |
+
+## Status (kontrollert mot koden)
+
+- Ferdig gjennom alle lag: boenheter, styresaker, oppgaver, dashboard, demodata.
+- Bare domenelag og tester: elbillading (M4E-A). Database, UI og demodata for elbillading er ikke laget.
+- Ikke laget: backup/gjenoppretting og pakking (M5).

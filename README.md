@@ -21,6 +21,8 @@ dotnet run --project src/SameieHub.Web
 ```
 
 ## Dokumentasjon
+Se [docs/README.md](docs/README.md) for indeks og anbefalt leserekkefølge. Forklaringer for å forstå og presentere prosjektet: [Prosjektstruktur](docs/PROJECT_STRUCTURE.md), [Arkitekturen forklart](docs/ARCHITECTURE_EXPLAINED.md), [Kodegjennomgang](docs/CODE_WALKTHROUGH.md), [Designbeslutninger](docs/DESIGN_DECISIONS.md), [Mine bidrag](docs/MY_CONTRIBUTIONS.md) og [Presentasjonsguide](docs/PRESENTATION_GUIDE.md).
+
 - [Krav](docs/REQUIREMENTS.md)
 - [Arkitektur](docs/ARCHITECTURE.md)
 - [UI-design](docs/UI_DESIGN.md)
