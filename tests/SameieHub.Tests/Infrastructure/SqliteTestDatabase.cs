@@ -128,6 +128,12 @@ public sealed class SqliteTestDatabase : IAsyncDisposable
         await _provider.MigrateSameieHubDatabaseAsync();
     }
 
+    /// <summary>Closes every connection so the database file can be deleted, like stopping the demo before a reset.</summary>
+    public Task StopForResetAsync()
+    {
+        return StopAsync();
+    }
+
     public async ValueTask DisposeAsync()
     {
         await StopAsync();

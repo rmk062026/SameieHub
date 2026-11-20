@@ -9,7 +9,8 @@ var builder = WebApplication.CreateBuilder(args);
 // The demo command (scripts/demo.ps1) is the only way demo data is created. It only runs against the dedicated
 // demo database, so it can never fill the ordinary database or any other file by accident.
 var seedDemo = args.Contains("--seed-demo");
-if (seedDemo && !DemoDatabaseSeeder.IsDemoDatabasePath(builder.Configuration["Database:Path"], DemoDatabaseLocation.GetPath()))
+var checkDemo = args.Contains("--check-demo");
+if ((seedDemo || checkDemo) && !DemoDatabaseSeeder.IsDemoDatabasePath(builder.Configuration["Database:Path"], DemoDatabaseLocation.GetPath()))
 {
     Console.Error.WriteLine($"The demo command only runs against the demo database. Set Database__Path to {DemoDatabaseLocation.GetPath()}.");
     return 1;
@@ -34,6 +35,11 @@ await app.Services.MigrateSameieHubDatabaseAsync();
 if (seedDemo)
 {
     return await RunDemoSeedingAsync(app.Services);
+}
+
+if (checkDemo)
+{
+    return await RunDemoCheckAsync(app.Services);
 }
 
 // Only the folder and file name are logged, because the full path can contain the Windows user name.
@@ -64,11 +70,7 @@ return 0;
 static async Task<int> RunDemoSeedingAsync(IServiceProvider services)
 {
     using var scope = services.CreateScope();
-    var seeder = new DemoDatabaseSeeder(
-        scope.ServiceProvider.GetRequiredService<IHousingUnitRepository>(),
-        scope.ServiceProvider.GetRequiredService<IBoardCaseRepository>(),
-        scope.ServiceProvider.GetRequiredService<ITaskItemRepository>(),
-        TimeProvider.System);
+    var seeder = CreateDemoSeeder(scope.ServiceProvider);
 
     try
     {
@@ -80,10 +82,49 @@ static async Task<int> RunDemoSeedingAsync(IServiceProvider services)
 
         return 0;
     }
-    catch (Exception exception) when (exception is DemoDatabaseNotEmptyException or DemoDatabaseIncompleteException or AggregateException)
+    catch (Exception exception) when (exception is DemoDatabaseNotEmptyException or DemoDatabaseIncompleteException or DemoDatabaseOutdatedException or AggregateException)
     {
         Console.Error.WriteLine(exception.Message);
 
         return 1;
     }
+}
+
+// Only looks at the demo database and changes nothing. Exit code 0: the demo has charging data or is empty,
+// 2: an older demo without charging data, 3: partly created or other data.
+static async Task<int> RunDemoCheckAsync(IServiceProvider services)
+{
+    using var scope = services.CreateScope();
+    var state = await CreateDemoSeeder(scope.ServiceProvider).InspectAsync();
+
+    switch (state)
+    {
+        case DemoDatabaseState.OutdatedWithoutCharging:
+            Console.WriteLine(new DemoDatabaseOutdatedException().Message);
+
+            return 2;
+        case DemoDatabaseState.PartlyCreated:
+            Console.WriteLine("The demo database is partly created or has been changed so it no longer matches the demo. Run the demo command 'reset' for a fresh demo.");
+
+            return 3;
+        case DemoDatabaseState.OtherData:
+            Console.WriteLine("The demo database contains other data than the demo.");
+
+            return 3;
+        default:
+            return 0;
+    }
+}
+
+static DemoDatabaseSeeder CreateDemoSeeder(IServiceProvider provider)
+{
+    return new DemoDatabaseSeeder(
+        provider.GetRequiredService<IHousingUnitRepository>(),
+        provider.GetRequiredService<IBoardCaseRepository>(),
+        provider.GetRequiredService<ITaskItemRepository>(),
+        provider.GetRequiredService<IChargingFacilityRepository>(),
+        provider.GetRequiredService<IEvChargerRepository>(),
+        provider.GetRequiredService<IMeterRepository>(),
+        provider.GetRequiredService<IMeterReadingRepository>(),
+        TimeProvider.System);
 }

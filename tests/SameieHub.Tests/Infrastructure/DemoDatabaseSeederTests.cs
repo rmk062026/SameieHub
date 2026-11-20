@@ -22,9 +22,17 @@ public class DemoDatabaseSeederTests : IAsyncLifetime
         await _database.DisposeAsync();
     }
 
-    private DemoDatabaseSeeder NewSeeder()
+    private DemoDatabaseSeeder NewSeeder(ITaskItemRepository? tasks = null)
     {
-        return new DemoDatabaseSeeder(_database.Repository, _database.BoardCaseRepository, _database.TaskRepository, _database.Clock);
+        return new DemoDatabaseSeeder(
+            _database.Repository,
+            _database.BoardCaseRepository,
+            tasks ?? _database.TaskRepository,
+            _database.FacilityRepository,
+            _database.ChargerRepository,
+            _database.MeterRepository,
+            _database.ReadingRepository,
+            _database.Clock);
     }
 
     private async Task<DemoSeedResult> SeedAsync()
@@ -88,7 +96,7 @@ public class DemoDatabaseSeederTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Seed_EveryUnit_HasCarportAndChargerInTheNotes()
+    public async Task Seed_EveryUnit_HasCarportInTheNotesAndTheChargersAreModelledSeparately()
     {
         await SeedAsync();
 
@@ -96,12 +104,9 @@ public class DemoDatabaseSeederTests : IAsyncLifetime
         Assert.All(units, unit =>
         {
             Assert.Contains("Carport", unit.Notes);
-            Assert.Contains("Elbillader", unit.Notes);
+            Assert.DoesNotContain("Elbillader", unit.Notes);
         });
-        Assert.Contains(units, unit => unit.Notes!.Contains("i bruk"));
-        Assert.Contains(units, unit => unit.Notes!.Contains("ikke i bruk"));
-        Assert.Contains(units, unit => unit.Notes!.Contains("midlertidig deaktivert"));
-        Assert.Contains(units, unit => unit.Notes!.Contains("Ingen elbil"));
+        Assert.Equal(8, (await _database.Charging.GetChargersAsync()).Count);
     }
 
     // Board cases
@@ -494,7 +499,7 @@ public class DemoDatabaseSeederTests : IAsyncLifetime
     public async Task Seed_FailureInTheMiddle_RemovesWhatWasCreatedSoTheDemoIsNeverHalfDone()
     {
         var failing = new FailingTaskRepository(_database.TaskRepository, failOnAdd: 10);
-        var seeder = new DemoDatabaseSeeder(_database.Repository, _database.BoardCaseRepository, failing, _database.Clock);
+        var seeder = NewSeeder(failing);
 
         await Assert.ThrowsAsync<IOException>(seeder.SeedAsync);
 
@@ -507,7 +512,7 @@ public class DemoDatabaseSeederTests : IAsyncLifetime
     public async Task Seed_AfterAFailedAttempt_CanBeRunAgainAndCompletes()
     {
         var failing = new FailingTaskRepository(_database.TaskRepository, failOnAdd: 3);
-        var seeder = new DemoDatabaseSeeder(_database.Repository, _database.BoardCaseRepository, failing, _database.Clock);
+        var seeder = NewSeeder(failing);
         await Assert.ThrowsAsync<IOException>(seeder.SeedAsync);
 
         var result = await SeedAsync();
@@ -520,7 +525,7 @@ public class DemoDatabaseSeederTests : IAsyncLifetime
     public async Task Seed_FailureAndFailedCleanup_LeavesAPartlyCreatedDemoThatIsReportedAsIncomplete()
     {
         var failing = new FailingTaskRepository(_database.TaskRepository, failOnAdd: 5, failOnDelete: true);
-        var seeder = new DemoDatabaseSeeder(_database.Repository, _database.BoardCaseRepository, failing, _database.Clock);
+        var seeder = NewSeeder(failing);
         var exception = await Assert.ThrowsAsync<AggregateException>(seeder.SeedAsync);
 
         Assert.Contains("reset", exception.Message);

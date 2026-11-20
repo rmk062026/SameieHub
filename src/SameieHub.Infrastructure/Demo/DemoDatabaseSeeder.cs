@@ -8,6 +8,25 @@ public enum DemoSeedResult
     AlreadySeeded
 }
 
+/// <summary>What the database contains, seen from the demo command. Nothing is changed by looking.</summary>
+public enum DemoDatabaseState
+{
+    /// <summary>No data at all. The demo can be created.</summary>
+    Empty,
+
+    /// <summary>The whole demo, including the charging facility.</summary>
+    Complete,
+
+    /// <summary>An older demo: the Fiktivdalen housing units without any charging data.</summary>
+    OutdatedWithoutCharging,
+
+    /// <summary>The demo was only partly created, or parts of it were removed or changed afterwards.</summary>
+    PartlyCreated,
+
+    /// <summary>Other data. It is never touched.</summary>
+    OtherData
+}
+
 /// <summary>The database contains data that is not the Fiktivdalen demo data, so nothing is added.</summary>
 public class DemoDatabaseNotEmptyException : InvalidOperationException
 {
@@ -20,8 +39,21 @@ public class DemoDatabaseNotEmptyException : InvalidOperationException
 /// <summary>The demo data was only partly created (for example after a crash), so it cannot be used or completed.</summary>
 public class DemoDatabaseIncompleteException : InvalidOperationException
 {
-    public DemoDatabaseIncompleteException()
-        : base("The demo database is only partly created. Nothing was changed. Run the demo command 'reset' to delete it and create it again.")
+    public DemoDatabaseIncompleteException(Exception? innerException = null)
+        : base("The demo database is only partly created. Nothing was changed. Run the demo command 'reset' to delete it and create it again.", innerException)
+    {
+    }
+}
+
+/// <summary>
+/// The database holds an older demo without the charging facility. It is not updated automatically,
+/// because the user may have changed it. A deliberate reset creates the new demo.
+/// </summary>
+public class DemoDatabaseOutdatedException : InvalidOperationException
+{
+    public DemoDatabaseOutdatedException()
+        : base("The demo database is an older demo without the charging facility. Nothing was changed, and your changes are kept. "
+            + "To get the new demo, stop the demo and run the demo command 'reset'. This deletes the demo database and creates it again.")
     {
     }
 }
@@ -63,6 +95,10 @@ public class DemoDatabaseSeeder
     private readonly IHousingUnitRepository _housingUnitRepository;
     private readonly IBoardCaseRepository _boardCaseRepository;
     private readonly ITaskItemRepository _taskRepository;
+    private readonly IChargingFacilityRepository _facilityRepository;
+    private readonly IEvChargerRepository _chargerRepository;
+    private readonly IMeterRepository _meterRepository;
+    private readonly IMeterReadingRepository _readingRepository;
     private readonly TimeProvider _realClock;
 
     private readonly DemoClock _clock = new();
@@ -71,17 +107,26 @@ public class DemoDatabaseSeeder
     private HousingUnitService _housingUnits = null!;
     private BoardCaseService _boardCases = null!;
     private TaskItemService _tasks = null!;
+    private ChargingService _charging = null!;
     private DateOnly _today;
 
     public DemoDatabaseSeeder(
         IHousingUnitRepository housingUnitRepository,
         IBoardCaseRepository boardCaseRepository,
         ITaskItemRepository taskRepository,
+        IChargingFacilityRepository facilityRepository,
+        IEvChargerRepository chargerRepository,
+        IMeterRepository meterRepository,
+        IMeterReadingRepository readingRepository,
         TimeProvider timeProvider)
     {
         _housingUnitRepository = housingUnitRepository;
         _boardCaseRepository = boardCaseRepository;
         _taskRepository = taskRepository;
+        _facilityRepository = facilityRepository;
+        _chargerRepository = chargerRepository;
+        _meterRepository = meterRepository;
+        _readingRepository = readingRepository;
         _realClock = timeProvider;
     }
 
@@ -103,43 +148,89 @@ public class DemoDatabaseSeeder
     }
 
     /// <summary>
-    /// Adds the demo data to an empty database. A complete demo is left alone.
+    /// Adds the demo data to an empty database. A complete demo is left alone, and an older demo without
+    /// charging data is never updated automatically.
     /// </summary>
+    /// <exception cref="DemoDatabaseOutdatedException">An older demo without charging data. Nothing is changed.</exception>
     /// <exception cref="DemoDatabaseIncompleteException">The demo is only partly created. Nothing is changed.</exception>
     /// <exception cref="DemoDatabaseNotEmptyException">The database has other data. Nothing is changed.</exception>
     /// <exception cref="AggregateException">Creating the demo failed and the clean-up failed too.</exception>
     public async Task<DemoSeedResult> SeedAsync()
     {
+        var state = await InspectAsync();
+
+        switch (state)
+        {
+            case DemoDatabaseState.Empty:
+                await CreateDemoDataSafelyAsync();
+
+                return DemoSeedResult.Seeded;
+            case DemoDatabaseState.Complete:
+                return DemoSeedResult.AlreadySeeded;
+            case DemoDatabaseState.OutdatedWithoutCharging:
+                throw new DemoDatabaseOutdatedException();
+            case DemoDatabaseState.PartlyCreated:
+                throw new DemoDatabaseIncompleteException();
+            default:
+                throw new DemoDatabaseNotEmptyException();
+        }
+    }
+
+    /// <summary>
+    /// Tells what the database contains without changing anything. «Complete» means the data matches the demo
+    /// content, not just that the number of rows is right. Readings registered after the demo was created do not
+    /// matter, but a deleted or corrected demo reading does.
+    /// </summary>
+    public async Task<DemoDatabaseState> InspectAsync()
+    {
         var units = await _housingUnitRepository.GetAllAsync();
         var boardCases = await _boardCaseRepository.GetAllAsync();
         var tasks = await _taskRepository.GetAllAsync();
+        var facility = await _facilityRepository.GetAsync();
+        var chargers = await _chargerRepository.GetAllAsync();
+        var meters = await _meterRepository.GetAllAsync();
+        var readings = await _readingRepository.GetAllAsync();
+
+        var hasChargingData = facility != null || chargers.Count > 0 || meters.Count > 0 || readings.Count > 0;
 
         if (units.Count == 0 && boardCases.Count == 0 && tasks.Count == 0)
         {
-            await CreateDemoDataSafelyAsync();
-
-            return DemoSeedResult.Seeded;
+            return hasChargingData ? DemoDatabaseState.OtherData : DemoDatabaseState.Empty;
         }
 
-        if (IsCompleteDemo(units, boardCases, tasks))
+        if (IsCompleteBaseDemo(units, boardCases, tasks))
         {
-            return DemoSeedResult.AlreadySeeded;
+            if (!hasChargingData)
+            {
+                return DemoDatabaseState.OutdatedWithoutCharging;
+            }
+
+            return IsCompleteChargingDemo(units, facility, chargers, meters, readings)
+                ? DemoDatabaseState.Complete
+                : DemoDatabaseState.PartlyCreated;
         }
 
-        if (IsPartlyCreatedDemo(units, boardCases, tasks))
+        if (!hasChargingData && IsPartlyCreatedBaseDemo(units, boardCases, tasks))
         {
-            throw new DemoDatabaseIncompleteException();
+            return DemoDatabaseState.PartlyCreated;
         }
 
-        throw new DemoDatabaseNotEmptyException();
+        if (hasChargingData && units.All(unit => unit.Address.StartsWith(AddressPrefix, StringComparison.Ordinal)))
+        {
+            return DemoDatabaseState.PartlyCreated;
+        }
+
+        if (!hasChargingData && HasAllDemoUnits(units))
+        {
+            return DemoDatabaseState.OutdatedWithoutCharging;
+        }
+
+        return DemoDatabaseState.OtherData;
     }
 
-    private static bool IsCompleteDemo(
-        IReadOnlyList<HousingUnit> units,
-        IReadOnlyList<BoardCase> boardCases,
-        IReadOnlyList<TaskItem> tasks)
+    private static bool HasAllDemoUnits(IReadOnlyList<HousingUnit> units)
     {
-        if (units.Count != ExpectedHousingUnits || boardCases.Count != ExpectedBoardCases || tasks.Count != ExpectedTasks)
+        if (units.Count != ExpectedHousingUnits)
         {
             return false;
         }
@@ -152,6 +243,19 @@ public class DemoDatabaseSeeder
             }
         }
 
+        return true;
+    }
+
+    private static bool IsCompleteBaseDemo(
+        IReadOnlyList<HousingUnit> units,
+        IReadOnlyList<BoardCase> boardCases,
+        IReadOnlyList<TaskItem> tasks)
+    {
+        if (boardCases.Count != ExpectedBoardCases || tasks.Count != ExpectedTasks || !HasAllDemoUnits(units))
+        {
+            return false;
+        }
+
         return boardCases.Any(boardCase => boardCase.Title == LastBoardCaseTitle)
             && tasks.Any(task => task.Title == LastTaskTitle);
     }
@@ -160,7 +264,7 @@ public class DemoDatabaseSeeder
     /// The data is created units first, then board cases, then tasks. A partly created demo therefore has
     /// only demo units and looks like the first part of that sequence.
     /// </summary>
-    private static bool IsPartlyCreatedDemo(
+    private static bool IsPartlyCreatedBaseDemo(
         IReadOnlyList<HousingUnit> units,
         IReadOnlyList<BoardCase> boardCases,
         IReadOnlyList<TaskItem> tasks)
@@ -187,6 +291,70 @@ public class DemoDatabaseSeeder
         return onlyUnits || allUnitsAndSomeCases || allUnitsAndAllCasesAndSomeTasks;
     }
 
+    private static bool IsCompleteChargingDemo(
+        IReadOnlyList<HousingUnit> units,
+        ChargingFacility? facility,
+        IReadOnlyList<EvCharger> chargers,
+        IReadOnlyList<Meter> meters,
+        IReadOnlyList<MeterReading> readings)
+    {
+        if (facility == null || facility.Name != DemoChargingPlan.FacilityName)
+        {
+            return false;
+        }
+
+        var main = meters.SingleOrDefault(meter => meter.IsMain);
+        if (main == null || chargers.Count != DemoChargingPlan.Chargers.Length || meters.Count != chargers.Count + 1)
+        {
+            return false;
+        }
+
+        if (!ReadingsStartWith(readings, main, DemoChargingPlan.MainValues()))
+        {
+            return false;
+        }
+
+        foreach (var plan in DemoChargingPlan.Chargers)
+        {
+            var unit = units.FirstOrDefault(existing => existing.Address == AddressPrefix + plan.UnitNumber);
+            var charger = unit == null ? null : chargers.FirstOrDefault(existing => existing.HousingUnitId == unit.Id);
+            var subMeter = charger == null ? null : meters.FirstOrDefault(meter => meter.EvChargerId == charger.Id);
+
+            if (charger == null
+                || subMeter == null
+                || charger.ChargerNumber != DemoChargingPlan.ChargerNumber(plan.UnitNumber)
+                || subMeter.CabinetNumber != plan.Cabinet
+                || !ReadingsStartWith(readings, subMeter, DemoChargingPlan.SubMeterValues(plan)))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// The values of the meter, oldest first, start with the planned demo values. Readings registered later come after them.
+    /// </summary>
+    private static bool ReadingsStartWith(IReadOnlyList<MeterReading> readings, Meter meter, List<decimal> plannedValues)
+    {
+        var meterReadings = MeterHistory.Sort(readings.Where(reading => reading.MeterId == meter.Id));
+        if (meterReadings.Count < plannedValues.Count)
+        {
+            return false;
+        }
+
+        for (var index = 0; index < plannedValues.Count; index++)
+        {
+            if (meterReadings[index].Kwh != plannedValues[index])
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     /// <summary>
     /// If creating fails halfway, everything that was created is removed again, so the database is empty
     /// and the command can be run again. The database was empty before the creation started.
@@ -195,7 +363,7 @@ public class DemoDatabaseSeeder
     {
         try
         {
-            await CreateDemoDataAsync();
+            await CreateBaseDataAsync();
         }
         catch (Exception creationError)
         {
@@ -212,6 +380,17 @@ public class DemoDatabaseSeeder
             }
 
             throw;
+        }
+
+        // Chargers, meters and readings cannot be deleted through the repositories, on purpose. If creating them
+        // fails, the demo is reported as partly created, and the demo command 'reset' deletes the demo database file.
+        try
+        {
+            await CreateChargingDataAsync();
+        }
+        catch (Exception chargingError)
+        {
+            throw new DemoDatabaseIncompleteException(chargingError);
         }
     }
 
@@ -233,7 +412,7 @@ public class DemoDatabaseSeeder
         }
     }
 
-    private async Task CreateDemoDataAsync()
+    private async Task CreateBaseDataAsync()
     {
         var now = _realClock.GetUtcNow();
 
@@ -242,33 +421,34 @@ public class DemoDatabaseSeeder
         _housingUnits = new HousingUnitService(_housingUnitRepository);
         _boardCases = new BoardCaseService(_boardCaseRepository, _housingUnitRepository, _clock);
         _tasks = new TaskItemService(_taskRepository, _housingUnitRepository, _boardCaseRepository, _clock);
+        _charging = new ChargingService(_facilityRepository, _chargerRepository, _meterRepository, _readingRepository, _housingUnitRepository, _clock);
 
         await CreateHousingUnitsAsync();
         await CreateBoardCasesAsync();
         await CreateTasksAsync();
     }
 
-    // Housing units: four duplexes with two sections each. Carport and charger are described in the notes,
-    // because the housing unit has no fields for them yet.
+    // Housing units: four duplexes with two sections each. The carport is described in the notes. The chargers
+    // and their meters are created in CreateChargingDataAsync.
 
     private async Task CreateHousingUnitsAsync()
     {
         await AddUnitAsync("10A", 1, 118.5m, "Ola Eksempel", "+47 000 00 101", "ola.eksempel@example.com", "Kari Eksempel", null, "kari.eksempel@example.com",
-            "Carport: én plass, nær inngangen. Elbillader: installert og i bruk (husstanden har elbil). Fiktive demodata.");
+            "Carport: én plass, nær inngangen. Fiktive demodata.");
         await AddUnitAsync("10B", 2, 112m, "Per Testesen", "+47 000 00 102", "per.testesen@example.com", null, null, null,
-            "Carport: én plass. Elbillader: installert. Ingen elbil registrert i husstanden. Fiktive demodata.");
+            "Carport: én plass. Fiktive demodata.");
         await AddUnitAsync("12A", 3, 127m, "Lise Prøve", null, "lise.prove@example.com", "Tor Prøve", null, null,
-            "Carport: én plass med utebod. Elbillader: installert og i bruk. Fiktive demodata.");
+            "Carport: én plass med utebod. Fiktive demodata.");
         await AddUnitAsync("12B", 4, 95m, "Nils Demo", null, null, null, null, null,
-            "Carport: én plass. Elbillader: installert, men ikke i bruk (eier vurderer elbil). Fiktive demodata.");
+            "Carport: én plass. Fiktive demodata.");
         await AddUnitAsync("14A", 5, 139m, "Anna Demo", "+47 000 00 105", null, "Jon Demo", "+47 000 00 205", null,
-            "Carport: én plass. Elbillader: installert, men midlertidig deaktivert i påvente av service. Fiktive demodata.");
+            "Carport: én plass. Fiktive demodata.");
         await AddUnitAsync("14B", 6, 105m, "Eva Fiktiv", null, "eva.fiktiv@example.com", null, null, null,
-            "Carport: én plass. Elbillader: installert. Ingen elbil registrert i husstanden. Fiktive demodata.");
+            "Carport: én plass. Fiktive demodata.");
         await AddUnitAsync("16A", 7, 145m, "Mari Fiktiv", "+47 000 00 107", "mari.fiktiv@example.com", "Svein Fiktiv", "+47 000 00 207", "svein.fiktiv@example.com",
-            "Carport: én plass, største i sameiet. Elbillader: installert og i bruk (to elbiler i husstanden). Fiktive demodata.");
+            "Carport: én plass, største i sameiet. Fiktive demodata.");
         await AddUnitAsync("16B", 8, 101.5m, "Hans Fiktiv", "+47 000 00 108", null, null, null, null,
-            "Carport: én plass. Elbillader: installert og i bruk. Fiktive demodata.");
+            "Carport: én plass. Fiktive demodata.");
     }
 
     private async Task AddUnitAsync(
@@ -302,6 +482,106 @@ public class DemoDatabaseSeeder
         });
 
         _unitIds[number] = unit.Id;
+    }
+
+    // Charging facility: one main meter, eight chargers with one sub meter each, and five reading rounds.
+
+    private async Task CreateChargingDataAsync()
+    {
+        _clock.SetDaysAgo(119);
+        await _charging.SetUpFacilityAsync(DemoChargingPlan.FacilityName);
+
+        _clock.SetDaysAgo(118);
+        var subMeterIds = new Dictionary<string, int>();
+        foreach (var plan in DemoChargingPlan.Chargers)
+        {
+            var details = new EvChargerDetails
+            {
+                ChargerNumber = DemoChargingPlan.ChargerNumber(plan.UnitNumber),
+                Manufacturer = DemoChargingPlan.Manufacturer,
+                Model = plan.Model,
+                Status = plan.Status,
+                HasElectricVehicle = plan.HasElectricVehicle,
+                Notes = "Fiktive demodata."
+            };
+
+            var charger = await _charging.RegisterChargerAsync(_unitIds[plan.UnitNumber], details, plan.Cabinet);
+            subMeterIds[plan.UnitNumber] = (await _charging.GetSubMeterAsync(charger.Id))!.Id;
+        }
+
+        var mainValues = DemoChargingPlan.MainValues();
+        for (var round = 0; round < DemoChargingPlan.RoundDaysAgo.Length; round++)
+        {
+            await RegisterRoundAsync(round, mainValues[round], subMeterIds);
+        }
+    }
+
+    private async Task RegisterRoundAsync(int round, decimal mainKwh, Dictionary<string, int> subMeterIds)
+    {
+        var readAt = ReadingTime(DemoChargingPlan.RoundDaysAgo[round]);
+        var isIncompleteRound = round == DemoChargingPlan.IncompleteRoundIndex;
+        var subValues = new Dictionary<int, decimal?>();
+        decimal? completedLaterKwh = null;
+        var completedLaterMeterId = 0;
+
+        foreach (var plan in DemoChargingPlan.Chargers)
+        {
+            var kwh = AccumulatedKwh(plan, round);
+            if (isIncompleteRound && plan.UnitNumber == DemoChargingPlan.NotReadUnitNumber)
+            {
+                continue;
+            }
+
+            if (isIncompleteRound && plan.UnitNumber == DemoChargingPlan.CompletedLaterUnitNumber)
+            {
+                completedLaterKwh = kwh;
+                completedLaterMeterId = subMeterIds[plan.UnitNumber];
+                continue;
+            }
+
+            subValues[subMeterIds[plan.UnitNumber]] = kwh;
+        }
+
+        _clock.SetUtc(readAt.AddMinutes(30));
+        await _charging.RegisterReadingSetAsync(new MeterReadingSetDetails { ReadAt = readAt, MainMeterKwh = mainKwh, SubMeterKwh = subValues });
+
+        if (completedLaterKwh != null)
+        {
+            // The missing reading was found and registered the next day, with the time it was read.
+            _clock.SetUtc(readAt.AddDays(1));
+            await _charging.RegisterReadingSetAsync(new MeterReadingSetDetails
+            {
+                ReadAt = readAt,
+                SubMeterKwh = new Dictionary<int, decimal?> { [completedLaterMeterId] = completedLaterKwh }
+            });
+        }
+
+        if (round == DemoChargingPlan.DisabledAfterRoundIndex)
+        {
+            _clock.SetDaysAgo(DemoChargingPlan.RoundDaysAgo[round] - 3);
+            var charger = await _charging.GetChargerForHousingUnitAsync(_unitIds[DemoChargingPlan.DisabledUnitNumber]);
+            await _charging.ChangeChargerStatusAsync(charger!.Id, ChargerStatus.TemporarilyDisabled);
+        }
+    }
+
+    private static decimal AccumulatedKwh(DemoChargerPlan plan, int round)
+    {
+        var total = plan.StartKwh;
+        for (var period = 0; period < round; period++)
+        {
+            total += plan.PeriodKwh[period];
+        }
+
+        return total;
+    }
+
+    /// <summary>08:00 Norwegian time, the given number of days before the demo is created, as UTC.</summary>
+    private DateTime ReadingTime(int daysAgo)
+    {
+        var local = _today.AddDays(-daysAgo).ToDateTime(new TimeOnly(8, 0), DateTimeKind.Unspecified);
+        NorwegianTime.TryConvertToUtc(local, null, out var utc, out _);
+
+        return utc;
     }
 
     // Board cases. Dates are relative to today, so the demo always has past and upcoming meetings.
@@ -521,6 +801,11 @@ public class DemoDatabaseSeeder
         public void SetDaysAgo(int days)
         {
             _current = _realNow.AddDays(-days);
+        }
+
+        public void SetUtc(DateTime utc)
+        {
+            _current = new DateTimeOffset(utc, TimeSpan.Zero);
         }
 
         public override DateTimeOffset GetUtcNow()
