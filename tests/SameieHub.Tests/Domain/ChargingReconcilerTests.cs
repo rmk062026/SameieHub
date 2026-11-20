@@ -52,9 +52,15 @@ public class ChargingReconcilerTests
         Read(meter, End, atEnd);
     }
 
+    /// <summary>
+    /// These tests check the calculations, so the facility is the number of sub meters the test sets up. The rule that
+    /// a real facility needs eight sub meters is tested in <see cref="ChargingExpectedSubMetersTests"/>.
+    /// </summary>
     private ChargingReconciliation Reconcile(DateTime? from = null, DateTime? to = null, TimeSpan? tolerance = null)
     {
-        return ChargingReconciler.Reconcile(_meters, _chargers, _readings, from ?? Start, to ?? End, tolerance ?? Tolerance);
+        var configuredSubMeters = _meters.Count(meter => !meter.IsMain);
+
+        return ChargingReconciler.Reconcile(_meters, _chargers, _readings, from ?? Start, to ?? End, tolerance ?? Tolerance, configuredSubMeters);
     }
 
     private void FillEightSubMeters(decimal kwhEach, decimal startValue = 100m)
@@ -243,7 +249,7 @@ public class ChargingReconcilerTests
     {
         ReadBoth(Main, 5000m, 5100m);
 
-        var result = Reconcile();
+        var result = ChargingReconciler.Reconcile(_meters, _chargers, _readings, Start, End, Tolerance);
 
         Assert.False(result.IsComplete);
         Assert.Null(result.Difference);

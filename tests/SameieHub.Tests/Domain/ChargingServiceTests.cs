@@ -604,11 +604,13 @@ public class ChargingServiceTests
 
         var result = await _service.ReconcileAsync(from, to);
 
-        Assert.True(result.IsComplete);
+        // Only two of the eight sub meters are set up, so the reconciliation is incomplete and has no difference.
+        Assert.False(result.IsComplete);
         Assert.Equal(300m, result.MainKwh);
         Assert.Equal(240m, result.SubMeterKwh);
-        Assert.Equal(60m, result.Difference);
-        Assert.Equal(20m, result.DifferencePercent);
+        Assert.Null(result.Difference);
+        Assert.Equal(2, result.ConfiguredSubMeterCount);
+        Assert.Equal(6, result.MissingSubMeterCount);
         Assert.Equal(MeterHistory.DefaultTolerance, result.Tolerance);
     }
 

@@ -82,6 +82,24 @@ public class MeterReading
         return new MeterReadingDetails { ReadAt = ReadAt, Kwh = Kwh, Notes = Notes };
     }
 
+    /// <summary>
+    /// The rules for a meter value: from 0 to <see cref="MaxKwh"/> and at most <see cref="KwhDecimals"/> decimals.
+    /// Forms can call this to show the message at the right field, so the rule exists in one place.
+    /// </summary>
+    /// <exception cref="ArgumentException">The value is not allowed (ParamName "Kwh").</exception>
+    public static void CheckKwh(decimal kwh)
+    {
+        if (kwh < 0 || kwh > MaxKwh)
+        {
+            throw new ArgumentException($"Kwh must be between 0 and {MaxKwh}.", nameof(MeterReadingDetails.Kwh));
+        }
+
+        if (decimal.Round(kwh, KwhDecimals) != kwh)
+        {
+            throw new ArgumentException($"Kwh can have at most {KwhDecimals} decimals.", nameof(MeterReadingDetails.Kwh));
+        }
+    }
+
     private void Apply(MeterReadingDetails details)
     {
         var notes = TextRules.NormalizeOptional(details.Notes, MaxNotesLength, nameof(details.Notes));
@@ -96,15 +114,7 @@ public class MeterReading
             throw new ArgumentException($"ReadAt cannot be before {MinReadAt:yyyy-MM-dd}.", nameof(details.ReadAt));
         }
 
-        if (details.Kwh < 0 || details.Kwh > MaxKwh)
-        {
-            throw new ArgumentException($"Kwh must be between 0 and {MaxKwh}.", nameof(details.Kwh));
-        }
-
-        if (decimal.Round(details.Kwh, KwhDecimals) != details.Kwh)
-        {
-            throw new ArgumentException($"Kwh can have at most {KwhDecimals} decimals.", nameof(details.Kwh));
-        }
+        CheckKwh(details.Kwh);
 
         ReadAt = details.ReadAt;
         Kwh = details.Kwh;

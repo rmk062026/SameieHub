@@ -34,8 +34,26 @@ public record ChargingReconciliation
     /// <summary>The meters (main and sub) that have no documented consumption in the period.</summary>
     public IReadOnlyList<ReconciliationLine> MissingMeters { get; init; } = [];
 
-    /// <summary>True when the main meter and every sub meter are documented in the period.</summary>
+    /// <summary>
+    /// True when the main meter and all expected sub meters are set up and documented in the period. It is never true
+    /// just because the configured sub meters happen to have readings: fewer sub meters than expected is incomplete.
+    /// </summary>
     public bool IsComplete { get; init; }
+
+    /// <summary>How many sub meters the facility should have (eight).</summary>
+    public int ExpectedSubMeterCount { get; init; }
+
+    /// <summary>
+    /// How many sub meters are set up with their own charger. Two sub meters for the same charger count as one, and a
+    /// sub meter whose charger is unknown does not count.
+    /// </summary>
+    public int ConfiguredSubMeterCount { get; init; }
+
+    /// <summary>True when exactly the expected number of sub meters is set up, each with its own charger.</summary>
+    public bool HasAllExpectedSubMeters { get; init; }
+
+    /// <summary>How many expected sub meters are not set up at all (they are not listed in <see cref="MissingMeters"/>).</summary>
+    public int MissingSubMeterCount => Math.Max(0, ExpectedSubMeterCount - ConfiguredSubMeterCount);
 
     /// <summary>
     /// True when at least one documented meter was read at a time other than exactly the start or end of the period.
@@ -53,7 +71,8 @@ public record ChargingReconciliation
 public static class ChargingReconciler
 {
     /// <summary>
-    /// Difference = main meter consumption − sum of the sub meter consumption.
+    /// Difference = main meter consumption − sum of the sub meter consumption. The result is only complete when
+    /// <paramref name="expectedSubMeters"/> sub meters (by default the eight of the facility) are set up and documented.
     /// Percent = difference / main meter consumption × 100, when the main meter consumption is not zero.
     /// Every meter uses the reading nearest to the start and the end of the period, within the tolerance.
     /// </summary>
@@ -63,7 +82,8 @@ public static class ChargingReconciler
         IEnumerable<MeterReading> readings,
         DateTime from,
         DateTime to,
-        TimeSpan tolerance)
+        TimeSpan tolerance,
+        int expectedSubMeters = ChargingFacility.ExpectedSubMeterCount)
     {
         var chargerById = chargers.ToDictionary(charger => charger.Id);
         var readingList = readings.ToList();
@@ -92,8 +112,21 @@ public static class ChargingReconciler
             subMeterKwh += line.Consumption.Kwh ?? 0m;
         }
 
+        // One configured sub meter per distinct charger; anything else (a shared or unknown charger) is not counted.
+        var configuredChargers = new HashSet<int>();
+        foreach (var line in subMeters)
+        {
+            if (line.Charger != null)
+            {
+                configuredChargers.Add(line.Charger.Id);
+            }
+        }
+
+        var configuredSubMeters = configuredChargers.Count;
+        var hasAllExpectedSubMeters = configuredSubMeters == expectedSubMeters && subMeters.Count == expectedSubMeters;
+
         var mainKwh = main?.Consumption.Kwh;
-        var isComplete = main != null && subMeters.Count > 0 && missing.Count == 0;
+        var isComplete = main != null && hasAllExpectedSubMeters && missing.Count == 0;
         decimal? difference = isComplete ? mainKwh - subMeterKwh : null;
         decimal? percent = isComplete && mainKwh != 0m ? difference / mainKwh * 100m : null;
 
@@ -110,6 +143,9 @@ public static class ChargingReconciler
             SubMeterKwh = subMeterKwh,
             MissingMeters = missing,
             IsComplete = isComplete,
+            ExpectedSubMeterCount = expectedSubMeters,
+            ConfiguredSubMeterCount = configuredSubMeters,
+            HasAllExpectedSubMeters = hasAllExpectedSubMeters,
             HasApproximateReadings = hasApproximateReadings,
             Difference = difference,
             DifferencePercent = percent

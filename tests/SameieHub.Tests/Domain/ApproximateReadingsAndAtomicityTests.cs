@@ -90,7 +90,7 @@ public class ApproximateReadingsAndAtomicityTests
             Reading(End, 5100m, meterId: 1)
         };
 
-        var result = ChargingReconciler.Reconcile(meters, [], readings, Start, End, Tolerance);
+        var result = ChargingReconciler.Reconcile(meters, [], readings, Start, End, Tolerance, expectedSubMeters: 0);
 
         Assert.True(result.Main!.Consumption.IsApproximate);
         Assert.True(result.HasApproximateReadings);
@@ -113,7 +113,7 @@ public class ApproximateReadingsAndAtomicityTests
             Reading(Start.AddHours(3), 10m, meterId: 2)
         };
 
-        var result = ChargingReconciler.Reconcile(meters, [charger], readings, Start, End, Tolerance);
+        var result = ChargingReconciler.Reconcile(meters, [charger], readings, Start, End, Tolerance, expectedSubMeters: 1);
 
         Assert.False(result.IsComplete);
         Assert.Null(result.Difference);
@@ -137,7 +137,7 @@ public class ApproximateReadingsAndAtomicityTests
             Reading(End.AddHours(subMeterOffsetHours), 200m, meterId: 2)
         };
 
-        return ChargingReconciler.Reconcile(meters, [charger], readings, Start, End, Tolerance);
+        return ChargingReconciler.Reconcile(meters, [charger], readings, Start, End, Tolerance, expectedSubMeters: 1);
     }
 
     private MeterReading Reading(DateTime readAt, decimal kwh, int meterId)

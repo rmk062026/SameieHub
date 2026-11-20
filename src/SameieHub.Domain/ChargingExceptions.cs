@@ -34,6 +34,24 @@ public class MeterReadingSequenceException : InvalidOperationException
         NeighbourKwh = neighbour.Kwh;
     }
 
+    private MeterReadingSequenceException(MeterReadingSequenceException original, int meterId)
+        : base(original.Message)
+    {
+        IsLowerThanEarlier = original.IsLowerThanEarlier;
+        NeighbourReadAt = original.NeighbourReadAt;
+        NeighbourKwh = original.NeighbourKwh;
+        MeterId = meterId;
+    }
+
+    /// <summary>The meter the reading belongs to, when known. A reading set tells which of its meters has the problem.</summary>
+    public int? MeterId { get; }
+
+    /// <summary>The same error, tagged with the meter it concerns.</summary>
+    public MeterReadingSequenceException ForMeter(int meterId)
+    {
+        return new MeterReadingSequenceException(this, meterId);
+    }
+
     /// <summary>True when the value is lower than an earlier reading; false when it is higher than a later one.</summary>
     public bool IsLowerThanEarlier { get; }
 

@@ -10,6 +10,12 @@ public class ChargingFacility
     public const int MaxNameLength = 100;
     public const int MaxNotesLength = 2000;
 
+    /// <summary>
+    /// The facility has one charger with its own sub meter for each of eight housing units. A reconciliation is
+    /// only complete when all eight sub meters are set up and documented.
+    /// </summary>
+    public const int ExpectedSubMeterCount = 8;
+
     public int Id { get; private set; }
 
     public string Name { get; private set; } = string.Empty;

@@ -538,19 +538,23 @@ public class ChargingPersistenceTests : IAsyncLifetime
     [Fact]
     public async Task ReadingSet_ReadingsAtOtherTimesThanThePeriodBoundary_AreMarkedApproximateAfterRestart()
     {
-        var setup = await ChargingSetup.CreateAsync(_database, chargerCount: 1);
-        await _database.Charging.RegisterReadingSetAsync(setup.Set(60, 5000m, 100m));
-        await _database.Charging.RegisterReadingAsync(setup.MainMeter.Id, new MeterReadingDetails { ReadAt = At(30), Kwh = 5300m });
-        await _database.Charging.RegisterReadingAsync(setup.SubMeters[0].Id, new MeterReadingDetails { ReadAt = At(30, hour: 14), Kwh = 250m });
+        var setup = await ChargingSetup.CreateAsync(_database);
+        await _database.Charging.RegisterReadingSetAsync(setup.Set(60, 5000m, ChargingSetup.Same(100m)));
+        await _database.Charging.RegisterReadingAsync(setup.MainMeter.Id, new MeterReadingDetails { ReadAt = At(30), Kwh = 5800m });
+        foreach (var meter in setup.SubMeters)
+        {
+            await _database.Charging.RegisterReadingAsync(meter.Id, new MeterReadingDetails { ReadAt = At(30, hour: 14), Kwh = 197m });
+        }
+
         await _database.RestartAsync();
 
         var result = (await _database.Charging.ReconcileLatestPeriodAsync())!;
 
         Assert.True(result.IsComplete);
         Assert.True(result.HasApproximateReadings);
-        Assert.True(result.SubMeters[0].Consumption.IsApproximate);
+        Assert.All(result.SubMeters, line => Assert.True(line.Consumption.IsApproximate));
         Assert.False(result.Main!.Consumption.IsApproximate);
-        Assert.Equal(150m, result.SubMeterKwh);
+        Assert.Equal(776m, result.SubMeterKwh);
     }
 
     [Fact]

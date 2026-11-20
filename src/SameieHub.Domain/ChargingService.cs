@@ -159,6 +159,12 @@ public class ChargingService
 
     // Readings
 
+    /// <summary>All readings of all meters, in no particular order. Used by overviews that look at every meter.</summary>
+    public Task<IReadOnlyList<MeterReading>> GetAllReadingsAsync()
+    {
+        return _readingRepository.GetAllAsync();
+    }
+
     /// <summary>The readings of a meter, in time order.</summary>
     public async Task<IReadOnlyList<MeterReading>> GetReadingsAsync(int meterId)
     {
@@ -226,7 +232,7 @@ public class ChargingService
             {
                 var reading = CreateReading(meter, details, kwh, now);
                 EnsureNotInTheFuture(reading.ReadAt);
-                MeterHistory.EnsureFits(readingsBefore[meter.Id], reading.ReadAt, reading.Kwh);
+                EnsureFitsForMeter(meter, readingsBefore[meter.Id], reading);
                 newReadings[meter.Id] = reading;
             }
         }
@@ -382,6 +388,19 @@ public class ChargingService
         }
 
         return new ReadingSetResult { ReadAt = readAt, Lines = lines, MetersNotRead = notRead, Reconciliation = reconciliation };
+    }
+
+    private static void EnsureFitsForMeter(Meter meter, IReadOnlyList<MeterReading> existing, MeterReading reading)
+    {
+        try
+        {
+            MeterHistory.EnsureFits(existing, reading.ReadAt, reading.Kwh);
+        }
+        catch (MeterReadingSequenceException exception)
+        {
+            // The form can then show the message at the field of this meter.
+            throw exception.ForMeter(meter.Id);
+        }
     }
 
     private void EnsureNotInTheFuture(DateTime readAt)
