@@ -37,6 +37,39 @@ public class SqliteConstraintErrorsTests
         Assert.False(SqliteConstraintErrors.IsForeignKeyViolation(exception));
     }
 
+    [Theory]
+    [InlineData(2067)]
+    [InlineData(1555)]
+    public void IsUniqueViolation_UniqueAndPrimaryKeyCodesThatNameTheIndex_ReturnsTrue(int extendedCode)
+    {
+        var exception = Wrap(new SqliteException("UNIQUE constraint failed: EvChargers.HousingUnitId", SqliteConstraint, extendedCode));
+
+        Assert.True(SqliteConstraintErrors.IsUniqueViolation(exception, "EvChargers.HousingUnitId"));
+    }
+
+    [Fact]
+    public void IsUniqueViolation_AnotherIndexOrAnotherCode_ReturnsFalse()
+    {
+        var otherIndex = Wrap(new SqliteException("UNIQUE constraint failed: Meters.EvChargerId", SqliteConstraint, 2067));
+        var foreignKey = Wrap(new SqliteException("FOREIGN KEY constraint failed.", SqliteConstraint, 787));
+
+        Assert.False(SqliteConstraintErrors.IsUniqueViolation(otherIndex, "EvChargers.HousingUnitId"));
+        Assert.False(SqliteConstraintErrors.IsUniqueViolation(foreignKey, "EvChargers.HousingUnitId"));
+        Assert.False(SqliteConstraintErrors.IsUniqueViolation(Wrap(new InvalidOperationException("Other")), "EvChargers.HousingUnitId"));
+    }
+
+    [Fact]
+    public void IsCheckViolation_CheckCodeThatNamesTheConstraint_ReturnsTrueOtherwiseFalse()
+    {
+        var check = Wrap(new SqliteException("CHECK constraint failed: CK_ChargingFacilities_OneFacility", SqliteConstraint, 275));
+        var otherCheck = Wrap(new SqliteException("CHECK constraint failed: CK_Other", SqliteConstraint, 275));
+        var unique = Wrap(new SqliteException("UNIQUE constraint failed: X.Y", SqliteConstraint, 2067));
+
+        Assert.True(SqliteConstraintErrors.IsCheckViolation(check, "CK_ChargingFacilities_OneFacility"));
+        Assert.False(SqliteConstraintErrors.IsCheckViolation(otherCheck, "CK_ChargingFacilities_OneFacility"));
+        Assert.False(SqliteConstraintErrors.IsCheckViolation(unique, "CK_ChargingFacilities_OneFacility"));
+    }
+
     [Fact]
     public void IsForeignKeyViolation_OtherSqliteError_ReturnsFalse()
     {

@@ -41,6 +41,16 @@ public sealed class SqliteTestDatabase : IAsyncDisposable
 
     public TaskItemService Tasks => _scope.ServiceProvider.GetRequiredService<TaskItemService>();
 
+    public ChargingService Charging => _scope.ServiceProvider.GetRequiredService<ChargingService>();
+
+    public IMeterReadingRepository ReadingRepository => _scope.ServiceProvider.GetRequiredService<IMeterReadingRepository>();
+
+    public IEvChargerRepository ChargerRepository => _scope.ServiceProvider.GetRequiredService<IEvChargerRepository>();
+
+    public IMeterRepository MeterRepository => _scope.ServiceProvider.GetRequiredService<IMeterRepository>();
+
+    public IChargingFacilityRepository FacilityRepository => _scope.ServiceProvider.GetRequiredService<IChargingFacilityRepository>();
+
     public ITaskItemRepository TaskRepository => _scope.ServiceProvider.GetRequiredService<ITaskItemRepository>();
 
     public static async Task<SqliteTestDatabase> CreateAsync()
@@ -142,6 +152,7 @@ public sealed class SqliteTestDatabase : IAsyncDisposable
         services.AddScoped<HousingUnitService>();
         services.AddScoped<BoardCaseService>();
         services.AddScoped<TaskItemService>();
+        services.AddScoped<ChargingService>();
         services.AddSingleton<TimeProvider>(Clock);
 
         return services.BuildServiceProvider(validateScopes: true);
