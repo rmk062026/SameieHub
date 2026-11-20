@@ -452,6 +452,56 @@ Bare **endrede** koblinger kontrolleres (`details.HousingUnitId != task.HousingU
 - **Migrering:** kun ny tabell, to fremmednøkler og to indekser; eksisterende migreringer er uendret. Testet fra skjemaet etter M2E (`AddBoardCaseDecisionDate`) med data, og fra tom database (`TaskItemMigrationTests`).
 - **Gjenstår:** dashboard (M4), backup (M5).
 
+## Elbillading: domenemodell (M4E-A)
+
+Bare domenelaget og testene er laget (M4E-A). Database (M4E-B), brukergrensesnitt (M4E-C) og demodata (M4E-D) er ikke laget, og demoen bruker fortsatt merknader for ladere.
+
+**Det fysiske anlegget:** én felles hovedmåler, to sikringsskap med fire undermålere («minusmålere») i hvert, altså åtte undermålere, én til hver boenhets elbillader. Undermålerne er ikke innebygd i ladeboksene. Alle målerstander registreres for hånd. Ingen fjernstyring, API-integrasjon eller automatisk avlesning.
+
+```mermaid
+graph TD
+    Facility["ChargingFacility<br/>(ett ladeanlegg)"] --> Main["Meter: Main<br/>(hovedmåler, ingen lader)"]
+    Facility --> Charger["EvCharger (8)<br/>én per boenhet"]
+    Charger --> Sub["Meter: Sub (8)<br/>CabinetNumber 1 eller 2"]
+    Unit["HousingUnit"] --- Charger
+    Main --> Readings["MeterReading<br/>ReadAt, Kwh, RegisteredAt"]
+    Sub --> Readings
+```
+
+- **Klasser (Domain):** `ChargingFacility`, `EvCharger` (boenhet, nummer, produsent, modell, `ChargerStatus`, har husstanden elbil, merknader), `Meter` (`MeterKind` Main/Sub, `EvChargerId` for undermåler, `CabinetNumber` 1 eller 2) og `MeterReading` (`ReadAt` i UTC, `Kwh` som `decimal` med inntil tre desimaler, `RegisteredAt`, `UpdatedAt`, merknader). Fire repository-grensesnitt i `ChargingRepositories.cs`. `ChargingService` samler oppsett, registrering og korrigering.
+- **Status er adskilt fra boenheten og fra målerne.** `ChargerStatus` (I bruk, Ikke i bruk, Midlertidig deaktivert) er administrativ. Den hindrer verken avlesning eller registrering av undermåleren, og laderen beholder måleren og all historikk. En inaktiv boenhet påvirker ikke laderen.
+- **Én lader per boenhet:** kontrolleres i tjenesten (`EvChargerAlreadyExistsException`); databasen får en unik begrensning i M4E-B. Registrering av en lader oppretter også undermåleren.
+- **Felles målerlogikk:** `MeterHistory` har reglene og beregningene for alle målere, uavhengig av om det er hoved- eller undermåler.
+
+### Regler (forslag, lagt inn i koden og testene)
+
+| Tema | Regel |
+|---|---|
+| Målerstand | Akkumulert verdi i kWh, 0–9 999 999,999, maks tre desimaler (flere avvises, ikke rundes). Aldri negativ. Målerstander summeres aldri som forbruk. |
+| Første avlesning | Startverdi uten forbruk. |
+| Forbruk | Forbruk = målerstand − forrige avlesning av samme måler i tid. Beregnes alltid, lagres aldri. Samme verdi som forrige gir 0 kWh (reelt nullforbruk). |
+| Kronologi | En avlesning kan ikke være lavere enn en tidligere eller høyere enn en senere avlesning av samme måler (`MeterReadingSequenceException`, som oppgir naboavlesningen). Etterregistrering mellom to avlesninger er tillatt hvis verdien passer. |
+| Sammenfallende tidspunkt | To avlesninger av samme måler kan ikke ha nøyaktig samme tidspunkt (dato og klokkeslett). Samme dag med ulikt klokkeslett er greit. Ulike målere kan ha samme tidspunkt. Tidspunktet kan ikke ligge frem i tid. |
+| Registrering av alle målere samlet | `RegisterReadingSetAsync`: ett felles tidspunkt, hovedmåler først og så undermålerne. Settet lagres ikke som egen post; avlesningene deler bare `ReadAt`. |
+| Delvis utfylt | Tomt felt betyr «ikke avlest», aldri null kWh. Null må skrives som 0. Minst én verdi kreves. Alt kontrolleres først; er én verdi ugyldig, lagres ingenting. Et sett kan fullføres senere ved å registrere de manglende målerne med samme tidspunkt. |
+| Korrigering | `CorrectReadingAsync` endrer dato, verdi og merknad etter de samme reglene som ved registrering (uten selve avlesningen som sammenligningsgrunnlag). Ved feil endres ingenting. `RegisteredAt` beholdes, `UpdatedAt` settes. Forbruk og avstemming beregnes på nytt neste gang. Feilaktige avlesninger kan også slettes; de øvrige følger fortsatt kronologien. |
+| Avstemming | Differanse = hovedmålerforbruk − sum undermålerforbruk. Prosent = differanse / hovedmålerforbruk × 100 når hovedmålerforbruket ikke er 0. Positiv differanse betyr at hovedmåleren målte mer enn undermålerne, negativ at undermålerne tilsammen viser mer. |
+| Sammenlignbar periode | Hver måler bruker avlesningen nærmest start og slutt av perioden, men høyst 24 timer unna (`MeterHistory.DefaultTolerance`). Ved lik avstand velges den tidligste. Perioden er normalt mellom to hovedmåleravlesninger (`ChargingReconciler.MainMeterPeriods`). |
+| Ufullstendig | Mangler hovedmåleren eller en undermåler avlesning nær start eller slutt (eller har ingen avlesninger), er avstemmingen ufullstendig. Da finnes ingen differanse eller prosent, og de manglende målerne listes med årsak (`MissingStart`, `MissingEnd`, `MissingBoth`, `NoReadings`, `SameReading`). Manglende forbruk estimeres aldri, og en deaktivert lader antas ikke å ha brukt null. |
+
+### Beslutninger (M4E-A)
+
+| Beslutning | Alternativ | Begrunnelse |
+|---|---|---|
+| Ett `Meter`-objekt for både hoved- og undermåler | Egne klasser | Felles regler og beregninger i `MeterHistory`; ingen duplisering. |
+| Avlesningstidspunkt som UTC `DateTime` (dato og klokkeslett) | Bare dato | Kravet er dato og klokkeslett, og to avlesninger på samme dag kan være ulike. Brukeren skriver norsk tid som konverteres i brukergrensesnittet (M4E-C). |
+| Sikringsskap som `CabinetNumber` (1 eller 2) på undermåleren | Eget skapregister | Enkelt, og dekker behovet. |
+| Avlesningssett lagres ikke som egen post | `ReadingSet`-tabell | Enklere skjema og database; sett kan fullføres og korrigeres per avlesning. |
+| Toleranse på 24 timer for «samme tidspunkt» | Krav om identisk tidspunkt | Håndavlesninger skjer sjelden på minuttet. Toleransen kan endres ved kall. |
+| Ingen proratering av forbruk på kalenderdager | Fordele forbruk | Ville gitt anslag som ser ut som målinger. Eventuelt senere som eksplisitt valg. |
+
+**Fremtidig integrasjon:** modellen har ingen felt for eksterne nøkler eller leverandører. En senere integrasjon kan registrere avlesninger gjennom `RegisterReadingAsync` med de samme reglene. Målerbytte er ikke støttet (en ny måler må i dag behandles som ny startverdi etter en avklaring).
+
 ## Demodata (M4D)
 
 `Infrastructure/Demo/DemoDatabaseSeeder` oppretter det fiktive Fiktivdalen Sameie (8 boenheter, 12 styresaker, 20 oppgaver). Innholdet og kommandoene er beskrevet i [DEMO.md](DEMO.md).
