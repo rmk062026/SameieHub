@@ -72,7 +72,7 @@ Se [DESIGN_DECISIONS.md](DESIGN_DECISIONS.md). Kort:
 
 ## 7. Hva jeg selv har bidratt med
 
-Se [MY_CONTRIBUTIONS.md](MY_CONTRIBUTIONS.md) (verifisert/forslag/må-bekreftes). Kort: krav og avgrensninger, milepælsplan, godkjenninger, tilbakemeldinger som endret produktet (to eiere, sikker sletting, demo-sikkerhet, målermodellen), og regler for personvern og kodestil.
+Se [MY_CONTRIBUTIONS.md](MY_CONTRIBUTIONS.md) (roller for deg, ChatGPT og Claude Code, arkitekturbidrag og læringsmål). Kort: krav og avgrensninger, milepælsplan, godkjenninger, tilbakemeldinger som endret produktet (to eiere, sikker sletting, demo-sikkerhet, målermodellen), og regler for personvern og kodestil.
 
 ## 8. Hva jeg har lært (skriv med egne ord)
 

@@ -12,7 +12,7 @@ Indeks over dokumentene i `docs/`. Den korte oversikten over prosjektet står i 
 | 4 | [CODE_WALKTHROUGH.md](CODE_WALKTHROUGH.md) | lese den faktiske C#-koden linje for linje |
 | 5 | [DESIGN_DECISIONS.md](DESIGN_DECISIONS.md) | kunne forklare *hvorfor* valgene ble tatt, med alternativer |
 | 6 | [DEMO.md](DEMO.md) | kjøre demoen med fiktive data |
-| 7 | [MY_CONTRIBUTIONS.md](MY_CONTRIBUTIONS.md) | gjennomgå og bekrefte prosjektfortellingen (inneholder punkter som må bekreftes av eieren) |
+| 7 | [MY_CONTRIBUTIONS.md](MY_CONTRIBUTIONS.md) | gjennomgå prosjektfortellingen (roller, arkitekturbidrag og læringsmål) og kontrollere at den stemmer med egne erfaringer |
 | 8 | [PRESENTATION_GUIDE.md](PRESENTATION_GUIDE.md) | forberede presentasjon og øve på spørsmål |
 
 ## Prosjektdokumentasjon som er skrevet underveis (historisk)
