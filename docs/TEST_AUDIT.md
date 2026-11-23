@@ -392,3 +392,7 @@ De 54 testene som beholder egen database seeder (eller migrerer) fortsatt hver s
 ### Status for planen
 
 Steg 1 i punkt 11 er **gjennomført**. De øvrige stegene er ikke startet og venter på godkjenning.
+
+## 14. Oppstartstest (M4T-P1.2)
+
+Hullet «ingen test av `Program.cs`» (punkt 8, nr. 1) og steg 2 i planen (røyktest av oppstart og DI) er gjennomført med `Startup/StartupTests` (10 kjørte tester) og `Microsoft.AspNetCore.Mvc.Testing`, som ble godkjent for dette formålet. Beskrivelse og begrunnelse: [USABILITY_REVIEW.md](USABILITY_REVIEW.md), punkt 6, og [TESTING.md](TESTING.md). Ingen eksisterende tester er slettet eller slått sammen.
