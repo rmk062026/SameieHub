@@ -104,6 +104,19 @@ public class StartupTests : IClassFixture<StartupFixture>
         }
     }
 
+    [Fact]
+    public async Task Startup_BackupServiceMakesAValidBackupOfTheTemporaryDatabase()
+    {
+        var backup = _app.Services.GetRequiredService<SameieHub.Infrastructure.Backup.IDatabaseBackup>();
+        var destination = Path.Combine(Path.GetDirectoryName(_app.DatabasePath)!, "sikkerhetskopi.db");
+
+        var result = await backup.CreateBackupAsync(destination);
+
+        Assert.Equal(destination, result.FilePath);
+        Assert.Empty(SameieHub.Infrastructure.Backup.DatabaseBackupValidator.FindProblems(destination));
+        _app.AssertOrdinaryDatabaseIsUnchanged();
+    }
+
     [Theory]
     [InlineData("/")]
     [InlineData("/elbillading")]

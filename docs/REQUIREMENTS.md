@@ -51,7 +51,7 @@ En oppgave har tittel (obligatorisk), beskrivelse, kategori (Generell eller Vedl
 ## Ikke-funksjonelle krav
 - Kjører lokalt på Windows uten Visual Studio, .NET SDK eller internett (selvstendig publisering, M5).
 - Én lokal bruker; ingen innlogging.
-- Backup og gjenoppretting av SQLite-data er obligatorisk før v1.0 godkjennes.
+- Backup og gjenoppretting av SQLite-data er obligatorisk før v1.0 godkjennes. **Backupmotoren er laget (M5A):** en konsistent, validert kopi av hele databasen til et sted som oppgis, uten å overskrive eksisterende filer. Gjenoppretting (M5B), skjerm for sikkerhetskopiering og lokal pakking (M5C) gjenstår. Sikkerhetskopien inneholder personopplysninger og må oppbevares trygt. Se [ARCHITECTURE.md](ARCHITECTURE.md), «Sikkerhetskopiering (M5A)».
 - Data forblir lokalt og committes aldri.
 
 ## Utenfor v1.0

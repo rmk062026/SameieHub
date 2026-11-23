@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using SameieHub.Domain;
+using SameieHub.Infrastructure.Backup;
 using SameieHub.Infrastructure.Persistence;
 
 namespace SameieHub.Infrastructure;
@@ -24,6 +26,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IEvChargerRepository, EfEvChargerRepository>();
         services.AddScoped<IMeterRepository, EfMeterRepository>();
         services.AddScoped<IMeterReadingRepository, EfMeterReadingRepository>();
+        services.AddSingleton<IDatabaseBackup>(provider => new SqliteDatabaseBackup(
+            databasePath,
+            provider.GetRequiredService<TimeProvider>(),
+            provider.GetRequiredService<ILogger<SqliteDatabaseBackup>>()));
 
         return services;
     }

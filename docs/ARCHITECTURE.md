@@ -661,3 +661,68 @@ Sidene ligger i `Web/Components/Pages/Charging/`. Razor-sidene bruker bare `Char
 | Statusen til laderen er administrativ og stopper ikke avlesninger | Blokkere avlesning for «Ikke i bruk» | Måleren teller strøm uansett; forbruket må kunne dokumenteres. |
 | Korrigering og sletting per avlesning med nabokontroll | Redigerbar hel tabell | Hver endring kontrolleres mot kronologien, og sletting krever bekreftelse. |
 | Ingen automatisk anslag av manglende verdier | Interpolere | Avstemmingen skal vise hva som er dokumentert, ikke hva som antas. |
+
+## Sikkerhetskopiering (M5A)
+
+M5A er bare **backupmotoren**: å lage en konsistent, kontrollert kopi av databasen. Gjenoppretting, skjerm for sikkerhetskopiering, automatisk tidsplan og Windows-pakking er ikke laget (M5B og M5C). Alt ligger i `Infrastructure/Backup/`.
+
+### Arkitektur
+
+| Del | Ansvar |
+|---|---|
+| `IDatabaseBackup` | Den eneste kontrakten: `CreateBackupAsync(destinationPath, cancellationToken)` gir en `DatabaseBackupResult` (sti, størrelse, tidspunkt, siste migrering) eller kaster `DatabaseBackupException` med en `DatabaseBackupFailure` (`InvalidDestination`, `DestinationExists`, `SourceUnavailable`, `ValidationFailed`, `WriteFailed`). Brukergrensesnittet velger selv ordlyden for hver årsak senere. |
+| `SqliteDatabaseBackup` | Utfører sikkerhetskopieringen. Registrert som singleton i `AddSameieHubInfrastructure` med databasestien (altså den samme stien programmet bruker, også `Database:Path`). Ingen Blazor-komponent kjenner til SQLite. |
+| `DatabaseBackupValidator` | Kontrollerer at en fil er en komplett SameieHub-database. Skilt ut slik at **gjenopprettingen senere kan kontrollere en valgt fil med nøyaktig de samme reglene**. |
+
+Backupkontrakten ligger i Infrastructure og ikke i Domain, fordi den handler om en databasefil og ikke om en forretningsregel. Web kan bruke den direkte (Web refererer Infrastructure). Det er ikke laget en generell «backup og restore»-abstraksjon.
+
+### Slik gjennomføres sikkerhetskopien
+
+1. **Kontroll av stedet** før noe opprettes: banen må være absolutt, ha et gyldig filnavn, ikke være en mappe, ikke være selve databasen (eller dens `-wal`/`-shm`/`-journal`-fil), mappen må finnes, og filen må ikke finnes fra før. Mappen opprettes **ikke** automatisk, og ingen mappe velges automatisk.
+2. **SQLite sin innebygde backup** (`SqliteConnection.BackupDatabase`). Originalen åpnes **skrivebeskyttet** (`Mode=ReadOnly`), så den verken kan endres eller opprettes ved en feil. SQLite tar et konsistent øyeblikksbilde selv om programmet skriver samtidig. Det brukes aldri `File.Copy` på en aktiv database.
+3. **Midlertidig fil:** kopien skrives til `.<navn>.<guid>.partial` i samme mappe som målet, så den siste flyttingen skjer på samme disk.
+4. **Én enkelt fil:** kopien settes til `journal_mode = DELETE`, så det ikke følger med `-wal` og `-shm`.
+5. **Validering** av den midlertidige filen (se under).
+6. **Publisering:** filen får sitt endelige navn med `File.Move` **uten overskriving**. Er filen opprettet i mellomtiden, avvises det i stedet for å erstatte den.
+7. **Opprydding** i `finally`: den midlertidige filen og eventuelle SQLite-sidefiler slettes, uansett utfall.
+
+En sikkerhetskopi finnes dermed under sitt endelige navn **bare** hvis den er ferdig skrevet og har bestått alle kontroller. Én backup kjøres om gangen.
+
+### Slik valideres den
+
+`DatabaseBackupValidator.FindProblems(fil)` åpner filen skrivebeskyttet og returnerer en liste over problemer (tom liste = godkjent):
+- `PRAGMA integrity_check` må gi nøyaktig «ok».
+- `PRAGMA foreign_key_check` må ikke gi noen rader (ingen brutte relasjoner).
+- Alle tabellene i EF-modellen må finnes (boenheter, styresaker, oppgaver, ladeanlegg, ladere, målere og avlesninger).
+- Alle migreringer programmet kjenner må være anvendt i `__EFMigrationsHistory`, så skjemaversjonen er riktig.
+- En fil som ikke er en SQLite-database, mangler, eller er avkortet, gir et problem og ikke et unntak.
+
+Radantall brukes **ikke** som kvalitetskriterium, og kopien sammenlignes ikke med originalen på radantall (databasen kan endres mens kopien lages). Resultatet er bare «vellykket» hvis listen er tom.
+
+### Feil og ufullstendige filer
+
+| Situasjon | Resultat |
+|---|---|
+| Ugyldig sted (tom, relativ, manglende mappe, en mappe, ugyldig filnavn, databasen selv) | `InvalidDestination`, ingenting opprettes |
+| Filen finnes | `DestinationExists`, den eksisterende filen er uendret |
+| Originalen mangler eller er ikke en SQLite-database | `SourceUnavailable`, ingen fil, og originalen opprettes ikke |
+| Kopien feiler en kontroll (for eksempel brutte relasjoner eller manglende tabell) | `ValidationFailed`, den midlertidige filen slettes |
+| Skrivefeil (manglende tillatelse, full disk) | `WriteFailed`, den midlertidige filen slettes |
+| Avbrutt | `OperationCanceledException` før noen fil har fått sitt endelige navn |
+
+### Sikkerhet og personopplysninger
+
+- Sikkerhetskopien er en **fullstendig kopi av databasen** og inneholder eiernavn, telefonnumre, e-postadresser og alle andre data, **ukryptert**. Den må oppbevares like trygt som selve databasen, og ikke i en delt eller offentlig mappe.
+- Motoren **velger aldri sted selv**. Stedet må oppgis av den som ber om backupen (senere: brukeren i en skjerm).
+- Det logges bare filnavn, størrelse, årsakskode og typen indre feil, aldri mappenavn, unntaksmeldinger eller innhold fra databasen (testet).
+- Ingen ekstern opplasting eller skylagring. Databasefiler og backuper committes aldri.
+
+### Forhold som må avklares før gjenoppretting (M5B)
+
+1. **Hva skjer med programmet under gjenoppretting?** Programmet holder databasen åpen. Trolig må gjenopprettingen kreve at programmet startes på nytt (eller stoppes) slik at ingen forbindelser er åpne.
+2. **Sikkerhetskopi av dagens database først.** Før en gjenoppretting erstatter noe, bør en ny backup av nåværende database lages (med motoren fra M5A), slik at en feilvalgt gjenoppretting kan angres.
+3. **Kontroll av valgt fil** med `DatabaseBackupValidator` (samme regler). En fil fra en nyere programversjon (migreringer programmet ikke kjenner) må avvises tydelig, og en eldre fil må migreres.
+4. **Atomisk erstatning** av databasefilen (og `-wal`/`-shm`), og hva som skjer hvis erstatningen mislykkes halvveis.
+5. **Brukerens valg av sted og fil**, og hvordan brukeren kan vite hvilken backup som er nyest (filnavn med dato er ikke laget ennå).
+6. **Anbefalt rutine for brukeren:** hvor ofte, hvor sikkerhetskopier lagres (ikke samme disk eller sky uten kryptering), og at backupen må beskyttes som personopplysninger.
+7. **Mapping av feilårsaker til norske meldinger** i skjermen (`DatabaseBackupFailure` er laget for det).

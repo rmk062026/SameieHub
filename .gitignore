@@ -256,6 +256,8 @@ Generated_Code/
 # because we have git ;-)
 _UpgradeReport_Files/
 Backup*/
+# SameieHub's own backup engine lives in this source folder (database files are ignored separately).
+!src/SameieHub.Infrastructure/Backup/
 UpgradeLog*.XML
 UpgradeLog*.htm
 ServiceFabricBackup/
