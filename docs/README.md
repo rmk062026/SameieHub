@@ -28,6 +28,7 @@ Disse ble skrevet i samme endring som koden, milepæl for milepæl, og beskriver
 | [DEVELOPMENT.md](DEVELOPMENT.md) | Kommandoer, database, git-arbeidsflyt, hvordan legge til et felt |
 | [DEMO.md](DEMO.md) | Demodatabasen, kommandoer og sikkerhetsregler |
 | [TEST_AUDIT.md](TEST_AUDIT.md) | Revisjon av testpakken og plan for forbedring (M4T) |
+| [REDESIGN_PLAN.md](REDESIGN_PLAN.md) | Plan for å forenkle brukeropplevelsen (M5D, ikke implementert) |
 | [USABILITY_REVIEW.md](USABILITY_REVIEW.md) | Brukervennlighet, antakelser om det første sameiet og anbefalinger (M4T-P1.2) |
 
 ## Status (kontrollert mot koden)
