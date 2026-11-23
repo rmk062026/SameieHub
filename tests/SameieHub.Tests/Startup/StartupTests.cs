@@ -154,6 +154,38 @@ public class StartupTests : IClassFixture<StartupFixture>
     }
 
     [Fact]
+    public async Task Startup_CarriesOutAPreparedRestoreBeforeTheDatabaseIsOpened()
+    {
+        var second = new StartupFixture();
+        var folder = Path.GetDirectoryName(second.DatabasePath)!;
+        Directory.CreateDirectory(folder);
+        var backupFile = Path.Combine(folder, "sikkerhetskopi.db");
+
+        await using (var source = await SameieHub.Tests.Infrastructure.SqliteTestDatabase.CreateAsync())
+        {
+            await source.Service.RegisterAsync("Fiktivdalen 7 (gjenopprettet)");
+            await source.StopForResetAsync();
+            await new SameieHub.Infrastructure.Backup.SqliteDatabaseBackup(source.DatabasePath, TimeProvider.System, Microsoft.Extensions.Logging.Abstractions.NullLogger<SameieHub.Infrastructure.Backup.SqliteDatabaseBackup>.Instance)
+                .CreateBackupAsync(backupFile);
+        }
+
+        var restore = new SameieHub.Infrastructure.Restore.SqliteDatabaseRestore(second.DatabasePath, TimeProvider.System, Microsoft.Extensions.Logging.Abstractions.NullLogger<SameieHub.Infrastructure.Restore.SqliteDatabaseRestore>.Instance);
+        await restore.PrepareAsync(backupFile);
+        Assert.NotNull(restore.GetPending());
+
+        await second.InitializeAsync();
+        await using (var context = await second.CreateContextAsync())
+        {
+            Assert.Equal("Fiktivdalen 7 (gjenopprettet)", (await context.HousingUnits.SingleAsync()).Address);
+        }
+
+        Assert.Null(restore.GetPending());
+        Assert.Equal(SameieHub.Infrastructure.Restore.RestoreOutcomeKind.Applied, restore.GetLastOutcome()!.Kind);
+
+        await second.DisposeAsync();
+    }
+
+    [Fact]
     public async Task Cleanup_StoppingTheApplicationDeletesTheTemporaryDatabaseAndRestoresTheSetting()
     {
         var before = Environment.GetEnvironmentVariable("Database__Path");

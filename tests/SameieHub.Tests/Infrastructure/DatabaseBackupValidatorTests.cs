@@ -1,5 +1,6 @@
 using Microsoft.Data.Sqlite;
 using SameieHub.Infrastructure.Backup;
+using static SameieHub.Tests.Infrastructure.DatabaseTestFiles;
 
 namespace SameieHub.Tests.Infrastructure;
 
@@ -30,24 +31,9 @@ public class DatabaseBackupValidatorTests : IAsyncLifetime
     private async Task<string> CopyOfTheDatabaseAsync()
     {
         var copy = Path.Combine(_folder, "kopi.db");
-        await using (var source = new SqliteConnection($"Data Source={_database.DatabasePath};Mode=ReadOnly;Pooling=False"))
-        await using (var destination = new SqliteConnection($"Data Source={copy};Pooling=False"))
-        {
-            await source.OpenAsync();
-            await destination.OpenAsync();
-            source.BackupDatabase(destination);
-        }
+        await CopyAsync(_database.DatabasePath, copy);
 
         return copy;
-    }
-
-    private static async Task ExecuteAsync(string file, string sql)
-    {
-        await using var connection = new SqliteConnection($"Data Source={file};Pooling=False");
-        await connection.OpenAsync();
-        await using var command = connection.CreateCommand();
-        command.CommandText = sql;
-        await command.ExecuteNonQueryAsync();
     }
 
     [Fact]

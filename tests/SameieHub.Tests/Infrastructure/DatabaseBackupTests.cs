@@ -7,6 +7,8 @@ using SameieHub.Domain;
 using SameieHub.Infrastructure.Backup;
 using SameieHub.Infrastructure.Persistence;
 using SameieHub.Tests.Fakes;
+using static SameieHub.Tests.Infrastructure.DatabaseTestData;
+using static SameieHub.Tests.Infrastructure.DatabaseTestFiles;
 
 namespace SameieHub.Tests.Infrastructure;
 
@@ -16,9 +18,6 @@ namespace SameieHub.Tests.Infrastructure;
 /// </summary>
 public class DatabaseBackupTests : IAsyncLifetime
 {
-    private const string OwnerName = "Fiktiv Eier";
-    private const string OwnerPhone = "+47 000 00 999";
-    private const string OwnerEmail = "fiktiv.eier@example.com";
 
     private SqliteTestDatabase _database = null!;
     private string _folder = null!;
@@ -53,59 +52,7 @@ public class DatabaseBackupTests : IAsyncLifetime
 
     private string Destination(string name = "backup.db") => Path.Combine(_folder, name);
 
-    /// <summary>Fills every module with fictional data, including values that must survive exactly.</summary>
-    private async Task FillAllModulesAsync()
-    {
-        var unit = await _database.Service.RegisterAsync(new HousingUnitDetails
-        {
-            Address = "Fiktivdalen 10A",
-            UnitNumber = "10A",
-            SectionNumber = 1,
-            HousingType = HousingType.Duplex,
-            AreaSquareMeters = 118.5m,
-            OwnerName = OwnerName,
-            OwnerPhoneNumber = OwnerPhone,
-            OwnerEmail = OwnerEmail,
-            Notes = "Æøå i merknaden"
-        });
-        var boardCase = await _database.BoardCases.RegisterAsync(new BoardCaseDetails { Title = "Sak med vedtak", HousingUnitId = unit.Id });
-        await _database.BoardCases.RegisterDecisionAsync(boardCase.Id, "Vedtatt av styret", new DateOnly(2026, 11, 10));
-        await _database.Tasks.RegisterAsync(new TaskItemDetails { Title = "Oppgave", HousingUnitId = unit.Id, BoardCaseId = boardCase.Id, AssignedTo = "Fiktiv Ansvarlig" });
-
-        var setup = await ChargingSetup.CreateAsync(_database);
-        await _database.Charging.RegisterReadingSetAsync(setup.Set(60, 0m, ChargingSetup.Same(0m)));
-        await _database.Charging.RegisterReadingSetAsync(setup.Set(30, 0.001m, ChargingSetup.Same(0.001m)));
-        await _database.Charging.RegisterReadingSetAsync(setup.Set(1, 12345.678m, ChargingSetup.Same(1234.5m)));
-    }
-
-    private static async Task<Dictionary<string, string>> SnapshotAsync(string databaseFile)
-    {
-        var options = new DbContextOptionsBuilder<SameieHubDbContext>()
-            .UseSqlite($"Data Source={databaseFile};Mode=ReadOnly;Pooling=False")
-            .Options;
-        await using var context = new SameieHubDbContext(options);
-
-        return new Dictionary<string, string>
-        {
-            ["HousingUnits"] = JsonSerializer.Serialize(await context.HousingUnits.AsNoTracking().OrderBy(row => row.Id).ToListAsync()),
-            ["BoardCases"] = JsonSerializer.Serialize(await context.BoardCases.AsNoTracking().OrderBy(row => row.Id).ToListAsync()),
-            ["TaskItems"] = JsonSerializer.Serialize(await context.TaskItems.AsNoTracking().OrderBy(row => row.Id).ToListAsync()),
-            ["ChargingFacilities"] = JsonSerializer.Serialize(await context.ChargingFacilities.AsNoTracking().OrderBy(row => row.Id).ToListAsync()),
-            ["EvChargers"] = JsonSerializer.Serialize(await context.EvChargers.AsNoTracking().OrderBy(row => row.Id).ToListAsync()),
-            ["Meters"] = JsonSerializer.Serialize(await context.Meters.AsNoTracking().OrderBy(row => row.Id).ToListAsync()),
-            ["MeterReadings"] = JsonSerializer.Serialize(await context.MeterReadings.AsNoTracking().OrderBy(row => row.Id).ToListAsync())
-        };
-    }
-
-    private static async Task<string?> ScalarAsync(string databaseFile, string sql)
-    {
-        await using var connection = new SqliteConnection($"Data Source={databaseFile};Mode=ReadOnly;Pooling=False");
-        await connection.OpenAsync();
-        await using var command = connection.CreateCommand();
-        command.CommandText = sql;
-
-        return (await command.ExecuteScalarAsync())?.ToString();
-    }
+    private Task FillAllModulesAsync() => DatabaseTestData.FillAllModulesAsync(_database);
 
     private string[] FilesInFolder() => Directory.GetFiles(_folder).OrderBy(file => file).ToArray();
 
@@ -335,7 +282,7 @@ public class DatabaseBackupTests : IAsyncLifetime
 
         Assert.NotEmpty(logs.Messages);
         var everything = string.Join("\n", logs.Messages);
-        foreach (var secret in new[] { OwnerName, OwnerPhone, OwnerEmail, "Fiktiv Ansvarlig", _folder, Path.GetTempPath() })
+        foreach (var secret in new[] { OwnerName, OwnerPhone, OwnerEmail, AssignedTo, _folder, Path.GetTempPath() })
         {
             Assert.DoesNotContain(secret, everything);
         }

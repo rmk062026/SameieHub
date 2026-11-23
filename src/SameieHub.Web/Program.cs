@@ -2,6 +2,7 @@ using SameieHub.Domain;
 using SameieHub.Infrastructure;
 using SameieHub.Infrastructure.Demo;
 using SameieHub.Infrastructure.Persistence;
+using SameieHub.Infrastructure.Restore;
 using SameieHub.Web.Components;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -29,6 +30,14 @@ builder.Services.AddScoped<ChargingService>();
 builder.Services.AddSingleton(TimeProvider.System);
 
 var app = builder.Build();
+
+// A restore that was prepared while the program was running is carried out here, before any connection to the
+// database is opened. This is also where an interrupted restore is finished or undone.
+var restoreOutcome = app.Services.GetRequiredService<IDatabaseRestore>().ApplyPendingRestore();
+if (restoreOutcome.Kind != RestoreOutcomeKind.NothingPending)
+{
+    app.Logger.LogWarning("Database restore at startup: {Result}.", restoreOutcome.Kind);
+}
 
 await app.Services.MigrateSameieHubDatabaseAsync();
 

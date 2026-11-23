@@ -717,7 +717,7 @@ Radantall brukes **ikke** som kvalitetskriterium, og kopien sammenlignes ikke me
 - Det logges bare filnavn, størrelse, årsakskode og typen indre feil, aldri mappenavn, unntaksmeldinger eller innhold fra databasen (testet).
 - Ingen ekstern opplasting eller skylagring. Databasefiler og backuper committes aldri.
 
-### Forhold som må avklares før gjenoppretting (M5B)
+### Forhold som måtte avklares før gjenoppretting (M5B, avklart nedenfor)
 
 1. **Hva skjer med programmet under gjenoppretting?** Programmet holder databasen åpen. Trolig må gjenopprettingen kreve at programmet startes på nytt (eller stoppes) slik at ingen forbindelser er åpne.
 2. **Sikkerhetskopi av dagens database først.** Før en gjenoppretting erstatter noe, bør en ny backup av nåværende database lages (med motoren fra M5A), slik at en feilvalgt gjenoppretting kan angres.
@@ -726,3 +726,84 @@ Radantall brukes **ikke** som kvalitetskriterium, og kopien sammenlignes ikke me
 5. **Brukerens valg av sted og fil**, og hvordan brukeren kan vite hvilken backup som er nyest (filnavn med dato er ikke laget ennå).
 6. **Anbefalt rutine for brukeren:** hvor ofte, hvor sikkerhetskopier lagres (ikke samme disk eller sky uten kryptering), og at backupen må beskyttes som personopplysninger.
 7. **Mapping av feilårsaker til norske meldinger** i skjermen (`DatabaseBackupFailure` er laget for det).
+
+## Gjenoppretting: arkitekturvalg (M5B)
+
+Dette avsnittet ble skrevet **før** implementasjonen, og beskriver de spørsmålene som måtte avklares og valget som er tatt.
+
+### Hva programmet holder åpent
+
+- `AddDbContextFactory<SameieHubDbContext>` gir korte `DbContext`-instanser, men `Microsoft.Data.Sqlite` bruker **forbindelsespooling** som standard. Selv etter at en kontekst er avhendet, kan SQLite-forbindelsen bli stående åpen i poolen, og filen er da låst på Windows. Databasen er i tillegg i WAL-modus (det opprettes `-wal`- og `-shm`-filer).
+- Programmet kan derfor **ikke trygt bytte databasefilen mens det kjører**: filen kan være låst, og en `-wal`-fil fra den gamle databasen som blir liggende ved siden av en ny hovedfil, kan ødelegge den nye databasen.
+
+### Valg: gjenoppretting i to trinn, og selve byttet ved oppstart
+
+1. **Klargjøring (`PrepareAsync`), kan kjøres mens programmet går.** Den valgte sikkerhetskopien kontrolleres og kopieres til en **egen arbeidskopi** i mappen `restore` ved siden av databasen. Er den eldre, oppgraderes arbeidskopien med EF Core-migreringer. Arbeidskopien kontrolleres på nytt, og en liten fil (`pending.json`, med SHA-256) skrives sist. Den aktive databasen og sikkerhetskopien røres ikke.
+2. **Bytte (`ApplyPendingRestore`), kjøres ved neste oppstart, før noen forbindelse er åpnet.** Programmet kaller metoden rett etter at tjenestene er bygget og før migreringene. Da finnes ingen åpne forbindelser og ingen pooling, så filene kan flyttes trygt. Brukeren må altså **stenge programmet og starte det igjen** for at gjenopprettingen skal gjennomføres. Det er et bevisst valg framfor å prøve å bytte en aktiv database.
+
+Ingen ekstern hjelpeprosess eller egen oppstartsfil trengs. Det eneste som endres i `Program.cs` er ett kall før migreringen.
+
+### Hvordan databasen byttes uten å miste data
+
+Alle filene ligger på samme disk (i `restore` ved siden av databasen), så hver flytting er en atomisk `File.Move`. Den gamle databasen **kopieres ikke, den flyttes** til `restore\before-restore-<tidspunkt>\` sammen med `-wal`, `-shm` og `-journal`. Dermed bevares nøyaktig den tilstanden den hadde, også endringer som ikke var skrevet tilbake fra WAL-filen, selv om den gamle databasen skulle være skadet. Mappen kan brukes direkte som en egen database. Bytte-trinnene føres i en **journal** (`restore\journal.json`) som skrives atomisk:
+
+| Trinn | Journal | Hvis programmet stopper her |
+|---|---|---|
+| Arbeidskopien er kontrollert på nytt (SHA-256) | – | Ingenting er endret |
+| Journal skrives, gamle filer flyttes én og én | `MovingOld` | **Tilbakeføring:** filene flyttes tilbake. Opprinnelig database er uendret. |
+| Alle gamle filer er flyttet | `PlacingNew` | **Fullføring framover:** arbeidskopien flyttes på plass |
+| Ny database på plass, journal ikke slettet ennå | `PlacingNew` | Opprydding, den nye databasen beholdes |
+
+Ved neste oppstart leser programmet først journalen og ruller tilbake eller fullfører, så det aldri er en tilstand uten database eller med en blanding av gammel og ny. Etter en tilbakeføring slettes den klargjorte gjenopprettingen (den forsøkes ikke på nytt automatisk, slik at et gjentatt avbrudd ikke kan hindre programmet i å starte). Brukeren klargjør da en ny.
+
+### Eldre og nyere sikkerhetskopier
+
+Filen undersøkes (`BackupFileInspector`) og havner i én av fem kategorier:
+
+| Kategori | Kjennetegn | Handling |
+|---|---|---|
+| Ugyldig | Ikke en SQLite-fil, avkortet, feil i `integrity_check`, brutte relasjoner | Avvises |
+| Ikke SameieHub | Gyldig SQLite, men uten migrasjonshistorikken fra dette programmet | Avvises (feil database) |
+| Nyere | Historikken inneholder migreringer dette programmet ikke kjenner | **Avvises tydelig.** En eldre programversjon må ikke åpne en nyere database. |
+| Eldre | Gyldig, men mangler siste migreringer (må være et sammenhengende prefiks) | Oppgraderes i arbeidskopien med EF Core `Migrate()`, aldri i originalfilen |
+| Gjeldende | Alle kjente migreringer, ingen ukjente | Brukes som den er |
+
+Det er ikke laget noen egen migreringsmotor: EF Core `Database.Migrate()` dekker behovet, og oppgraderingen gjøres bare på arbeidskopien. Feiler den, slettes arbeidskopien og ingenting er endret.
+
+### Andre sikkerhetsvalg
+
+- **Demodatabasen:** motoren avviser både å gjenopprette *til* demodatabasen og å bruke selve demodatabasen som kilde. Kontrollen gjøres før noen mappe eller fil opprettes.
+- **Aldri nåværende database som kilde**, og aldri en fil inne i `restore`-mappen.
+- **Personopplysninger:** det logges bare resultattype og om en oppgradering ble gjort, aldri stier, filnavn eller innhold.
+- **Backupfilen røres ikke:** den leses skrivebeskyttet via SQLites backup-API (arbeidskopien lages ikke med `File.Copy`).
+- **Avgrensning:** ingen brukergrensesnitt, ingen automatisk sikkerhetskopiering.
+
+### Gjenoppretting: slik er den laget (M5B)
+
+Koden ligger i `Infrastructure/Restore/`: `IDatabaseRestore` (kontrakten), `SqliteDatabaseRestore` (motoren) og `BackupFileInspector` (avgjør hva slags fil en sikkerhetskopi er). Den er registrert som singleton i DI og kalt fra `Program.cs`. Det er ikke laget noe brukergrensesnitt og ingen automatisk sikkerhetskopiering.
+
+**Kontrakten:**
+
+| Metode | Når | Hva |
+|---|---|---|
+| `PrepareAsync(backup)` | Mens programmet kjører | Kontrollerer sikkerhetskopien, lager en arbeidskopi i `restore\pending.db` (med SQLites backup-API fra en skrivebeskyttet forbindelse, aldri `File.Copy`), oppgraderer den om den er eldre, kontrollerer den med `DatabaseBackupValidator`, og skriver `pending.json` (med SHA-256) sist. Den aktive databasen og sikkerhetskopien røres ikke. |
+| `ApplyPendingRestore()` | Ved oppstart, før noen forbindelse | Verifiserer arbeidskopien på nytt, flytter den gamle databasen og sidefilene til `restore\before-restore-<tidspunkt>\`, og flytter arbeidskopien på plass. Fullfører eller angrer en avbrutt gjenoppretting. Kaster ikke: programmet skal alltid kunne starte. |
+| `GetPending()`, `CancelPending()`, `GetLastOutcome()` | Når som helst | Brukergrensesnittet senere kan vise hva som venter, avbryte det, og fortelle utfallet etter omstart (`restore\last-restore.json`). |
+
+**Utfall (`RestoreOutcomeKind`):** `NothingPending`, `Applied`, `AppliedAfterRecovery`, `RolledBack`, `Rejected`, `Failed`.
+
+**Hva som avvises ved klargjøring (`DatabaseRestoreFailure`):** manglende, ødelagt eller avkortet fil (`InvalidBackup`), gyldig SQLite som ikke er SameieHub (`NotSameieHubDatabase`), en nyere programversjon (`NewerVersion`), en eldre som ikke lot seg oppgradere (`UpgradeFailed`), demodatabasen som mål eller kilde (`DemoDatabaseNotAllowed`), selve den aktive databasen (`SourceIsTheLiveDatabase`) og skrivefeil (`WriteFailed`). Demo-kontrollen skjer først, før noen mappe eller fil opprettes.
+
+### Slik gjenoppretter du manuelt hvis noe går galt
+
+- **Normalt:** den gamle databasen ligger i `restore\before-restore-<tidspunkt>\` med sine sidefiler under de opprinnelige navnene. For å gå tilbake: lukk programmet, flytt filene i den mappen til databasemappen (over den nye), og start programmet.
+- **Etter et avbrudd** trenger du ikke gjøre noe: neste oppstart fullfører eller angrer gjenopprettingen selv (se tabellen over). Resultatet står i `restore\last-restore.json` og i loggen (bare typen utfall, ingen stier eller innhold).
+
+### Begrensninger
+
+- **Programmet må startes på nytt** for at gjenopprettingen skal skje (valgt bevisst). Brukerskjermen må forklare det, og bør også vise utfallet etter omstart.
+- **Plass:** arbeidskopien tar like mye plass som en database, og de gamle databasene i `restore` slettes aldri automatisk (ingen opprydding er laget).
+- **Samme disk:** arbeidsmappen ligger ved siden av databasen. Det gjør hvert flytt atomisk, men betyr at `restore` ikke kan ligge på en annen disk.
+- **Tillatelser og disk full** er ikke testet direkte (kan ikke simuleres trygt). Feilen oversettes til `WriteFailed`, og en halvferdig arbeidskopi fjernes eller ryddes ved neste oppstart.
+- **Én samtidig operasjon** per motor. To programforekomster mot samme database støttes ikke (programmet er for én bruker).
+- **Sikkerhetskopier er ukrypterte** og inneholder personopplysninger. Det gjelder også `restore`-mappen.

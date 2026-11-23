@@ -127,6 +127,7 @@ Kobler Domain til en ekte database. Avhenger av Domain og av pakkene `Microsoft.
 | `Persistence/DesignTimeDbContextFactory.cs` | Brukes bare av `dotnet ef` når migreringer lages (`design-time.db`, åpnes aldri for ekte data). | Verktøyet `dotnet ef` |
 | `Demo/DemoDatabaseSeeder.cs` | Oppretter det fiktive Fiktivdalen Sameie, inkludert ladeanlegget, via de ekte tjenestene, og avgjør om en database er tom, komplett, eldre, delvis eller annet (`InspectAsync`). Inneholder også `DemoDatabaseLocation`, tilstanden og unntakene. | `Program.cs` (bare med `--seed-demo` og `--check-demo`), tester |
 | `Backup/IDatabaseBackup.cs`, `SqliteDatabaseBackup.cs`, `DatabaseBackupValidator.cs` | Sikkerhetskopiering (M5A): kontrakten, motoren som bruker SQLites innebygde backup, og kontrollene en backup må bestå. Gjenoppretting er ikke laget. | `AddSameieHubInfrastructure` (DI), tester |
+| `Restore/IDatabaseRestore.cs`, `SqliteDatabaseRestore.cs`, `BackupFileInspector.cs` | Gjenoppretting (M5B): kontrakt og utfall, motoren (klargjøring, bytte ved oppstart, journal og recovery) og klassifisering av sikkerhetskopier. Ingen skjerm. | `AddSameieHubInfrastructure` (DI), `Program.cs` (ett kall ved oppstart), tester |
 | `Demo/DemoChargingPlan.cs` | Det faste ladeinnholdet i demoen (ladere, skap, status, målerstander, rundenes tidspunkt). Brukes både til å opprette og til å kontrollere. | `DemoDatabaseSeeder` |
 
 ### Migreringene (`Persistence/Migrations/`)

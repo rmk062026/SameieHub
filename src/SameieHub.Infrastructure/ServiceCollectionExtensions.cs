@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using SameieHub.Domain;
 using SameieHub.Infrastructure.Backup;
 using SameieHub.Infrastructure.Persistence;
+using SameieHub.Infrastructure.Restore;
 
 namespace SameieHub.Infrastructure;
 
@@ -30,6 +31,10 @@ public static class ServiceCollectionExtensions
             databasePath,
             provider.GetRequiredService<TimeProvider>(),
             provider.GetRequiredService<ILogger<SqliteDatabaseBackup>>()));
+        services.AddSingleton<IDatabaseRestore>(provider => new SqliteDatabaseRestore(
+            databasePath,
+            provider.GetRequiredService<TimeProvider>(),
+            provider.GetRequiredService<ILogger<SqliteDatabaseRestore>>()));
 
         return services;
     }
