@@ -330,3 +330,65 @@ Hvert steg kan godkjennes for seg. Ingen endring gjøres før du godkjenner.
 - Ingen applikasjonskode eller arkitektur er endret.
 - Ingen avhengighet (for eksempel `Mvc.Testing` eller Pester) er lagt til.
 - Ingen milepæl er startet. Neste skritt er din godkjenning av hvilke steg i punkt 11 som skal gjennomføres.
+
+(Punkt 12 beskriver revisjonen slik den var ved leveransen. Gjennomføringen av steg 1 står i punkt 13.)
+
+## 13. Resultat av steg 1: raskere demotester (M4T-P1.1)
+
+Steg 1 i planen (delt, skrivebeskyttet demo-fixture) er gjennomført. **Ingen tester er slettet, ingen applikasjonskode er endret, og ingen pakker er lagt til.**
+
+### Klassifisering av demotestene
+
+| Klasse | Tester | Bare leser (delt fixture) | Egen database |
+|---|---:|---:|---:|
+| `DemoDatabaseSeederTests` | 54 | 16 | 38 |
+| `DemoChargingSeedTests` | 38 | 22 (21 metoder) | 16 |
+| **Sum** | **92** | **38** | **54** |
+
+- **Leser bare** (flyttet til delt fixture): innholdet i demoen etter seeding, for eksempel antall og felt på boenheter, styresaker og oppgaver, koblinger, tidspunkter, ladeanlegget, skap, statuser, avlesninger og avstemmingene (1 250 / 1 220 kWh).
+- **Beholder egen isolert database** (alt som endrer data eller tester selve opprettelsen):
+  - selve seedingen og resultatet `Seeded` (`Seed_EmptyDatabase_CreatesExactlyTheEightFiktivdalenUnits`), gjenkjøring og omstart;
+  - sikkerhetstestene: ordinær database og stiavvisning (`Seed_OnlyUsesTheGivenDatabase_*`, `IsDemoDatabasePath_*`, `NormalStartup_*`);
+  - egne data, delvis seed, annet innhold, eldre demo (både via SQL og migrert fra skjemaet før elbillading) og slettede eller korrigerte demoavlesninger;
+  - feil under opprettelse, feil under opprettelse av ladedata og opprydding som feiler;
+  - kontrollert reset (fil slettes og migreres på nytt);
+  - `Seed_ANewReadingSetRegisteredLaterDoesNotMakeTheDemoIncomplete`, som registrerer en ny avlesning;
+  - `Inspect_*`-testene mot tom database.
+
+### Hvordan det er løst
+
+- **`SeededDemoFixture`** (`tests/SameieHub.Tests/Infrastructure/SeededDemoFixture.cs`) er en `IClassFixture` som oppretter én SQLite-database og seeder demoen én gang per klasse. Den bruker de samme repositories, tjenestene og seederen som før.
+- Fixturen er **skrivebeskyttet ved konstruksjon**: den eksponerer bare lesemetoder (`UnitsAsync`, `ChargersAsync`, `ReadingsAsync`, `ReconcileAsync` og lignende), ingen tjenester med skrivemetoder og ikke klokken (bare `Now`). Testene kan derfor ikke endre data ved et uhell.
+- Som ekstra sikring tar fixturen et **fingeravtrykk** av databasen (antall rader, nyeste `UpdatedAt`, målerstandene) etter seeding, og sammenligner det når klassen er ferdig. Skulle noe likevel endre den delte databasen, feiler testklassen, så feilen ikke blir stille.
+- De 38 leseorienterte testene er flyttet til to nye klasser, **`DemoDatabaseContentTests`** og **`DemoChargingContentTests`**, uten endret innhold: samme assertions, bare lest via fixturen i stedet for en egen database. Klassene kjører parallelt med de andre, siden de ligger i hver sin testsamling. De ubrukte hjelpemetodene som ble igjen i de opprinnelige klassene er fjernet.
+- Ingen delt tilstand mellom klasser: hver klasse har sin egen fixture og dermed sin egen database, og ingen test kan skrive til den.
+
+### Målt effekt (samme maskin, `dotnet test --no-build`)
+
+| Mål | Før | Etter |
+|---|---|---|
+| Antall tester (alle) | 1240 | **1240** (ingen slettet) |
+| Antall demotester | 92 | **92** |
+| Kjøretid, alle tester | 54 s og 61 s (to målinger) | **27 s, 29 s og 34 s** (tre målinger) |
+| Kjøretid, demotestene | 29 s og 30 s | **15 s, 16 s og 17 s** |
+| Demotester uten parallellkjøring (`ParallelizeTestCollections=false`) | ikke målt | 19 s |
+| Summert tid for de 38 leseorienterte testene | ca. 30 s (anslag fra målt tid per test, hver test seedet selv) | **0,5 s** |
+| Gjentatte kjøringer | – | 3 + 3 kjøringer, alle 1240 og 92 grønne |
+
+Total kjøretid ble altså omtrent halvert, og demotestene gikk fra rundt 30 til rundt 16 sekunder.
+
+### Hvorfor ikke enda raskere
+
+De 54 testene som beholder egen database seeder (eller migrerer) fortsatt hver sin database, og det er med vilje: de endrer data eller tester selve opprettelsen. `DemoChargingSeedTests` er nå den langsomste klassen (ca. 11 s for 16 tester, der reset-testen alene bruker ca. 3 s fordi den migrerer to ganger). Xunit kjører testene i en klasse etter hverandre. Å dele disse videre ville svekke isolasjonen eller kreve at testene omskrives, og det er utenfor dette stegets rammer.
+
+### Ulemper
+
+- **Tre ting å huske:** en ny lesetest hører hjemme i `*ContentTests` og må bruke `SeededDemoFixture`, mens en test som endrer data eller tester seeding må ligge i `DemoDatabaseSeederTests` eller `DemoChargingSeedTests` og bruke sin egen database. Dokumentert i klassenes `<summary>` og her.
+- **Testnavn har fått nytt klassenavn** (for eksempel `DemoChargingContentTests.Seed_…` i stedet for `DemoChargingSeedTests.Seed_…`). Eventuelle filtre på gamle fullstendige navn må justeres.
+- **Fixturen gir en liten fast kostnad per klasse** (to seedinger på ca. 1 s hver, parallelt med de andre klassene).
+- Fingeravtrykket er en vaktbikkje, ikke et bevis: det fanger endringer i radantall, nyeste `UpdatedAt` og målerstandene, men ikke alle tenkelige endringer. Den virkelige sikringen er at fixturen bare tilbyr lesing.
+- Dette berører ikke tiden resten av Infrastructure-testene bruker (ekte SQLite per test). Det er et senere trinn og ikke startet.
+
+### Status for planen
+
+Steg 1 i punkt 11 er **gjennomført**. De øvrige stegene er ikke startet og venter på godkjenning.
