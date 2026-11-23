@@ -54,13 +54,13 @@ public sealed class SqliteDatabaseRestore : IDatabaseRestore
 
     // Step 1: prepare
 
-    public async Task<RestorePreparation> PrepareAsync(string backupFilePath, CancellationToken cancellationToken = default)
+    public async Task<RestorePreparation> PrepareAsync(string backupFilePath, CancellationToken cancellationToken = default, string? displayName = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         await _oneAtATime.WaitAsync(cancellationToken);
         try
         {
-            return await Task.Run(() => Prepare(backupFilePath, cancellationToken), cancellationToken);
+            return await Task.Run(() => Prepare(backupFilePath, displayName, cancellationToken), cancellationToken);
         }
         catch (DatabaseRestoreException exception)
         {
@@ -74,7 +74,7 @@ public sealed class SqliteDatabaseRestore : IDatabaseRestore
         }
     }
 
-    private RestorePreparation Prepare(string backupFilePath, CancellationToken cancellationToken)
+    private RestorePreparation Prepare(string backupFilePath, string? displayName, CancellationToken cancellationToken)
     {
         RefuseTheDemoDatabase(backupFilePath);
         var source = CheckSourceFile(backupFilePath);
@@ -108,12 +108,20 @@ public sealed class SqliteDatabaseRestore : IDatabaseRestore
 
         var lastMigration = DatabaseBackupValidator.FindLastMigrationId(PendingFile) ?? string.Empty;
         var preparedAt = _timeProvider.GetUtcNow().UtcDateTime;
-        var manifest = new PendingManifest(Path.GetFileName(source), preparedAt, wasUpgraded, Hash(PendingFile), lastMigration);
+        var manifest = new PendingManifest(ShownName(displayName, source), preparedAt, wasUpgraded, Hash(PendingFile), lastMigration);
         WriteJson(ManifestFile, manifest);
 
         _logger.LogInformation("Restore prepared (upgraded: {WasUpgraded}).", wasUpgraded);
 
         return new RestorePreparation(status, wasUpgraded, manifest.BackupFileName, preparedAt, lastMigration);
+    }
+
+    /// <summary>The name shown to the person: only a file name, never a path, and not too long.</summary>
+    private static string ShownName(string? displayName, string source)
+    {
+        var name = string.IsNullOrWhiteSpace(displayName) ? Path.GetFileName(source) : Path.GetFileName(displayName.Replace('\\', '/'));
+
+        return name.Length > 80 ? name[..80] : name;
     }
 
     private void RefuseTheDemoDatabase(string backupFilePath)
@@ -529,6 +537,11 @@ public sealed class SqliteDatabaseRestore : IDatabaseRestore
     public RestoreOutcome? GetLastOutcome()
     {
         return File.Exists(LastOutcomeFile) ? ReadJson<RestoreOutcome>(LastOutcomeFile) : null;
+    }
+
+    public void ClearLastOutcome()
+    {
+        DeleteFile(LastOutcomeFile);
     }
 
     private RestoreOutcome Record(RestoreOutcome outcome)

@@ -864,3 +864,54 @@ Filen `restore\last-restore.json` forteller siste utfall.
 - **Uavklart betyr stopp:** programmet gjør ingen forsøk på å gjette. Det er bevisst, men brukeren må følge fremgangsmåten over, og en senere skjerm bør vise den samme veiledningen.
 - **Lås fra virusskanner** kan gi en midlertidig `Unresolved`. Neste oppstart løser det normalt.
 - **Strømbrudd midt i en enkelt filflytting** er ikke testet (garantert atomisk av filsystemet), og tillatelse- og diskfeil er ikke testet direkte.
+
+## Sikkerhetskopi og gjenoppretting i brukergrensesnittet (M5C)
+
+Siden `/innstillinger/sikkerhetskopi` (menyvalget «Sikkerhetskopi») gjør motorene fra M5A og M5B tilgjengelige for et styremedlem. Den bygger ingen ny sikkerhetslogikk: alt går gjennom `IDatabaseBackup` og `IDatabaseRestore`, og siden gir motorene aldri annet enn en midlertidig fil den selv har mottatt.
+
+### Hvordan nedlasting fungerer (uten offentlig adresse)
+
+Blazor Interactive Server har ingen vanlig nedlastingsadresse å bruke, og en statisk URL til en databasefil ville vært en sikkerhetsrisiko. Derfor:
+1. `BackupTransfer.CreateDownloadAsync()` lager sikkerhetskopien med M5A-motoren i en **privat midlertidig mappe** (`transfer\<tilfeldig>`) ved siden av databasen, med et filnavn som `SameieHub-sikkerhetskopi-2026-11-23-1353.db` (norsk dato og klokkeslett, ingen personopplysninger).
+2. Siden sender filen til nettleseren som en **strøm** (`DotNetStreamReference`) over den eksisterende Blazor-forbindelsen, til en liten JavaScript-modul (`BackupPage.razor.js`). Modulen lager en midlertidig adresse som bare finnes i den ene nettleserfanen (`URL.createObjectURL`) og starter nedlastingen.
+3. Så snart nettleseren har mottatt filen (eller noe feiler) **slettes den midlertidige mappen**. Det finnes ingen adresse på serveren som peker på en databasefil, og ingen minimal-API-rute.
+
+Nettleseren lagrer filen i nedlastingsmappen sin. Siden sier at filen må flyttes til et trygt sted og at den inneholder personopplysninger og ikke er kryptert.
+
+### Hvordan filvalg fungerer (ingen filbane fra klienten)
+
+Et vanlig HTML-filfelt gir **ikke** en lokal filbane til serveren, bare selve innholdet. Siden bruker derfor Blazors `InputFile`:
+1. Brukeren velger en fil som slutter på `.db`. Nettleseren oppgir filens navn og innhold, aldri en bane.
+2. `BackupTransfer.ReceiveUploadAsync()` kopierer innholdet i en strøm til `transfer\<tilfeldig>\upload.db`. **Filen får alltid det faste navnet `upload.db`** i en egen tilfeldig mappe. Navnet nettleseren sendte brukes bare til visning, etter at alle baneskilletegn og kontrolltegn er fjernet, og er aldri en del av en bane.
+3. **Størrelsesgrense:** 200 MB (`BackupTransfer.DefaultMaxUploadBytes`). Både `InputFile` og kopieringen håndhever den. En tom fil avvises.
+4. Filen **inspiseres** (`BackupFileInspector`) og innholdet telles (`BackupContentSummary`, bare antall, ingen navn). Er den ugyldig, ikke fra SameieHub eller fra en nyere versjon, vises en forståelig melding og den midlertidige filen slettes med en gang.
+5. Filen slettes uansett utfall: etter forberedelsen, når brukeren velger en annen fil eller avbryter, når siden forlates (`IDisposable`), og ved et avbrutt opplasting (opprydding i `catch`). Gamle midlertidige mapper (over en time) slettes når siden åpnes.
+
+Filtypen `.db` er bare en hjelp for brukeren. Den virkelige kontrollen er inspeksjonen og de tre M5B-kontrollene (sjekksum, validering, versjon).
+
+### Slik bekreftes gjenoppretting
+
+| Trinn | Hva som skjer | Hva som er endret |
+|---|---|---|
+| 1. Velg fil | Opplasting, kontroll og sammenligning «nå» mot «i sikkerhetskopien» (boenheter, styresaker, oppgaver, ladere, avlesninger) | Ingenting |
+| 2. «Gjenopprett denne sikkerhetskopien …» | Bekreftelsesboks (`role="alertdialog"`) som sier at alle data erstattes, at dagens data tas vare på, og at ingenting skjer før omstart | Ingenting |
+| 3. «Ja, forbered gjenopprettingen» | `IDatabaseRestore.PrepareAsync` (full M5B-kontroll, oppgradering av eldre versjon på arbeidskopi) | Bare arbeidskopien i `restore` |
+| 4. Venter på omstart | Siden viser hva som venter og hva brukeren må gjøre, og «Avbryt gjenopprettingen» (`CancelPending`) | Ingenting før omstart |
+| 5. Omstart | `ApplyPendingRestore` (M5B) bytter databasen før noen forbindelse åpnes | Databasen er erstattet, den gamle er tatt vare på |
+| 6. Resultat | En beskjed på forsiden og på siden (`RestoreResultNotice`) fra `GetLastOutcome()`, som brukeren kan skjule (`ClearLastOutcome()`) | – |
+
+Gjenopprettingen forberedes først når brukeren bekrefter, så en forlatt side etterlater aldri en ventende gjenoppretting som ville blitt gjennomført ved neste omstart uten at noen ba om det. Siden kan ikke omgå M5B: motoren gjør alle kontrollene på nytt, og avviser demodatabasen (`DemoDatabaseNotAllowed`), den aktive databasen, nyere versjoner og feil databaser. En uavklart tilstand ved oppstart stopper programmet (M5B-S) og kommer aldri så langt som til siden.
+
+**Hva brukeren må gjøre ved omstart:** lukke SameieHub (programmet/vinduet det kjører i, ikke bare nettleseren) og starte det på nytt. Gjenopprettingen gjennomføres da automatisk, og resultatet vises på forsiden.
+
+### Små tillegg i motorene (M5C)
+- `IDatabaseRestore.ClearLastOutcome()` slik at en beskjed ikke vises om og om igjen.
+- `PrepareAsync(..., displayName)`: navnet brukeren valgte vises som navn på den ventende gjenopprettingen (opplastingen har et midlertidig navn). Navnet brukes bare til visning.
+- `BackupTransfer` og `BackupContentSummary` (nye) i `Infrastructure/Backup`.
+
+### Begrensninger
+- **Opplasting går via forbindelsen mellom nettleseren og programmet** og er derfor tregere for store filer enn en vanlig nedlasting. For et lite sameie (databasen er et titalls MB) er det uproblematisk.
+- **Nettleseren bestemmer hvor filen lagres** (vanligvis nedlastingsmappen). Programmet kan ikke velge en annen disk eller mappe for brukeren.
+- **Ingen automatisk eller planlagt sikkerhetskopi**, og ingen skylagring.
+- **Omstart må gjøres for hånd.** Programmet kan ikke starte seg selv på nytt, og siden kan ikke vite hvordan det startes (i M5C-pakken kan teksten tilpasses).
+- Gamle databaser i `restore` slettes aldri automatisk.

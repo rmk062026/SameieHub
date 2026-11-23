@@ -11,8 +11,9 @@ public interface IDatabaseRestore
     /// Checks the chosen backup and prepares a restore from it, upgrading an older backup on a working copy. The backup file and
     /// the live database are never changed. A restore that was prepared earlier is replaced.
     /// </summary>
+    /// <param name="displayName">The name to show the person, for a file that was uploaded under a temporary name. It is only shown, never used as a path.</param>
     /// <exception cref="DatabaseRestoreException">The backup cannot be used. Nothing was changed.</exception>
-    Task<RestorePreparation> PrepareAsync(string backupFilePath, CancellationToken cancellationToken = default);
+    Task<RestorePreparation> PrepareAsync(string backupFilePath, CancellationToken cancellationToken = default, string? displayName = null);
 
     /// <summary>
     /// Carries out a prepared restore, or finishes or undoes one that was interrupted. Must be called before the database is
@@ -28,6 +29,9 @@ public interface IDatabaseRestore
 
     /// <summary>What happened the last time a restore was carried out or undone, or null if it never happened.</summary>
     RestoreOutcome? GetLastOutcome();
+
+    /// <summary>Forgets the last outcome once the person has seen it, so the message is not shown again.</summary>
+    void ClearLastOutcome();
 }
 
 /// <summary>What the chosen file turned out to be.</summary>

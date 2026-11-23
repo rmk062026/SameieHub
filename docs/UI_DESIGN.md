@@ -48,6 +48,7 @@ wwwroot/app.css  designvariabler og felles stiler
 | `/elbillading/avlesning` | Samlet avlesning: hovedmåler og undermålere | Funksjonell |
 | `/elbillading/avstemming` | Avstemming for valgt periode | Funksjonell |
 | `/elbillading/maler/{id}` | Historikk for en måler | Funksjonell |
+| `/innstillinger/sikkerhetskopi` | Lag og last ned sikkerhetskopi; kontroller, bekreft og forbered gjenoppretting; resultat etter omstart | Funksjonell |
 
 Sidemeny på bred skjerm (≥ 768 px); på smal skjerm en toppstripe med menyknapp.
 
@@ -109,6 +110,9 @@ Sidemeny på bred skjerm (≥ 768 px); på smal skjerm en toppstripe med menykna
 - **Historikk, korrigering og sletting:** per måler, nyeste først, med forbruk siden forrige. Korrigering må passe mellom nabo-avlesningene. Sletting krever bekreftelse (`role="alertdialog"`).
 - **Boenhet og dashboard:** boenhetssiden har en kompakt seksjon «Elbillader», og dashboardet en liten seksjon med tall og siste avstemming.
 - **Smal skjerm:** verifisert i nettleser på 375 px: ingen vannrett rulling på noen elbillingside.
+
+## Sikkerhetskopi (M5C)
+Én side med to atskilte kort: «Lag sikkerhetskopi» og «Gjenopprett fra sikkerhetskopi». Ingen tekniske begreper (ingen migreringer, sjekksummer eller SQLite). Knappene deaktiveres mens en handling pågår. Filvalg (`InputFile`) viser en kontroll med forskjell på «nå» og «i sikkerhetskopien», en bekreftelsesboks (`role="alertdialog"`) og en forklaring på hva brukeren må gjøre ved omstart. Resultatet vises som en beskjed på forsiden og på siden. Interne banenavn vises aldri. Se [ARCHITECTURE.md](ARCHITECTURE.md), «Sikkerhetskopi og gjenoppretting i brukergrensesnittet (M5C)».
 
 ## Ikke laget ennå
 Endringshistorikk for styresaker.

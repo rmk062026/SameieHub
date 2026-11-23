@@ -31,6 +31,11 @@ public static class ServiceCollectionExtensions
             databasePath,
             provider.GetRequiredService<TimeProvider>(),
             provider.GetRequiredService<ILogger<SqliteDatabaseBackup>>()));
+        services.AddSingleton(provider => new BackupTransfer(
+            databasePath,
+            provider.GetRequiredService<IDatabaseBackup>(),
+            provider.GetRequiredService<TimeProvider>(),
+            provider.GetRequiredService<ILogger<BackupTransfer>>()));
         services.AddSingleton<IDatabaseRestore>(provider => new SqliteDatabaseRestore(
             databasePath,
             provider.GetRequiredService<TimeProvider>(),

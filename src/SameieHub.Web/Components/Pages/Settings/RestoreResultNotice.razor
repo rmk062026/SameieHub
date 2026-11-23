@@ -1,0 +1,53 @@
+@using SameieHub.Infrastructure.Restore
+@inject IDatabaseRestore Restore
+
+@if (_outcome != null)
+{
+    <section class="alert @(_succeeded ? "alert-success" : "alert-warning")" data-testid="restore-result" role="status">
+        <h2 class="h6">@(_succeeded ? "Gjenopprettingen er gjennomført" : "Gjenopprettingen ble ikke gjennomført")</h2>
+        <p class="mb-2">@Message</p>
+        <div class="form-actions">
+            @if (Compact)
+            {
+                <a class="btn btn-outline-primary btn-sm" href="/innstillinger/sikkerhetskopi">Les mer</a>
+            }
+            <button type="button" id="dismiss-result" class="btn btn-outline-secondary btn-sm" @onclick="Dismiss">Skjul beskjeden</button>
+        </div>
+    </section>
+}
+
+@code {
+    private RestoreOutcome? _outcome;
+    private bool _succeeded;
+
+    /// <summary>A short form for the dashboard, with a link to the backup page.</summary>
+    [Parameter]
+    public bool Compact { get; set; }
+
+    private string Message => _outcome!.Kind switch
+    {
+        RestoreOutcomeKind.Applied or RestoreOutcomeKind.AppliedAfterRecovery =>
+            $"SameieHub bruker nå dataene fra sikkerhetskopien (gjennomført {NorwegianDateFormat.DateTime(_outcome.AtUtc)}). "
+            + "Dataene du hadde før er tatt vare på i en egen mappe («restore») ved siden av databasefilen, hvis du trenger dem.",
+        RestoreOutcomeKind.Rejected =>
+            "Den forberedte sikkerhetskopien besto ikke kontrollen da programmet startet, så den ble ikke brukt. Dataene dine er som før. Prøv igjen med en annen fil.",
+        _ =>
+            "Gjenopprettingen kunne ikke gjennomføres, og programmet har satt alt tilbake som det var. Dataene dine er uendret. Du kan prøve igjen."
+    };
+
+    protected override void OnInitialized()
+    {
+        _outcome = Restore.GetLastOutcome();
+        _succeeded = _outcome?.Kind is RestoreOutcomeKind.Applied or RestoreOutcomeKind.AppliedAfterRecovery;
+        if (_outcome?.Kind == RestoreOutcomeKind.NothingPending)
+        {
+            _outcome = null;
+        }
+    }
+
+    private void Dismiss()
+    {
+        Restore.ClearLastOutcome();
+        _outcome = null;
+    }
+}

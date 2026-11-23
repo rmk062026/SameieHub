@@ -24,6 +24,7 @@ public abstract class UiTestBase : BunitContext
         Services.AddSingleton<IMeterRepository>(Meters);
         Services.AddSingleton<IMeterReadingRepository>(Readings);
         Services.AddSingleton<ChargingService>();
+        Services.AddSingleton<SameieHub.Infrastructure.Restore.IDatabaseRestore>(new FakeDatabaseRestore());
     }
 
     protected FakeMeterRepository Meters { get; } = new();

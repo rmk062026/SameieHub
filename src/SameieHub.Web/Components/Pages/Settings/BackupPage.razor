@@ -1,0 +1,409 @@
+@page "/innstillinger/sikkerhetskopi"
+@using SameieHub.Infrastructure.Backup
+@using SameieHub.Infrastructure.Restore
+@implements IDisposable
+@inject BackupTransfer Transfer
+@inject IDatabaseRestore Restore
+@inject HousingUnitService HousingUnitService
+@inject BoardCaseService BoardCaseService
+@inject TaskItemService TaskService
+@inject ChargingService ChargingService
+@inject IJSRuntime JS
+@inject ILogger<BackupPage> Logger
+
+<PageTitle>Sikkerhetskopi – SameieHub</PageTitle>
+
+<PageHeader Title="Sikkerhetskopi" Description="Lag en kopi av alle dataene, og gjenopprett fra en tidligere kopi." />
+
+<RestoreResultNotice />
+
+<section class="surface-card form-section" aria-labelledby="backup-title">
+    <h2 id="backup-title">Lag sikkerhetskopi</h2>
+    <p>
+        Sikkerhetskopien er én fil med alle boenheter, styresaker, oppgaver og elbillingsavlesninger. Den lastes ned til nettleseren
+        din, og du velger selv hvor den lagres.
+    </p>
+    <p class="text-muted">
+        Lag en kopi jevnlig, og alltid før du gjenoppretter eller gjør store endringer. Lagre kopien et trygt sted, gjerne på en annen
+        disk enn datamaskinens egen.
+    </p>
+
+    @if (_backupError != null)
+    {
+        <div class="alert alert-danger" role="alert" data-testid="backup-error">@_backupError</div>
+    }
+    @if (_backupMessage != null)
+    {
+        <div class="alert alert-success" role="status" data-testid="backup-result">@_backupMessage</div>
+    }
+
+    <div class="form-actions">
+        <button type="button" id="create-backup" class="btn btn-primary" disabled="@_isBusy" @onclick="CreateBackupAsync">
+            @if (_isCreatingBackup)
+            {
+                <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
+                <span>Lager sikkerhetskopi …</span>
+            }
+            else
+            {
+                @:Lag og last ned sikkerhetskopi
+            }
+        </button>
+    </div>
+    <p class="form-text mt-3">
+        <strong>Oppbevar filen trygt.</strong> Den inneholder navn, telefonnumre og e-postadresser, og er ikke kryptert. Ikke legg den i en
+        delt eller åpen mappe, og ikke send den i vanlig e-post.
+    </p>
+</section>
+
+<section class="surface-card form-section" aria-labelledby="restore-title">
+    <h2 id="restore-title">Gjenopprett fra sikkerhetskopi</h2>
+
+    @if (_pending != null)
+    {
+        <div class="alert alert-warning" role="status" data-testid="restore-pending">
+            <h3 class="h6">Gjenopprettingen venter på omstart</h3>
+            <p>
+                Sikkerhetskopien «@_pending.BackupFileName» er kontrollert og klar (forberedt @NorwegianDateFormat.DateTime(_pending.PreparedAtUtc)).
+                @if (_pending.WasUpgraded)
+                {
+                    <text> Den er fra en eldre versjon og er oppgradert automatisk. Filen du valgte er ikke endret.</text>
+                }
+            </p>
+            <p class="mb-2"><strong>Dette må du gjøre nå:</strong></p>
+            <ol>
+                <li>Lukk SameieHub. Det er ikke nok å lukke nettleseren: programmet (vinduet det kjører i) må stoppes.</li>
+                <li>Start SameieHub på nytt.</li>
+                <li>Gjenopprettingen gjennomføres da automatisk, og du ser resultatet på forsiden.</li>
+            </ol>
+            <p>Dataene du har nå tas vare på i en egen mappe, slik at de kan reddes hvis noe skulle gå galt. Frem til du starter på nytt er ingenting endret, og du kan avbryte.</p>
+            <button type="button" id="cancel-pending" class="btn btn-outline-secondary" disabled="@_isBusy" @onclick="CancelPending">Avbryt gjenopprettingen</button>
+        </div>
+    }
+    else
+    {
+        <div class="alert alert-info" role="note">
+            <strong>Dette erstatter alle dataene i SameieHub</strong> med innholdet i sikkerhetskopien. Lag gjerne en ny sikkerhetskopi av dagens data først (over).
+        </div>
+
+        @if (_restoreError != null)
+        {
+            <div class="alert alert-danger" role="alert" data-testid="restore-error">@_restoreError</div>
+        }
+
+        @if (_upload == null)
+        {
+            <label for="backup-file" class="form-label">Velg sikkerhetskopien du vil bruke</label>
+            <InputFile id="backup-file" class="form-control" accept=".db" disabled="@_isBusy" OnChange="OnFileSelected" />
+            <div class="form-text">En fil som slutter på .db, laget av SameieHub. Filen kontrolleres før den kan brukes, og ingenting endres før du har bekreftet.</div>
+            @if (_isChecking)
+            {
+                <p class="mt-3" role="status"><span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Kontrollerer filen …</p>
+            }
+        }
+        else
+        {
+            <div data-testid="restore-check">
+                <h3 class="h6">Kontroll av «@_upload.DisplayName»</h3>
+                <p class="text-success mb-2">Sikkerhetskopien kan brukes.</p>
+                @if (_upload.Inspection.Status == BackupFileStatus.Older)
+                {
+                    <p>Den er laget med en eldre versjon av SameieHub. Den oppgraderes automatisk når gjenopprettingen forberedes, og filen du valgte endres ikke.</p>
+                }
+
+                <p class="mb-1">Dette er forskjellen på dataene dine nå og innholdet i sikkerhetskopien:</p>
+                <div class="table-responsive">
+                    <table class="table data-table">
+                        <caption class="visually-hidden">Antall nå og i sikkerhetskopien</caption>
+                        <thead>
+                            <tr>
+                                <th scope="col"></th>
+                                <th scope="col">Nå</th>
+                                <th scope="col">I sikkerhetskopien</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><th scope="row">Boenheter</th><td>@Show(_current?.HousingUnits)</td><td>@Show(_upload.Content?.HousingUnits)</td></tr>
+                            <tr><th scope="row">Styresaker</th><td>@Show(_current?.BoardCases)</td><td>@Show(_upload.Content?.BoardCases)</td></tr>
+                            <tr><th scope="row">Oppgaver</th><td>@Show(_current?.Tasks)</td><td>@Show(_upload.Content?.Tasks)</td></tr>
+                            <tr><th scope="row">Ladere</th><td>@Show(_current?.Chargers)</td><td>@Show(_upload.Content?.Chargers)</td></tr>
+                            <tr><th scope="row">Avlesninger</th><td>@Show(_current?.MeterReadings)</td><td>@Show(_upload.Content?.MeterReadings)</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                @if (_upload.Inspection.Status == BackupFileStatus.Older)
+                {
+                    <p class="form-text">Et «–» betyr at denne eldre sikkerhetskopien ikke har den typen data ennå.</p>
+                }
+
+                @if (!_confirming)
+                {
+                    <div class="form-actions">
+                        <button type="button" id="start-restore" class="btn btn-primary" disabled="@_isBusy" @onclick="AskForConfirmation">Gjenopprett denne sikkerhetskopien …</button>
+                        <button type="button" id="cancel-check" class="btn btn-outline-secondary" disabled="@_isBusy" @onclick="DiscardUpload">Velg en annen fil</button>
+                    </div>
+                }
+                else
+                {
+                    <div class="danger-zone" role="alertdialog" aria-labelledby="confirm-title" aria-describedby="confirm-text">
+                        <h3 id="confirm-title" class="h6">Gjenopprette fra «@_upload.DisplayName»?</h3>
+                        <p id="confirm-text">
+                            <strong>Alle dataene i SameieHub erstattes</strong> med innholdet i sikkerhetskopien. Dataene du har nå tas vare på i en egen mappe,
+                            men blir ikke brukt av programmet. Gjenopprettingen gjennomføres først når du har lukket SameieHub og startet det på nytt, og
+                            du kan avbryte frem til da.
+                        </p>
+                        <div class="form-actions">
+                            <button type="button" id="confirm-restore" class="btn btn-danger" disabled="@_isBusy" @onclick="PrepareRestoreAsync">
+                                @(_isPreparing ? "Forbereder …" : "Ja, forbered gjenopprettingen")
+                            </button>
+                            <button type="button" id="cancel-confirm" class="btn btn-outline-secondary" disabled="@_isBusy" @onclick="CancelConfirmation">Avbryt</button>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    }
+</section>
+
+@code {
+    private const string ModulePath = "./Components/Pages/Settings/BackupPage.razor.js";
+
+    private record CurrentContent(int HousingUnits, int BoardCases, int Tasks, int Chargers, int MeterReadings);
+
+    private bool _isBusy;
+    private bool _isCreatingBackup;
+    private bool _isChecking;
+    private bool _isPreparing;
+    private bool _confirming;
+    private string? _backupMessage;
+    private string? _backupError;
+    private string? _restoreError;
+    private UploadedBackup? _upload;
+    private CurrentContent? _current;
+    private PendingRestore? _pending;
+
+    protected override void OnInitialized()
+    {
+        Transfer.DeleteOldTemporaryFiles(TimeSpan.FromHours(1));
+        _pending = Restore.GetPending();
+    }
+
+    // Backup
+
+    private async Task CreateBackupAsync()
+    {
+        if (_isBusy)
+        {
+            return;
+        }
+
+        _isBusy = true;
+        _isCreatingBackup = true;
+        _backupMessage = null;
+        _backupError = null;
+
+        try
+        {
+            await using var download = await Transfer.CreateDownloadAsync();
+            await using var stream = download.OpenRead();
+            using var reference = new DotNetStreamReference(stream);
+            await using var module = await JS.InvokeAsync<IJSObjectReference>("import", ModulePath);
+            await module.InvokeVoidAsync("downloadFromStream", download.FileName, reference);
+
+            _backupMessage = $"Sikkerhetskopien er laget og sendt til nettleseren din som «{download.FileName}». "
+                + "Sjekk nedlastingsmappen din, og flytt filen til et trygt sted.";
+        }
+        catch (DatabaseBackupException exception)
+        {
+            _backupError = BackupMessage(exception.Reason);
+        }
+        catch (Exception exception) when (exception is JSException or IOException or JSDisconnectedException)
+        {
+            Logger.LogWarning("The backup could not be handed to the browser ({InnerError}).", exception.GetType().Name);
+            _backupError = "Sikkerhetskopien ble laget, men nettleseren kunne ikke ta imot den. Prøv igjen.";
+        }
+        finally
+        {
+            _isCreatingBackup = false;
+            _isBusy = false;
+        }
+    }
+
+    private static string BackupMessage(DatabaseBackupFailure reason)
+    {
+        return reason switch
+        {
+            DatabaseBackupFailure.SourceUnavailable => "Sikkerhetskopien kunne ikke lages fordi databasen ikke kunne leses. Lukk andre vinduer med SameieHub og prøv igjen.",
+            DatabaseBackupFailure.ValidationFailed => "Sikkerhetskopien kunne ikke lages: kopien besto ikke kontrollen, så den er ikke lagret. Dataene dine er uendret.",
+            _ => "Sikkerhetskopien kunne ikke lages. Kontroller at det er ledig plass på disken, og prøv igjen."
+        };
+    }
+
+    // Restore: choose, check, confirm
+
+    private async Task OnFileSelected(InputFileChangeEventArgs e)
+    {
+        if (_isBusy)
+        {
+            return;
+        }
+
+        _isBusy = true;
+        _isChecking = true;
+        _restoreError = null;
+        DisposeUpload();
+
+        try
+        {
+            var file = e.File;
+            if (!file.Name.EndsWith(".db", StringComparison.OrdinalIgnoreCase))
+            {
+                _restoreError = "Velg en sikkerhetskopi som slutter på .db.";
+
+                return;
+            }
+
+            await using var stream = file.OpenReadStream(Transfer.MaxUploadBytes);
+            var upload = await Transfer.ReceiveUploadAsync(stream, file.Name);
+
+            var problem = UploadProblem(upload.Inspection.Status);
+            if (problem != null)
+            {
+                upload.Dispose();
+                _restoreError = problem;
+
+                return;
+            }
+
+            _upload = upload;
+            _current = await ReadCurrentContentAsync();
+        }
+        catch (BackupUploadException exception)
+        {
+            _restoreError = exception.Reason == BackupUploadFailure.TooLarge ? TooLargeMessage : "Filen er tom. Velg en annen fil.";
+        }
+        catch (IOException)
+        {
+            // The browser reports a file above the limit before any of it is read, and an upload that is cut off ends here too.
+            _restoreError = TooLargeMessage;
+        }
+        finally
+        {
+            _isChecking = false;
+            _isBusy = false;
+        }
+    }
+
+    private string TooLargeMessage =>
+        $"Filen er for stor eller ble ikke overført ferdig. Sikkerhetskopier kan være opptil {Transfer.MaxUploadBytes / (1024 * 1024)} MB.";
+
+    private static string? UploadProblem(BackupFileStatus status)
+    {
+        return status switch
+        {
+            BackupFileStatus.Invalid => "Filen er ikke en gyldig sikkerhetskopi. Den kan være skadet eller ikke ferdig lastet ned. Prøv en annen fil.",
+            BackupFileStatus.NotSameieHub => "Filen er en databasefil, men ikke fra SameieHub. Velg en sikkerhetskopi laget av SameieHub.",
+            BackupFileStatus.Newer => "Sikkerhetskopien er laget med en nyere versjon av SameieHub enn den du bruker nå. Oppdater programmet, eller velg en eldre sikkerhetskopi.",
+            _ => null
+        };
+    }
+
+    private async Task<CurrentContent?> ReadCurrentContentAsync()
+    {
+        try
+        {
+            var units = await HousingUnitService.GetAllAsync();
+            var cases = await BoardCaseService.GetAllAsync();
+            var tasks = await TaskService.GetAllAsync();
+            var chargers = await ChargingService.GetChargersAsync();
+            var readings = await ChargingService.GetAllReadingsAsync();
+
+            return new CurrentContent(units.Count, cases.Count, tasks.Count, chargers.Count, readings.Count);
+        }
+        catch (Exception exception)
+        {
+            // The comparison is only a help. The restore itself does not depend on it.
+            Logger.LogWarning("The current data could not be counted ({InnerError}).", exception.GetType().Name);
+
+            return null;
+        }
+    }
+
+    private void AskForConfirmation()
+    {
+        _confirming = true;
+    }
+
+    private void CancelConfirmation()
+    {
+        _confirming = false;
+    }
+
+    private void DiscardUpload()
+    {
+        DisposeUpload();
+        _confirming = false;
+    }
+
+    private void DisposeUpload()
+    {
+        _upload?.Dispose();
+        _upload = null;
+    }
+
+    private async Task PrepareRestoreAsync()
+    {
+        if (_isBusy || _upload == null)
+        {
+            return;
+        }
+
+        _isBusy = true;
+        _isPreparing = true;
+        _restoreError = null;
+
+        try
+        {
+            // The engine repeats every check. The page never gives it anything but the temporary file it received itself.
+            await Restore.PrepareAsync(_upload.FilePath, displayName: _upload.DisplayName);
+            _pending = Restore.GetPending();
+        }
+        catch (DatabaseRestoreException exception)
+        {
+            _restoreError = RestoreMessage(exception.Reason);
+        }
+        finally
+        {
+            DisposeUpload();
+            _confirming = false;
+            _isPreparing = false;
+            _isBusy = false;
+        }
+    }
+
+    private static string RestoreMessage(DatabaseRestoreFailure reason)
+    {
+        return reason switch
+        {
+            DatabaseRestoreFailure.DemoDatabaseNotAllowed => "Gjenoppretting er ikke tilgjengelig i demoen. Demoen kan nullstilles i stedet.",
+            DatabaseRestoreFailure.NewerVersion => UploadProblem(BackupFileStatus.Newer)!,
+            DatabaseRestoreFailure.NotSameieHubDatabase => UploadProblem(BackupFileStatus.NotSameieHub)!,
+            DatabaseRestoreFailure.UpgradeFailed => "Den eldre sikkerhetskopien kunne ikke oppgraderes, så den kan ikke brukes. Dataene dine er uendret.",
+            DatabaseRestoreFailure.WriteFailed => "Gjenopprettingen kunne ikke forberedes. Kontroller at det er ledig plass på disken, og prøv igjen. Dataene dine er uendret.",
+            _ => UploadProblem(BackupFileStatus.Invalid)!
+        };
+    }
+
+    private void CancelPending()
+    {
+        Restore.CancelPending();
+        _pending = null;
+    }
+
+    private static string Show(int? count) => count?.ToString() ?? "–";
+
+    public void Dispose()
+    {
+        DisposeUpload();
+    }
+}

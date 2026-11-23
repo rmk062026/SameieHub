@@ -2,12 +2,15 @@
 @using SameieHub.Web.Components.Pages.BoardCases
 @using SameieHub.Web.Components.Pages.TaskItems
 @using SameieHub.Web.Components.Pages.Charging
+@using SameieHub.Web.Components.Pages.Settings
 @inject HousingUnitService HousingUnitService
 @inject BoardCaseService BoardCaseService
 @inject TaskItemService TaskService
 @inject ILogger<Dashboard> Logger
 
 <PageTitle>Dashboard – SameieHub</PageTitle>
+
+<RestoreResultNotice Compact="true" />
 
 <PageHeader Title="Dashboard" Description="@(_overview == null ? "Status for sameiet." : $"Status for sameiet per {NorwegianDateFormat.Date(_today)}.")">
     <button type="button" class="btn btn-outline-secondary" disabled="@_isLoading" @onclick="LoadAsync">Oppdater oversikten</button>

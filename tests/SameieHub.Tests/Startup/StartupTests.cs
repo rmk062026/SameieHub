@@ -120,6 +120,7 @@ public class StartupTests : IClassFixture<StartupFixture>
     [Theory]
     [InlineData("/")]
     [InlineData("/elbillading")]
+    [InlineData("/innstillinger/sikkerhetskopi")]
     public async Task Get_Page_ReturnsTheApplicationShell(string path)
     {
         using var client = _app.CreateClient();
