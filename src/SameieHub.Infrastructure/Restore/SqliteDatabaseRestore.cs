@@ -257,6 +257,13 @@ public sealed class SqliteDatabaseRestore : IDatabaseRestore
 
     // Step 2: apply at startup
 
+    /// <summary>
+    /// Three kinds of result matter to the caller. A restore that was carried out (<see cref="RestoreOutcomeKind.Applied"/>,
+    /// <see cref="RestoreOutcomeKind.AppliedAfterRecovery"/>) leaves a database that was checked by its checksum. Nothing done, rejected,
+    /// or rolled back leaves the original database, and a rollback is only reported when every original file is back with the checksum
+    /// it had before. Everything else is <see cref="RestoreOutcomeKind.Unresolved"/>: nothing more is changed, every file is kept, and
+    /// the program must not start.
+    /// </summary>
     public RestoreOutcome ApplyPendingRestore()
     {
         _oneAtATime.Wait();
@@ -284,10 +291,10 @@ public sealed class SqliteDatabaseRestore : IDatabaseRestore
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException)
         {
-            // The program must still be able to start. The files are left as they are for inspection.
-            _logger.LogError("Restore could not be completed ({InnerError}).", exception.GetType().Name);
+            // Not even the cause can be trusted to have left the database in a known state. Nothing more is touched.
+            _logger.LogError("Restore could not be resolved safely ({InnerError}).", exception.GetType().Name);
 
-            return new RestoreOutcome(RestoreOutcomeKind.Failed, Now(), null);
+            return Record(Unresolved());
         }
         finally
         {
@@ -297,6 +304,14 @@ public sealed class SqliteDatabaseRestore : IDatabaseRestore
 
     private RestoreOutcome Publish(PendingManifest manifest)
     {
+        if (!File.Exists(PendingFile) && File.Exists(_databasePath) && Hash(_databasePath) == manifest.Sha256)
+        {
+            // The new database was placed, and the program stopped before the manifest was deleted.
+            DeleteManifest();
+
+            return new RestoreOutcome(RestoreOutcomeKind.AppliedAfterRecovery, Now(), null);
+        }
+
         if (!IsPreparedFileStillGood(manifest))
         {
             DiscardPending();
@@ -304,12 +319,30 @@ public sealed class SqliteDatabaseRestore : IDatabaseRestore
             return new RestoreOutcome(RestoreOutcomeKind.Rejected, Now(), null);
         }
 
-        var existing = LiveFiles().Where(File.Exists).Select(Path.GetFileName).OfType<string>().ToList();
+        var existing = LiveFiles().Where(File.Exists).ToList();
         var previousName = NewPreviousFolderName();
-        WriteJournal(new RestoreJournal(MovingOld, previousName, existing));
+        var previousFolder = Path.Combine(_restoreFolder, previousName);
+        RestoreJournal journal;
+        try
+        {
+            // The checksums are taken before anything moves, so a later rollback can prove that the originals are back.
+            var files = existing.Select(file => new JournalEntry(Path.GetFileName(file), Hash(file))).ToList();
+            journal = new RestoreJournal(MovingOld, previousName, File.Exists(_databasePath), files);
+            WriteJournal(journal);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // Nothing has been moved yet.
+            _logger.LogWarning("Restore was not started ({InnerError}).", exception.GetType().Name);
+            DeleteFile(JournalFile + ".tmp");
+            DeleteFile(JournalFile);
+            DiscardPending();
+
+            return new RestoreOutcome(RestoreOutcomeKind.RolledBack, Now(), null);
+        }
+
         Step("journal-written");
 
-        var previousFolder = Path.Combine(_restoreFolder, previousName);
         try
         {
             if (existing.Count > 0)
@@ -318,9 +351,9 @@ public sealed class SqliteDatabaseRestore : IDatabaseRestore
             }
 
             var moved = 0;
-            foreach (var name in existing)
+            foreach (var file in existing)
             {
-                File.Move(Path.Combine(DatabaseFolder, name), Path.Combine(previousFolder, name));
+                File.Move(file, Path.Combine(previousFolder, Path.GetFileName(file)));
                 moved++;
                 if (moved == 1)
                 {
@@ -328,7 +361,7 @@ public sealed class SqliteDatabaseRestore : IDatabaseRestore
                 }
             }
 
-            WriteJournal(new RestoreJournal(PlacingNew, previousName, existing));
+            WriteJournal(journal with { State = PlacingNew });
             Step("all-old-files-moved");
 
             File.Move(PendingFile, _databasePath);
@@ -336,58 +369,67 @@ public sealed class SqliteDatabaseRestore : IDatabaseRestore
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            // Typically a file that is still in use. Everything that was moved is put back.
+            // Typically a file that is still in use. Everything that was moved is put back, and that is checked.
             _logger.LogWarning("Restore was rolled back because a file could not be moved ({InnerError}).", exception.GetType().Name);
-            PutOldFilesBack(previousFolder, existing);
-            DeleteJournal();
-            DiscardPending();
 
-            return new RestoreOutcome(RestoreOutcomeKind.RolledBack, Now(), null);
+            return RollBack(journal);
         }
 
-        DeleteManifest();
+        // The journal goes first: if the program stops between the two, the checksum in the manifest still proves what is in place.
         DeleteJournal();
+        DeleteManifest();
 
         return new RestoreOutcome(RestoreOutcomeKind.Applied, Now(), existing.Count > 0 ? previousName : null);
     }
 
-    /// <summary>Finishes or undoes a restore that was interrupted: before the new database was placed it is undone, after it is finished.</summary>
+    /// <summary>
+    /// Finishes or undoes a restore that was interrupted. It is only finished when the file on the database path is proven to be the
+    /// prepared database by its checksum, and it is only undone when every original file is back with its recorded checksum.
+    /// </summary>
     private RestoreOutcome Recover()
     {
-        var journal = ReadJson<RestoreJournal>(JournalFile) ?? throw new JsonException("The journal is empty.");
-        var previousFolder = Path.Combine(_restoreFolder, journal.PreviousFolderName);
-
-        if (journal.State == PlacingNew && CanFinishPlacingTheNewDatabase())
+        var journal = ReadJournal();
+        if (journal == null)
         {
-            DeleteManifest();
-            DeleteJournal();
-            _logger.LogInformation("An interrupted restore was finished.");
+            _logger.LogError("The restore journal is damaged or incomplete.");
 
-            return new RestoreOutcome(RestoreOutcomeKind.AppliedAfterRecovery, Now(), journal.FileNames.Count > 0 ? journal.PreviousFolderName : null);
+            return Unresolved();
         }
 
-        PutOldFilesBack(previousFolder, journal.FileNames);
-        DeleteJournal();
-        DiscardPending();
-        _logger.LogWarning("An interrupted restore was undone.");
+        if (journal.State == PlacingNew && TryFinishPlacingTheNewDatabase())
+        {
+            DeleteJournal();
+            DeleteManifest();
+            _logger.LogInformation("An interrupted restore was finished.");
 
-        return new RestoreOutcome(RestoreOutcomeKind.RolledBack, Now(), null);
+            return new RestoreOutcome(RestoreOutcomeKind.AppliedAfterRecovery, Now(), journal.Files.Count > 0 ? journal.PreviousFolderName : null);
+        }
+
+        return RollBack(journal);
     }
 
-    private bool CanFinishPlacingTheNewDatabase()
+    /// <summary>True only if the prepared database is now in place, proven by the checksum from the manifest.</summary>
+    private bool TryFinishPlacingTheNewDatabase()
     {
+        var manifest = ReadManifest();
+        if (manifest == null)
+        {
+            return false;
+        }
+
         if (File.Exists(_databasePath))
         {
-            if (File.Exists(PendingFile))
+            if (Hash(_databasePath) != manifest.Sha256)
             {
-                File.Delete(PendingFile);
+                return false;
             }
+
+            DeleteFile(PendingFile);
 
             return true;
         }
 
-        var manifest = ReadManifest();
-        if (manifest == null || !File.Exists(PendingFile) || Hash(PendingFile) != manifest.Sha256)
+        if (!File.Exists(PendingFile) || Hash(PendingFile) != manifest.Sha256)
         {
             return false;
         }
@@ -395,6 +437,60 @@ public sealed class SqliteDatabaseRestore : IDatabaseRestore
         File.Move(PendingFile, _databasePath);
 
         return true;
+    }
+
+    private RestoreOutcome RollBack(RestoreJournal journal)
+    {
+        var previousFolder = Path.Combine(_restoreFolder, journal.PreviousFolderName);
+        PutOldFilesBack(previousFolder, journal.Files);
+
+        if (!AreTheOriginalsBack(journal))
+        {
+            _logger.LogError("The original database could not be confirmed after the rollback. Nothing more is changed.");
+
+            return Unresolved();
+        }
+
+        DeleteJournal();
+        DiscardPending();
+        _logger.LogWarning("A restore was undone and the original database was confirmed.");
+
+        return new RestoreOutcome(RestoreOutcomeKind.RolledBack, Now(), null);
+    }
+
+    private void PutOldFilesBack(string previousFolder, IEnumerable<JournalEntry> files)
+    {
+        foreach (var file in files)
+        {
+            var moved = Path.Combine(previousFolder, file.Name);
+            var original = Path.Combine(DatabaseFolder, file.Name);
+            if (File.Exists(moved) && !File.Exists(original))
+            {
+                File.Move(moved, original);
+                Step("old-file-put-back");
+            }
+        }
+
+        if (Directory.Exists(previousFolder) && !Directory.EnumerateFileSystemEntries(previousFolder).Any())
+        {
+            Directory.Delete(previousFolder);
+        }
+    }
+
+    /// <summary>Every original file must be where it was, with exactly the bytes it had before the restore started.</summary>
+    private bool AreTheOriginalsBack(RestoreJournal journal)
+    {
+        foreach (var file in journal.Files)
+        {
+            var path = Path.Combine(DatabaseFolder, file.Name);
+            if (!File.Exists(path) || Hash(path) != file.Sha256)
+            {
+                return false;
+            }
+        }
+
+        // If there was a database, it is among the files above. If there was none, nothing may be in its place.
+        return journal.HadDatabase || !File.Exists(_databasePath);
     }
 
     private bool IsPreparedFileStillGood(PendingManifest manifest)
@@ -408,23 +504,27 @@ public sealed class SqliteDatabaseRestore : IDatabaseRestore
             && DatabaseBackupValidator.FindProblems(PendingFile).Count == 0;
     }
 
-    private void PutOldFilesBack(string previousFolder, IEnumerable<string> names)
+    private RestoreJournal? ReadJournal()
     {
-        foreach (var name in names)
+        try
         {
-            var moved = Path.Combine(previousFolder, name);
-            var original = Path.Combine(DatabaseFolder, name);
-            if (File.Exists(moved) && !File.Exists(original))
-            {
-                File.Move(moved, original);
-            }
-        }
+            var journal = ReadJson<RestoreJournal>(JournalFile);
+            var valid = journal != null
+                && (journal.State == MovingOld || journal.State == PlacingNew)
+                && !string.IsNullOrWhiteSpace(journal.PreviousFolderName)
+                && journal.PreviousFolderName == Path.GetFileName(journal.PreviousFolderName)
+                && journal.Files != null
+                && journal.Files.All(file => !string.IsNullOrWhiteSpace(file.Name) && file.Name == Path.GetFileName(file.Name) && !string.IsNullOrEmpty(file.Sha256));
 
-        if (Directory.Exists(previousFolder) && !Directory.EnumerateFileSystemEntries(previousFolder).Any())
+            return valid ? journal : null;
+        }
+        catch (JsonException)
         {
-            Directory.Delete(previousFolder);
+            return null;
         }
     }
+
+    private RestoreOutcome Unresolved() => new(RestoreOutcomeKind.Unresolved, Now(), null);
 
     public RestoreOutcome? GetLastOutcome()
     {
@@ -562,5 +662,7 @@ public sealed class SqliteDatabaseRestore : IDatabaseRestore
 
     private sealed record PendingManifest(string BackupFileName, DateTime PreparedAtUtc, bool WasUpgraded, string Sha256, string LastMigrationId);
 
-    private sealed record RestoreJournal(string State, string PreviousFolderName, List<string> FileNames);
+    private sealed record JournalEntry(string Name, string Sha256);
+
+    private sealed record RestoreJournal(string State, string PreviousFolderName, bool HadDatabase, List<JournalEntry> Files);
 }

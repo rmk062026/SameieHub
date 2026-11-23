@@ -75,8 +75,11 @@ public enum RestoreOutcomeKind
     /// <summary>The prepared file did not pass the checks at startup, so it was not used. The database is unchanged.</summary>
     Rejected,
 
-    /// <summary>Something unexpected happened. Nothing more was changed, and the files are left for inspection.</summary>
-    Failed
+    /// <summary>
+    /// The state of the database cannot be guaranteed (for example a damaged journal, or a file that is in the way). Nothing more is
+    /// changed and every file is kept. The program must stop instead of starting with a new or uncertain database.
+    /// </summary>
+    Unresolved
 }
 
 /// <param name="PreviousDatabaseFolderName">The folder (inside the restore folder) that holds the database as it was before the restore.</param>

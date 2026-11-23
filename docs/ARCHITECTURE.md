@@ -751,8 +751,8 @@ Alle filene ligger på samme disk (i `restore` ved siden av databasen), så hver
 |---|---|---|
 | Arbeidskopien er kontrollert på nytt (SHA-256) | – | Ingenting er endret |
 | Journal skrives, gamle filer flyttes én og én | `MovingOld` | **Tilbakeføring:** filene flyttes tilbake. Opprinnelig database er uendret. |
-| Alle gamle filer er flyttet | `PlacingNew` | **Fullføring framover:** arbeidskopien flyttes på plass |
-| Ny database på plass, journal ikke slettet ennå | `PlacingNew` | Opprydding, den nye databasen beholdes |
+| Alle gamle filer er flyttet | `PlacingNew` | **Fullføring framover:** arbeidskopien flyttes på plass, men bare hvis dens SHA-256 stemmer med manifestet (se M5B-S) |
+| Ny database på plass, journal ikke slettet ennå | `PlacingNew` | Opprydding, men bare hvis filen på databasebanen har samme SHA-256 som manifestet (se M5B-S) |
 
 Ved neste oppstart leser programmet først journalen og ruller tilbake eller fullfører, så det aldri er en tilstand uten database eller med en blanding av gammel og ny. Etter en tilbakeføring slettes den klargjorte gjenopprettingen (den forsøkes ikke på nytt automatisk, slik at et gjentatt avbrudd ikke kan hindre programmet i å starte). Brukeren klargjør da en ny.
 
@@ -790,7 +790,7 @@ Koden ligger i `Infrastructure/Restore/`: `IDatabaseRestore` (kontrakten), `Sqli
 | `ApplyPendingRestore()` | Ved oppstart, før noen forbindelse | Verifiserer arbeidskopien på nytt, flytter den gamle databasen og sidefilene til `restore\before-restore-<tidspunkt>\`, og flytter arbeidskopien på plass. Fullfører eller angrer en avbrutt gjenoppretting. Kaster ikke: programmet skal alltid kunne starte. |
 | `GetPending()`, `CancelPending()`, `GetLastOutcome()` | Når som helst | Brukergrensesnittet senere kan vise hva som venter, avbryte det, og fortelle utfallet etter omstart (`restore\last-restore.json`). |
 
-**Utfall (`RestoreOutcomeKind`):** `NothingPending`, `Applied`, `AppliedAfterRecovery`, `RolledBack`, `Rejected`, `Failed`.
+**Utfall (`RestoreOutcomeKind`):** `NothingPending`, `Applied`, `AppliedAfterRecovery`, `RolledBack`, `Rejected`, `Unresolved` (programmet stopper, se under).
 
 **Hva som avvises ved klargjøring (`DatabaseRestoreFailure`):** manglende, ødelagt eller avkortet fil (`InvalidBackup`), gyldig SQLite som ikke er SameieHub (`NotSameieHubDatabase`), en nyere programversjon (`NewerVersion`), en eldre som ikke lot seg oppgradere (`UpgradeFailed`), demodatabasen som mål eller kilde (`DemoDatabaseNotAllowed`), selve den aktive databasen (`SourceIsTheLiveDatabase`) og skrivefeil (`WriteFailed`). Demo-kontrollen skjer først, før noen mappe eller fil opprettes.
 
@@ -807,3 +807,60 @@ Koden ligger i `Infrastructure/Restore/`: `IDatabaseRestore` (kontrakten), `Sqli
 - **Tillatelser og disk full** er ikke testet direkte (kan ikke simuleres trygt). Feilen oversettes til `WriteFailed`, og en halvferdig arbeidskopi fjernes eller ryddes ved neste oppstart.
 - **Én samtidig operasjon** per motor. To programforekomster mot samme database støttes ikke (programmet er for én bruker).
 - **Sikkerhetskopier er ukrypterte** og inneholder personopplysninger. Det gjelder også `restore`-mappen.
+
+### Sikkerhetskontroll av gjenopprettingen (M5B-S)
+
+En målrettet gjennomgang av samspillet mellom `ApplyPendingRestore`, `Recover`, `PutOldFilesBack`, `Program.cs` og `MigrateSameieHubDatabaseAsync` fant **seks konkrete svakheter**. Alle er rettet og har regresjonstester.
+
+| # | Svakhet som ble bekreftet | Hva som kunne skje | Retting |
+|---|---|---|---|
+| 1 | `Program.cs` fortsatte til `MigrateSameieHubDatabaseAsync()` også når gjenopprettingen feilet uventet (`Failed`) | Hvis den gamle databasen var flyttet til side, **opprettet migreringen en ny, tom database** på databasebanen | Utfallet heter nå `Unresolved`, og programmet **stopper med avslutningskode 1 før migreringen**. Ingen database opprettes. |
+| 2 | `Recover()` godtok **en vilkårlig fil** på databasebanen som bevis på at den nye databasen var på plass, og slettet den klargjorte kopien | En tom database laget av en tidligere mislykket oppstart ble tatt for den gjenopprettede | Filen på banen godtas bare hvis **SHA-256 er lik den i `pending.json`**. Ellers `Unresolved`, og den klargjorte kopien beholdes. |
+| 3 | `PutOldFilesBack()` hoppet stille over en fil når noe allerede lå på den opprinnelige banen, og tilbakeføringen ble likevel meldt som vellykket | Den gamle databasen ble liggende i `before-restore-…` mens programmet startet på en annen fil | Før flytting tas **SHA-256 av hver gammel fil** og lagres i journalen. En tilbakeføring regnes bare som sikker når **hver fil er tilbake med nøyaktig samme sjekksum**. Ellers `Unresolved`, og journalen beholdes. |
+| 4 | En skadet eller mangelfull journal (ugyldig JSON, `null`, tomt objekt, ukjent tilstand, stier i filnavn) kunne gi `Failed` og dermed punkt 1 | Som punkt 1 | Journalen valideres: kjent tilstand, mappenavn og filnavn uten stier, sjekksum for hver fil. Alt annet gir `Unresolved`. |
+| 5 | Manifestet ble slettet **før** journalen, så et avbrudd mellom de to ga journal uten bevis for hva som var plassert | Recovery kunne ikke bekrefte den nye databasen | Journalen slettes først. Står manifestet igjen uten arbeidskopi, gjenkjennes den plasserte databasen på sjekksummen (`AppliedAfterRecovery`). |
+| 3b | Et avbrudd *under* tilbakeføringen kunne ikke gjenopptas trygt | – | `PutOldFilesBack` er idempotent: den flytter bare filer som mangler på originalbanen, og journalen slettes først når alt er bekreftet. En ny oppstart fortsetter der den slapp. |
+
+### De tre tilstandene
+
+| Tilstand | Når | Hva programmet gjør |
+|---|---|---|
+| **1. Sikker tilbakeføring** | Ingen gjenoppretting ventet, avvist (arbeidskopien var ikke lenger gyldig), ikke startet (journal kunne ikke skrives), eller avbrutt og tilbakeført | Originaldatabasen er uendret, og for en tilbakeføring **bekreftet** med sjekksummene. Programmet starter normalt (`NothingPending`, `Rejected`, `RolledBack`). |
+| **2. Vellykket gjenoppretting** | Den nye databasen er plassert og bekreftet med sjekksummen fra manifestet | Programmet starter normalt (`Applied`, `AppliedAfterRecovery`). |
+| **3. Uavklart** | Skadet journal; en fil på databasebanen som ikke er bekreftet; en originalfil som ikke kommer tilbake med riktig sjekksum; en låst fil; uventet I/O-feil | **Programmet stopper kontrollert før migreringen** (`Unresolved`, avslutningskode 1, melding i konsollen). Ingenting flyttes eller slettes mer. |
+
+### Avbruddspunkter som er kontrollert
+
+| Punkt | Resultat ved neste oppstart |
+|---|---|
+| Journalen er skrevet, ingenting flyttet | Tilbakeført (originalen bekreftet) |
+| Én eller flere (men ikke alle) gamle filer er flyttet | Tilbakeført (originalen bekreftet) |
+| Alle gamle filer er flyttet (journalen sier `PlacingNew`) | Fullført, bare hvis arbeidskopien har riktig sjekksum |
+| Den nye databasen er plassert, journalen er ikke slettet | Fullført (sjekksummen bekrefter den plasserte filen) |
+| Den nye databasen er plassert og journalen er slettet, manifestet står igjen | Gjenkjent på sjekksummen |
+| Programmet avbrytes under selve tilbakeføringen | Gjenopptas og bekreftes |
+| Journalen er skadet eller mangelfull (fire varianter) | `Unresolved`, alt beholdes |
+| En vilkårlig fil ligger på databasebanen (både ved `MovingOld` og `PlacingNew`) | `Unresolved`, alt beholdes |
+| En fil er låst under tilbakeføring | `Unresolved`, ingen database opprettes. Når filen er fri, fullføres tilbakeføringen ved neste oppstart. |
+| Database i bruk under bytte | Tilbakeført og bekreftet |
+
+### Hvis gjenopprettingen står uavklart: slik redder du den gamle databasen
+
+Programmet stopper med meldingen «SameieHub stopped: an interrupted database restore could not be resolved safely». **Ingenting er slettet, og ingen ny database er opprettet.**
+
+1. **Lukk alle SameieHub-vinduer** og andre programmer som kan holde databasefilen åpen. Prøv å starte programmet på nytt: er årsaken en låst fil, løser det seg ofte da (neste oppstart gjenopptar).
+2. **Ta en kopi av hele mappen med databasen** (databasefilen og mappen `restore`) før du gjør noe annet.
+3. Åpne `restore`-mappen. Den gamle databasen ligger i `before-restore-<tidspunkt>\` med sine `-wal`, `-shm` og `-journal`-filer under de opprinnelige navnene. Den klargjorte nye databasen er `pending.db`.
+4. **For å gå tilbake til den gamle databasen:** flytt alle filene fra `before-restore-<tidspunkt>` til databasemappen (der `sameiehub.db` skal ligge). Finnes det en annen databasefil der, flytt den til side først (ikke slett den). Slett deretter `journal.json`, `pending.json` og `pending.db` fra `restore`, og start programmet.
+5. **For å bruke den gjenopprettede databasen i stedet:** fjern databasefilen i databasemappen (flytt den til side), kopier `pending.db` dit som `sameiehub.db`, slett `journal.json` og `pending.json`, og start programmet. Den ordinære sikkerhetskopien du valgte finnes også fortsatt som egen fil.
+6. Er du usikker: behold kopien fra punkt 2 og få hjelp. Filene i `restore` er det som gjør alt mulig å redde.
+
+Filen `restore\last-restore.json` forteller siste utfall.
+
+### Begrensninger av kontrollen
+
+- **Sjekksummene bekrefter at filene er identiske med dem vi flyttet, ikke at innholdet er riktig** (det kontrolleres separat med integritets- og skjemakontrollen ved klargjøring). En original som allerede var skadet, blir tilbakeført skadet, men uendret.
+- **Sjekksum koster tid** i forhold til størrelsen på databasen (ett gjennomløp av hver fil ved bytte). For et lite sameie er det ubetydelig.
+- **Uavklart betyr stopp:** programmet gjør ingen forsøk på å gjette. Det er bevisst, men brukeren må følge fremgangsmåten over, og en senere skjerm bør vise den samme veiledningen.
+- **Lås fra virusskanner** kan gi en midlertidig `Unresolved`. Neste oppstart løser det normalt.
+- **Strømbrudd midt i en enkelt filflytting** er ikke testet (garantert atomisk av filsystemet), og tillatelse- og diskfeil er ikke testet direkte.

@@ -186,6 +186,23 @@ public class StartupTests : IClassFixture<StartupFixture>
     }
 
     [Fact]
+    public async Task Startup_UnresolvedRestore_StopsTheProgramBeforeAnyDatabaseIsCreated()
+    {
+        var second = new StartupFixture();
+        var restoreFolder = Path.Combine(Path.GetDirectoryName(second.DatabasePath)!, "restore");
+        Directory.CreateDirectory(restoreFolder);
+        var journal = Path.Combine(restoreFolder, "journal.json");
+        await File.WriteAllTextAsync(journal, "skadet journal");
+
+        // The test host does not report an early exit of Program.cs as an error, so only the consequences are checked.
+        await Record.ExceptionAsync(() => second.InitializeAsync());
+
+        Assert.False(File.Exists(second.DatabasePath), "The program must not start with a new, empty database.");
+        Assert.Equal("skadet journal", await File.ReadAllTextAsync(journal));
+        await second.DisposeAsync();
+    }
+
+    [Fact]
     public async Task Cleanup_StoppingTheApplicationDeletesTheTemporaryDatabaseAndRestoresTheSetting()
     {
         var before = Environment.GetEnvironmentVariable("Database__Path");

@@ -39,6 +39,18 @@ if (restoreOutcome.Kind != RestoreOutcomeKind.NothingPending)
     app.Logger.LogWarning("Database restore at startup: {Result}.", restoreOutcome.Kind);
 }
 
+// If the state of the database cannot be guaranteed, the program stops here: it must not migrate, which would create a new, empty
+// database, and it must not start on an uncertain file. Every file is kept in the restore folder for manual recovery.
+if (restoreOutcome.Kind == RestoreOutcomeKind.Unresolved)
+{
+    Console.Error.WriteLine(
+        "SameieHub stopped: an interrupted database restore could not be resolved safely. No database was created and no files were deleted. "
+        + "The old database and the prepared one are kept in the folder 'restore' next to the database file. "
+        + "See the documentation ('Hvis gjenopprettingen står uavklart') before you start the program again.");
+
+    return 1;
+}
+
 await app.Services.MigrateSameieHubDatabaseAsync();
 
 if (seedDemo)

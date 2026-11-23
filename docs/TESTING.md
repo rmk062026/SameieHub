@@ -57,3 +57,13 @@ Mot isolerte midlertidige SQLite-databaser; «programmet er stoppet» simuleres 
 - Hver regel er testet på ett nivå; hjelpere som deles med backuptestene ligger i `DatabaseTestFiles` og `DatabaseTestData`. Testene tar omtrent 12 s totalt fordi hver lager flere SQLite-databaser.
 - **Lærdom fra testingen:** mens programmet kjører kan SQLite endre selve databasefilen uten at noe er skrevet (en ledig forbindelse i poolen lukkes og WAL-filen sjekkpunktes), og en virusskanner eller et krasj kan la `-wal`/`-shm` ligge igjen. Testene sammenligner derfor lagrede data (øyeblikksbilde) når databasen er åpen, og filens kontrollsum bare etter at «programmet er stoppet». Testhjelperen overskriver aldri en ekte sidefil, siden den kan inneholde bekreftede data. Motoren flytter alltid sidefilene sammen med databasen.
 - **Ikke testet automatisk:** manglende skrivetillatelse og full disk; strømbrudd midt i en enkelt filflytting (garantert atomisk av filsystemet).
+
+### Sikkerhetskontroll av gjenopprettingen (M5B-S)
+Seks regresjonstester (ni kjørte) for påviste hull i `DatabaseRestoreTests`, pluss en oppstartstest. Hver ble skrevet først og feilet mot den forrige koden:
+- en vilkårlig fil på databasebanen godtas ikke som bevis for ny database (ved `PlacingNew`), og tilbakeføring bekreftes bare når originalfilene er tilbake med riktig sjekksum (ved `MovingOld`, med en tom database i veien);
+- skadet eller mangelfull journal (fire varianter) gir `Unresolved` og sletter ingenting;
+- et avbrudd under tilbakeføringen kan gjenopptas;
+- en låst fil gir `Unresolved` uten at en database opprettes, og går bra neste gang;
+- ny database på plass uten journal gjenkjennes på sjekksummen;
+- **`StartupTests.Startup_UnresolvedRestore_StopsTheProgramBeforeAnyDatabaseIsCreated`:** med en skadet journal opprettes ingen database og journalen står igjen. (Testverten melder ikke selv at `Program.cs` avsluttet tidlig, så testen kontrollerer konsekvensene. Det ekte programmet ble i tillegg kjørt manuelt og avsluttet med kode 1 og meldingen i konsollen.)
+Se [ARCHITECTURE.md](ARCHITECTURE.md), «Sikkerhetskontroll av gjenopprettingen (M5B-S)», for scenariene, tilstandene og hvordan den gamle databasen kan reddes.

@@ -389,6 +389,115 @@ public class DatabaseRestoreTests : IAsyncLifetime
         Assert.Equal(RestoreOutcomeKind.NothingPending, NewRestore().ApplyPendingRestore().Kind);
     }
 
+    // Safety check (M5B-S): a restore that cannot be resolved safely must stop the program and keep every file
+
+    private string PreviousFolder() => Directory.GetDirectories(RestoreFolder, "before-restore-*").Single();
+
+    private async Task<string> CrashAfterAsync(string step)
+    {
+        await NewRestore().PrepareAsync(_backup);
+        await StopProgramAsync();
+        CreateSideFiles(LivePath);
+        Assert.Throws<SimulatedCrashException>(() => NewRestore(onStep: CrashAt(step)).ApplyPendingRestore());
+
+        return PreviousFolder();
+    }
+
+    [Fact]
+    public async Task Recovery_AnArbitraryFileOnTheDatabasePath_IsNoProofThatTheNewDatabaseIsInPlace()
+    {
+        await CrashAfterAsync("all-old-files-moved");
+        await ExecuteAsync(LivePath, "CREATE TABLE Tom (Id INTEGER PRIMARY KEY)");
+
+        var outcome = NewRestore().ApplyPendingRestore();
+
+        Assert.Equal(RestoreOutcomeKind.Unresolved, outcome.Kind);
+        Assert.True(File.Exists(Path.Combine(RestoreFolder, "journal.json")));
+        Assert.True(File.Exists(Path.Combine(RestoreFolder, "pending.db")), "The prepared database is kept.");
+        Assert.True(File.Exists(Path.Combine(PreviousFolder(), Path.GetFileName(LivePath))), "The old database is kept.");
+    }
+
+    [Fact]
+    public async Task Recovery_RollbackIsOnlyConfirmedWhenTheOriginalFilesAreActuallyBack()
+    {
+        await CrashAfterAsync("first-old-file-moved");
+        await ExecuteAsync(LivePath, "CREATE TABLE Tom (Id INTEGER PRIMARY KEY)");
+
+        var outcome = NewRestore().ApplyPendingRestore();
+
+        Assert.Equal(RestoreOutcomeKind.Unresolved, outcome.Kind);
+        Assert.True(File.Exists(Path.Combine(RestoreFolder, "journal.json")));
+        Assert.True(File.Exists(Path.Combine(PreviousFolder(), Path.GetFileName(LivePath))), "The old database is kept.");
+    }
+
+    [Theory]
+    [InlineData("dette er ikke json")]
+    [InlineData("null")]
+    [InlineData("{}")]
+    [InlineData("{\"State\":\"Ukjent\",\"PreviousFolderName\":\"x\",\"HadDatabase\":true,\"Files\":[]}")]
+    public async Task Recovery_DamagedOrIncompleteJournal_IsUnresolvedAndNothingIsDeleted(string journalContent)
+    {
+        await NewRestore().PrepareAsync(_backup);
+        await StopProgramAsync();
+        await File.WriteAllTextAsync(Path.Combine(RestoreFolder, "journal.json"), journalContent);
+        var liveBefore = await HashAsync(LivePath);
+
+        var outcome = NewRestore().ApplyPendingRestore();
+
+        Assert.Equal(RestoreOutcomeKind.Unresolved, outcome.Kind);
+        Assert.Equal(journalContent, await File.ReadAllTextAsync(Path.Combine(RestoreFolder, "journal.json")));
+        Assert.True(File.Exists(Path.Combine(RestoreFolder, "pending.db")));
+        Assert.True(File.Exists(Path.Combine(RestoreFolder, "pending.json")));
+        Assert.Equal(liveBefore, await HashAsync(LivePath));
+    }
+
+    [Fact]
+    public async Task Recovery_InterruptedWhileRollingBack_CanBeResumedAndEndsWithTheOriginal()
+    {
+        await CrashAfterAsync("first-old-file-moved");
+
+        Assert.Throws<SimulatedCrashException>(() => NewRestore(onStep: CrashAt("old-file-put-back")).ApplyPendingRestore());
+        var outcome = NewRestore().ApplyPendingRestore();
+
+        Assert.Equal(RestoreOutcomeKind.RolledBack, outcome.Kind);
+        Assert.Equal(_stateNow, await SnapshotAsync(LivePath));
+        Assert.Equal(3, SideFilesNextToTheLiveDatabase().Length);
+        Assert.False(File.Exists(Path.Combine(RestoreFolder, "journal.json")));
+    }
+
+    [Fact]
+    public async Task Recovery_LockedFile_IsUnresolvedUntilItIsFreeAndNothingIsLostMeanwhile()
+    {
+        var previous = await CrashAfterAsync("first-old-file-moved");
+        RestoreOutcome whileLocked;
+        await using (new FileStream(Path.Combine(previous, Path.GetFileName(LivePath)), FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            whileLocked = NewRestore().ApplyPendingRestore();
+        }
+
+        Assert.Equal(RestoreOutcomeKind.Unresolved, whileLocked.Kind);
+        Assert.True(File.Exists(Path.Combine(RestoreFolder, "journal.json")));
+        Assert.False(File.Exists(LivePath), "No database is created or invented in the meantime.");
+
+        var afterwards = NewRestore().ApplyPendingRestore();
+
+        Assert.Equal(RestoreOutcomeKind.RolledBack, afterwards.Kind);
+        Assert.Equal(_stateNow, await SnapshotAsync(LivePath));
+    }
+
+    [Fact]
+    public async Task Recovery_NewDatabaseInPlaceButJournalGone_IsRecognisedByItsChecksum()
+    {
+        await CrashAfterAsync("new-database-placed");
+        File.Delete(Path.Combine(RestoreFolder, "journal.json"));
+
+        var outcome = NewRestore().ApplyPendingRestore();
+
+        Assert.Equal(RestoreOutcomeKind.AppliedAfterRecovery, outcome.Kind);
+        Assert.Equal(_stateAtBackup, await SnapshotAsync(LivePath));
+        Assert.False(File.Exists(Path.Combine(RestoreFolder, "pending.json")));
+    }
+
     // Pending restore and the last result
 
     [Fact]
