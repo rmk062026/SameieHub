@@ -4,9 +4,9 @@
 @inject NavigationManager Navigation
 @inject ILogger<BoardCaseCreate> Logger
 
-<PageTitle>Registrer styresak – SameieHub</PageTitle>
+<PageTitle>Ny styresak – SameieHub</PageTitle>
 
-<PageHeader Title="Registrer styresak" Description="Bare tittelen er obligatorisk. Resten kan du fylle inn senere."
+<PageHeader Title="Ny styresak" Description="Bare tittelen er obligatorisk. Resten kan du fylle inn senere."
             BackHref="/styresaker" BackText="Styresaker" />
 
 @if (_isLoading)
@@ -28,6 +28,10 @@ else
     {
         <div class="alert alert-warning" role="status">@_preselectNotice</div>
     }
+
+    <p class="form-intro" data-testid="case-explanation">
+        En styresak er noe styret skal behandle eller avgjøre. Hvis det bare er noe som skal gjøres av noen, kan du <a href="/oppgaver/ny">registrere en oppgave</a> i stedet.
+    </p>
 
     <BoardCaseForm AvailableHousingUnits="_activeHousingUnits" InitialHousingUnitId="_preselectedHousingUnitId"
                    SubmitText="Registrer styresak" OnSave="RegisterAsync" />

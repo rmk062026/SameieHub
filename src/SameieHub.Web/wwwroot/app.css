@@ -1018,3 +1018,31 @@ a:focus-visible,
         min-height: 2.75rem;
     }
 }
+
+/* Forms (R4) */
+.scope-field {
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+    .scope-field legend {
+        float: none;
+        width: auto;
+        padding: 0;
+        font-size: 1rem;
+    }
+
+.context-box {
+    margin-bottom: 1rem;
+    padding: 0.85rem 1rem;
+    background: var(--sh-surface);
+    border: 1px solid var(--sh-border);
+    border-left: 4px solid var(--sh-primary, #1f5f8b);
+    border-radius: var(--sh-radius);
+}
+
+.form-intro {
+    margin-bottom: 1rem;
+    color: var(--sh-muted);
+}

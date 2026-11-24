@@ -42,7 +42,7 @@ public class BoardCaseCreateTests : UiTestBase
         cut.Find("#description").Change("Fiktiv beskrivelse.");
         cut.Find("#priority").Change("High");
         cut.Find("#meetingDate").Change("2026-12-03");
-        cut.Find("#housingUnitId").Change(unit.Id.ToString());
+        cut.ChooseHousingUnit(unit.Id);
         cut.Find("#notes").Change("Fiktive merknader.");
         cut.Find("form").Submit();
 
@@ -63,8 +63,10 @@ public class BoardCaseCreateTests : UiTestBase
 
         var cut = RenderLoaded();
 
+        Assert.True(cut.IsWholeCooperativeChosen());
+        cut.Find("#scope-unit").Change(true);
         var options = cut.FindAll("#housingUnitId option").Select(option => option.TextContent).ToList();
-        Assert.Equal(["Hele sameiet (ingen boenhet)", "Storgata 1A"], options);
+        Assert.Equal(["Velg boenhet", "Storgata 1A"], options);
     }
 
     [Theory]
@@ -166,7 +168,7 @@ public class BoardCaseCreateTests : UiTestBase
 
         var cut = RenderWithQuery($"?boenhet={unit.Id}");
 
-        Assert.Equal(unit.Id.ToString(), cut.Find("#housingUnitId").GetAttribute("value"));
+        Assert.Equal(unit.Id.ToString(), cut.SelectedHousingUnit());
         Assert.Empty(cut.FindAll(".alert-warning"));
         cut.Find("#title").Change("Maling");
         cut.Find("form").Submit();
@@ -181,7 +183,8 @@ public class BoardCaseCreateTests : UiTestBase
 
         var cut = RenderWithQuery($"?boenhet={inactive.Id}");
 
-        Assert.Equal("", cut.Find("#housingUnitId").GetAttribute("value") ?? "");
+        Assert.True(cut.IsWholeCooperativeChosen());
+        Assert.Empty(cut.FindAll("#housingUnitId"));
         Assert.DoesNotContain(cut.FindAll("#housingUnitId option"), option => option.TextContent.Contains("Storgata 1A"));
         Assert.Contains("finnes ikke eller er inaktiv", cut.Find(".alert-warning").TextContent);
         cut.Find("#title").Change("Maling");
@@ -194,7 +197,8 @@ public class BoardCaseCreateTests : UiTestBase
     {
         var cut = RenderWithQuery("?boenhet=999");
 
-        Assert.Equal("", cut.Find("#housingUnitId").GetAttribute("value") ?? "");
+        Assert.True(cut.IsWholeCooperativeChosen());
+        Assert.Empty(cut.FindAll("#housingUnitId"));
         Assert.Contains("finnes ikke eller er inaktiv", cut.Find(".alert-warning").TextContent);
     }
 
@@ -206,6 +210,7 @@ public class BoardCaseCreateTests : UiTestBase
         var cut = RenderWithQuery("");
 
         Assert.Empty(cut.FindAll(".alert-warning"));
-        Assert.Equal("", cut.Find("#housingUnitId").GetAttribute("value") ?? "");
+        Assert.True(cut.IsWholeCooperativeChosen());
+        Assert.Empty(cut.FindAll("#housingUnitId"));
     }
 }

@@ -9,7 +9,7 @@
     }
 
     <section class="surface-card form-section">
-        <h2>Boliginformasjon</h2>
+        <p class="form-text mt-0">Felt merket med <span class="required-mark" aria-hidden="true">*</span> må fylles ut.</p>
         <div class="row g-3">
             <div class="col-12">
                 <label for="address" class="form-label">Adresse <span class="required-mark" aria-hidden="true">*</span></label>
@@ -17,41 +17,11 @@
                            maxlength="@HousingUnit.MaxAddressLength" aria-required="true" autocomplete="off" />
                 <ValidationMessage For="() => _model.Address" />
             </div>
-            <div class="col-md-6">
-                <label for="unitNumber" class="form-label">Bolignummer</label>
-                <InputText id="unitNumber" class="form-control" @bind-Value="_model.UnitNumber"
-                           maxlength="@HousingUnit.MaxUnitNumberLength" aria-describedby="unitNumber-help" autocomplete="off" />
-                <div id="unitNumber-help" class="form-text">For eksempel H0101.</div>
-                <ValidationMessage For="() => _model.UnitNumber" />
-            </div>
-            <div class="col-md-6">
-                <label for="sectionNumber" class="form-label">Seksjonsnummer</label>
-                <InputNumber id="sectionNumber" class="form-control" @bind-Value="_model.SectionNumber"
-                             ParsingErrorMessage="Seksjonsnummer må være et helt tall." inputmode="numeric" />
-                <ValidationMessage For="() => _model.SectionNumber" />
-            </div>
-            <div class="col-md-6">
-                <label for="housingType" class="form-label">Boligtype</label>
-                <InputSelect id="housingType" class="form-select" @bind-Value="_model.HousingType">
-                    <option value="">Ikke valgt</option>
-                    @foreach (var housingType in HousingTypeText.All)
-                    {
-                        <option value="@housingType">@HousingTypeText.ToNorwegian(housingType)</option>
-                    }
-                </InputSelect>
-                <ValidationMessage For="() => _model.HousingType" />
-            </div>
-            <div class="col-md-6">
-                <label for="areaSquareMeters" class="form-label">Areal (m²)</label>
-                <InputNumber id="areaSquareMeters" class="form-control" @bind-Value="_model.AreaSquareMeters"
-                             ParsingErrorMessage="Arealet må være et tall, for eksempel 85.5." inputmode="decimal" />
-                <ValidationMessage For="() => _model.AreaSquareMeters" />
-            </div>
         </div>
     </section>
 
     <section class="surface-card form-section">
-        <h2>Eier og kontaktinformasjon</h2>
+        <h2>Eier og kontaktinformasjon <span class="fs-6 fw-normal text-muted">(valgfritt)</span></h2>
         <h3 class="owner-title">Eier 1</h3>
         <div class="row g-3">
             <div class="col-12">
@@ -107,13 +77,46 @@
         }
     </section>
 
-    <section class="surface-card form-section">
-        <h2>Andre opplysninger</h2>
-        <label for="notes" class="form-label">Merknader</label>
-        <InputTextArea id="notes" class="form-control" rows="4" @bind-Value="_model.Notes"
-                       maxlength="@HousingUnit.MaxNotesLength" />
-        <ValidationMessage For="() => _model.Notes" />
-    </section>
+    <Disclosure Label="Flere valg" Hint="Bolignummer · Seksjonsnummer · Boligtype · Areal · Merknader" Open="_startOpen" ForceOpen="HasHiddenError()">
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label for="unitNumber" class="form-label">Bolignummer</label>
+                <InputText id="unitNumber" class="form-control" @bind-Value="_model.UnitNumber"
+                           maxlength="@HousingUnit.MaxUnitNumberLength" aria-describedby="unitNumber-help" autocomplete="off" />
+                <div id="unitNumber-help" class="form-text">For eksempel H0101.</div>
+                <ValidationMessage For="() => _model.UnitNumber" />
+            </div>
+            <div class="col-md-6">
+                <label for="sectionNumber" class="form-label">Seksjonsnummer</label>
+                <InputNumber id="sectionNumber" class="form-control" @bind-Value="_model.SectionNumber"
+                             ParsingErrorMessage="Seksjonsnummer må være et helt tall." inputmode="numeric" />
+                <ValidationMessage For="() => _model.SectionNumber" />
+            </div>
+            <div class="col-md-6">
+                <label for="housingType" class="form-label">Boligtype</label>
+                <InputSelect id="housingType" class="form-select" @bind-Value="_model.HousingType">
+                    <option value="">Ikke valgt</option>
+                    @foreach (var housingType in HousingTypeText.All)
+                    {
+                        <option value="@housingType">@HousingTypeText.ToNorwegian(housingType)</option>
+                    }
+                </InputSelect>
+                <ValidationMessage For="() => _model.HousingType" />
+            </div>
+            <div class="col-md-6">
+                <label for="areaSquareMeters" class="form-label">Areal (m²)</label>
+                <InputNumber id="areaSquareMeters" class="form-control" @bind-Value="_model.AreaSquareMeters"
+                             ParsingErrorMessage="Arealet må være et tall, for eksempel 85.5." inputmode="decimal" />
+                <ValidationMessage For="() => _model.AreaSquareMeters" />
+            </div>
+            <div class="col-12">
+                <label for="notes" class="form-label">Merknader</label>
+                <InputTextArea id="notes" class="form-control" rows="4" @bind-Value="_model.Notes"
+                               maxlength="@HousingUnit.MaxNotesLength" />
+                <ValidationMessage For="() => _model.Notes" />
+            </div>
+        </div>
+    </Disclosure>
 
     <div class="form-actions">
         <button type="submit" class="btn btn-primary" disabled="@_isSaving">
@@ -137,6 +140,7 @@
     private ValidationMessageStore _messageStore = default!;
     private InputText? _addressInput;
     private bool _showSecondOwner;
+    private bool _startOpen;
     private bool _isSaving;
     private string? _errorMessage;
 
@@ -156,6 +160,7 @@
     {
         _model = Unit == null ? new HousingUnitFormModel() : HousingUnitFormModel.From(Unit);
         _showSecondOwner = _model.HasSecondOwnerData;
+        _startOpen = Unit != null && HasHiddenValues();
 
         _editContext = new EditContext(_model);
         _messageStore = new ValidationMessageStore(_editContext);
@@ -169,6 +174,29 @@
         {
             await element.FocusAsync();
         }
+    }
+
+    private bool HasHiddenValues()
+    {
+        return !string.IsNullOrWhiteSpace(_model.UnitNumber)
+            || _model.SectionNumber != null
+            || !string.IsNullOrEmpty(_model.HousingType?.ToString())
+            || _model.AreaSquareMeters != null
+            || !string.IsNullOrWhiteSpace(_model.Notes);
+    }
+
+    private bool HasHiddenError()
+    {
+        return HasError(nameof(HousingUnitFormModel.UnitNumber))
+            || HasError(nameof(HousingUnitFormModel.SectionNumber))
+            || HasError(nameof(HousingUnitFormModel.HousingType))
+            || HasError(nameof(HousingUnitFormModel.AreaSquareMeters))
+            || HasError(nameof(HousingUnitFormModel.Notes));
+    }
+
+    private bool HasError(string fieldName)
+    {
+        return _editContext.GetValidationMessages(_editContext.Field(fieldName)).Any();
     }
 
     private void AddSecondOwner()

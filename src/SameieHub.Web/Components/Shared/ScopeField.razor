@@ -1,0 +1,98 @@
+@using System.Linq.Expressions
+@* «Gjelder»: the whole housing cooperative or one housing unit. The model still stores a missing HousingUnitId for the whole
+   cooperative. The form owns the values; this component only shows them and reports changes. *@
+<fieldset class="scope-field" data-testid="scope-field">
+    <legend class="form-label">Gjelder</legend>
+
+    <div class="form-check">
+        <input class="form-check-input" type="radio" name="scope" id="scope-whole" checked="@(!UnitMode)" @onchange="SelectWholeAsync" />
+        <label class="form-check-label" for="scope-whole">Hele sameiet</label>
+    </div>
+    <div class="form-check">
+        <input class="form-check-input" type="radio" name="scope" id="scope-unit" checked="@UnitMode" @onchange="SelectUnitAsync" />
+        <label class="form-check-label" for="scope-unit">En boenhet</label>
+    </div>
+
+    @if (UnitMode)
+    {
+        <label for="housingUnitId" class="form-label mt-2">Boenhet</label>
+        <select id="housingUnitId" class="form-select" @onchange="ChangeUnitAsync" aria-describedby="scope-help">
+            <option value="" selected="@(HousingUnitId == null)">Velg boenhet</option>
+            @foreach (var unit in Units)
+            {
+                <option value="@unit.Id" selected="@(HousingUnitId == unit.Id)">@unit.Address@(unit.IsActive ? "" : " (inaktiv)")</option>
+            }
+        </select>
+    }
+
+    @if (!string.IsNullOrEmpty(Help))
+    {
+        <div id="scope-help" class="form-text">@Help</div>
+    }
+    @if (!string.IsNullOrEmpty(Error))
+    {
+        <div class="validation-message" data-testid="scope-error">@Error</div>
+    }
+    <ValidationMessage For="For" />
+</fieldset>
+
+@code {
+    private int? _rememberedUnitId;
+
+    [CascadingParameter]
+    private EditContext? EditContext { get; set; }
+
+    [Parameter]
+    public bool UnitMode { get; set; }
+
+    [Parameter]
+    public EventCallback<bool> UnitModeChanged { get; set; }
+
+    [Parameter]
+    public int? HousingUnitId { get; set; }
+
+    [Parameter]
+    public EventCallback<int?> HousingUnitIdChanged { get; set; }
+
+    [Parameter, EditorRequired]
+    public Expression<Func<int?>> For { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public IReadOnlyList<HousingUnit> Units { get; set; } = [];
+
+    [Parameter]
+    public string? Help { get; set; }
+
+    /// <summary>A message from the form itself, for example when «En boenhet» is chosen but no unit is.</summary>
+    [Parameter]
+    public string? Error { get; set; }
+
+    private async Task SelectWholeAsync()
+    {
+        _rememberedUnitId = HousingUnitId;
+        await UnitModeChanged.InvokeAsync(false);
+        await SetUnitAsync(null);
+    }
+
+    private async Task SelectUnitAsync()
+    {
+        await UnitModeChanged.InvokeAsync(true);
+
+        if (_rememberedUnitId != null)
+        {
+            await SetUnitAsync(_rememberedUnitId);
+        }
+    }
+
+    private async Task ChangeUnitAsync(ChangeEventArgs args)
+    {
+        await SetUnitAsync(int.TryParse(args.Value?.ToString(), out var id) ? id : null);
+    }
+
+    private async Task SetUnitAsync(int? id)
+    {
+        HousingUnitId = id;
+        await HousingUnitIdChanged.InvokeAsync(id);
+        EditContext?.NotifyFieldChanged(FieldIdentifier.Create(For));
+    }
+}

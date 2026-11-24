@@ -33,7 +33,7 @@ Eieren har godkjent planen med disse valgene (svarer på spørsmålene i avsnitt
 
 **Justert plan:** «Neste styremøte» (avsnitt 3, 5.2 og R1) leses som **«Kommende saker med møtedato»**: åpne saker med møtedato, sortert på dato, uten å påstå at et møte er bekreftet.
 
-**Status:** R0, R2, R1 og R3 er ferdige (se avsnitt 9b–9e). R4 er neste og er ikke startet.
+**Status:** R0–R4 er ferdige (se avsnitt 9b–9f). R5 er neste og er ikke startet.
 
 ## 1. Kort oppsummering
 
@@ -429,7 +429,7 @@ Hver milepæl er avgrenset, kan godkjennes og rulles tilbake for seg, og avslutt
 | **R1 Oversikt** (ferdig) | Ny forside: «Må gjøres nå», «Kommende saker med møtedato», tre tall, elbillinglinje, «+ Ny». | `Pages/Dashboard.razor`, `DashboardChargingSection` | UI | F-09, F-17, F-22 |
 | **R2 Oppgaver** (ferdig) | Hurtigfaner, søk, «Flere filtre», radene som lenker, direkte fullføring, kortliste på mobil. Oppgavedetalj: hovedknapp i overskrift, bekreftelse ved knappen, «Detaljer». | `TaskItems/*` | UI | F-05, F-06, F-07 |
 | **R3 Styresaker** (ferdig) | Liste (møtedato, faner), detalj (overskriftslinje, vedtak, oppgaver, «Detaljer», adskilt slett, «x av y»). | `BoardCases/*` | UI | F-03, F-04 |
-| **R4 Skjemaer og veiledning** | «Gjelder», «Flere valg», veiledning om styresak/oppgave, forhåndsutfylling fra sak/boenhet. Boenhetsskjema og detalj (F-12, F-13, F-14, F-15). | `*Form.razor`, `HousingUnits/*` | UI | Hovedproblemet om styresak/oppgave |
+| **R4 Skjemaer og veiledning** (ferdig) | «Gjelder», «Flere valg», veiledning om styresak/oppgave, forhåndsutfylling fra sak/boenhet. Boenhetsskjema og detalj (F-12, F-13, F-14, F-15). | `*Form.razor`, `HousingUnits/*` | UI | Hovedproblemet om styresak/oppgave |
 | **R5 Elbillading** | Faner, statuslinje i stedet for tallkort, forklaring av differanse, nye etiketter, «Feil? Rett her». | `Charging/*` | UI | F-10, F-26, F-27, F-29 |
 | **R6 Navigasjon og mobil** | Menyrekkefølge og navn, «+ Ny»-valg, hopp-lenke, trykkflater, kontroll av alle sider på 375 px. (Fast nedre tabellinje bare hvis eieren velger det.) | `Layout/*`, `app.css` | UI | F-31 |
 | **R7 Innstillinger og sluttkontroll** | «Gjenopprett» lukket som standard, helhetlig kontroll mot tilgjengelighet, språk og konsistens, oppdatering av `UI_DESIGN.md`. | `Pages/Settings/*`, docs | UI | – |
@@ -529,6 +529,29 @@ Byggeklossene ligger i `src/SameieHub.Web/Components/Shared`. De er små, bruker
 | Detalj: seksjoner | 7 | 5 |
 | Detalj: synlige skjemafelt uten å velge noe | 3 | 0 |
 | Vannrett rulling ved 375 px | ingen | ingen |
+
+## 9f. R4 Skjemaer og veiledning: hva som ble gjort og målt
+
+**Skjemaer:** oppgave, styresak og boenhet viser det viktigste først og har resten under «Flere valg». «Tilknyttet boenhet» er erstattet av «Gjelder» (Hele sameiet / En boenhet). Detaljer står i `UI_DESIGN.md`.
+
+**Avgjørelser:**
+
+- **Styresaken er alltid synlig** på en oppgave som kommer fra en styresak, i en ramme øverst og som valg utenfor «Flere valg». Forslaget om styresakens boenhet er forhåndsutfylling som kan endres eller fjernes; det finnes ingen ny tvungen kobling, og domenereglene er uendret.
+- **Styresakens beskrivelse er synlig**, ikke under «Flere valg», fordi den er det mest naturlige å skrive først.
+- **`ScopeField`** (ny delt komponent, brukt av oppgave- og styresakskjemaet) holder «Gjelder» likt. Modellen lagrer fortsatt `HousingUnitId = null` for hele sameiet.
+- **«Flere valg» åpnes av feil** i skjulte felt, også feil som kommer fra domenet ved lagring, og den åpnes fra start ved redigering når den har verdier. Åpning og lukking endrer ingen verdier (kontrollert etter ny tegning).
+- **Navn:** sidene og knappene heter «Ny oppgave», «Ny styresak» og «Ny boenhet». Lagre-knappene heter fortsatt «Registrer …» og «Lagre endringer».
+- Domene, database, migreringer og repositories er urørt, og ingen ny pakke er lagt til.
+
+**Målt i nettleser** (demodata, isolert kopi, 1024 px, uten å åpne «Flere valg»):
+
+| Skjema | Synlige felt før | Etter | Høyde før | Høyde etter |
+|---|---|---|---|---|
+| Ny oppgave | 9 | 4 (+ «Gjelder») | 1 229 px | 806 px |
+| Ny styresak | 6 | 4 (+ «Gjelder») | 1 051 px | 1 014 px |
+| Ny boenhet | 9 | 4 | 1 231 px | 850 px |
+
+Styresakskjemaet vinner lite i høyde fordi beskrivelsen nå er synlig.
 
 ## 10. Risiko for regresjoner og hvordan de reduseres
 

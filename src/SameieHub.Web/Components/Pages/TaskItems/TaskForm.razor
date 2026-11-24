@@ -9,7 +9,7 @@
     }
 
     <section class="surface-card form-section">
-        <h2>Oppgaveinformasjon</h2>
+        <p class="form-text mt-0">Felt merket med <span class="required-mark" aria-hidden="true">*</span> må fylles ut.</p>
         <div class="row g-3">
             <div class="col-12">
                 <label for="title" class="form-label">Tittel <span class="required-mark" aria-hidden="true">*</span></label>
@@ -17,6 +17,43 @@
                            maxlength="@TaskItem.MaxTitleLength" aria-required="true" autocomplete="off" />
                 <ValidationMessage For="() => _model.Title" />
             </div>
+            <div class="col-md-6">
+                <label for="assignedTo" class="form-label">Ansvarlig</label>
+                <InputText id="assignedTo" class="form-control" @bind-Value="_model.AssignedTo"
+                           maxlength="@TaskItem.MaxAssignedToLength" autocomplete="off" />
+                <ValidationMessage For="() => _model.AssignedTo" />
+            </div>
+            <div class="col-md-6">
+                <label for="dueDate" class="form-label">Frist</label>
+                <InputDate id="dueDate" class="form-control" @bind-Value="_model.DueDate"
+                           ParsingErrorMessage="Fristen må være en gyldig dato." />
+                <ValidationMessage For="() => _model.DueDate" />
+            </div>
+            <div class="col-12">
+                <ScopeField UnitMode="_unitMode" UnitModeChanged="SetUnitMode"
+                            HousingUnitId="_model.HousingUnitId" HousingUnitIdChanged="SetHousingUnit"
+                            For="() => _model.HousingUnitId" Units="AvailableHousingUnits" Error="@_scopeError"
+                            Help="Velg «Hele sameiet» for et vanlig gjøremål. Oppgaven trenger ikke gjelde samme boenhet som en styresak." />
+            </div>
+            @if (_boardCaseVisible)
+            {
+                <div class="col-12" data-testid="board-case-field">
+                    <label for="boardCaseId" class="form-label">Styresak</label>
+                    <InputSelect id="boardCaseId" class="form-select" @bind-Value="_model.BoardCaseId">
+                        <option value="">Ingen styresak</option>
+                        @foreach (var boardCase in AvailableBoardCases)
+                        {
+                            <option value="@boardCase.Id">#@boardCase.Id @boardCase.Title</option>
+                        }
+                    </InputSelect>
+                    <ValidationMessage For="() => _model.BoardCaseId" />
+                </div>
+            }
+        </div>
+    </section>
+
+    <Disclosure Label="Flere valg" Hint="@MoreOptionsHint" Open="_startOpen" ForceOpen="HasHiddenError()">
+        <div class="row g-3">
             <div class="col-12">
                 <label for="description" class="form-label">Beskrivelse</label>
                 <InputTextArea id="description" class="form-control" rows="4" @bind-Value="_model.Description"
@@ -43,57 +80,29 @@
                 </InputSelect>
                 <ValidationMessage For="() => _model.Priority" />
             </div>
-            <div class="col-md-6">
-                <label for="dueDate" class="form-label">Frist</label>
-                <InputDate id="dueDate" class="form-control" @bind-Value="_model.DueDate"
-                           ParsingErrorMessage="Fristen må være en gyldig dato." />
-                <ValidationMessage For="() => _model.DueDate" />
+            <div class="col-12">
+                <label for="notes" class="form-label">Merknader</label>
+                <InputTextArea id="notes" class="form-control" rows="4" @bind-Value="_model.Notes"
+                               maxlength="@TaskItem.MaxNotesLength" />
+                <ValidationMessage For="() => _model.Notes" />
             </div>
-            <div class="col-md-6">
-                <label for="assignedTo" class="form-label">Ansvarlig</label>
-                <InputText id="assignedTo" class="form-control" @bind-Value="_model.AssignedTo"
-                           maxlength="@TaskItem.MaxAssignedToLength" autocomplete="off" />
-                <ValidationMessage For="() => _model.AssignedTo" />
-            </div>
+            @if (!_boardCaseVisible)
+            {
+                <div class="col-12" data-testid="board-case-field">
+                    <label for="boardCaseId" class="form-label">Styresak</label>
+                    <InputSelect id="boardCaseId" class="form-select" @bind-Value="_model.BoardCaseId" aria-describedby="boardCaseId-help">
+                        <option value="">Ingen styresak</option>
+                        @foreach (var boardCase in AvailableBoardCases)
+                        {
+                            <option value="@boardCase.Id">#@boardCase.Id @boardCase.Title</option>
+                        }
+                    </InputSelect>
+                    <div id="boardCaseId-help" class="form-text">Bare hvis oppgaven følger av en styresak. Vanlige gjøremål trenger ingen.</div>
+                    <ValidationMessage For="() => _model.BoardCaseId" />
+                </div>
+            }
         </div>
-    </section>
-
-    <section class="surface-card form-section">
-        <h2>Koblinger</h2>
-        <div class="row g-3">
-            <div class="col-md-6">
-                <label for="housingUnitId" class="form-label">Tilknyttet boenhet</label>
-                <InputSelect id="housingUnitId" class="form-select" @bind-Value="_model.HousingUnitId">
-                    <option value="">Ingen boenhet</option>
-                    @foreach (var unit in AvailableHousingUnits)
-                    {
-                        <option value="@unit.Id">@unit.Address@(unit.IsActive ? "" : " (inaktiv)")</option>
-                    }
-                </InputSelect>
-                <ValidationMessage For="() => _model.HousingUnitId" />
-            </div>
-            <div class="col-md-6">
-                <label for="boardCaseId" class="form-label">Tilknyttet styresak</label>
-                <InputSelect id="boardCaseId" class="form-select" @bind-Value="_model.BoardCaseId">
-                    <option value="">Ingen styresak</option>
-                    @foreach (var boardCase in AvailableBoardCases)
-                    {
-                        <option value="@boardCase.Id">#@boardCase.Id @boardCase.Title</option>
-                    }
-                </InputSelect>
-                <ValidationMessage For="() => _model.BoardCaseId" />
-            </div>
-        </div>
-        <p class="form-text mb-0 mt-2">Oppgaven og styresaken trenger ikke gjelde samme boenhet.</p>
-    </section>
-
-    <section class="surface-card form-section">
-        <h2>Andre opplysninger</h2>
-        <label for="notes" class="form-label">Merknader</label>
-        <InputTextArea id="notes" class="form-control" rows="4" @bind-Value="_model.Notes"
-                       maxlength="@TaskItem.MaxNotesLength" />
-        <ValidationMessage For="() => _model.Notes" />
-    </section>
+    </Disclosure>
 
     <div class="form-actions">
         <button type="submit" class="btn btn-primary" disabled="@_isSaving">
@@ -116,8 +125,12 @@
     private EditContext _editContext = default!;
     private ValidationMessageStore _messageStore = default!;
     private InputText? _titleInput;
+    private bool _unitMode;
+    private bool _boardCaseVisible;
+    private bool _startOpen;
     private bool _isSaving;
     private string? _errorMessage;
+    private string? _scopeError;
 
     [Parameter]
     public TaskItem? Existing { get; set; }
@@ -146,11 +159,23 @@
     [Parameter, EditorRequired]
     public Func<TaskItemDetails, Task> OnSave { get; set; } = _ => Task.CompletedTask;
 
+    private string MoreOptionsHint => _boardCaseVisible
+        ? "Beskrivelse · Kategori · Prioritet · Merknader"
+        : "Beskrivelse · Kategori · Prioritet · Merknader · Styresak";
+
     protected override void OnInitialized()
     {
         _model = Existing == null
             ? new TaskFormModel { HousingUnitId = InitialHousingUnitId, BoardCaseId = InitialBoardCaseId }
             : TaskFormModel.From(Existing);
+
+        _unitMode = _model.HousingUnitId != null;
+
+        // A board case that is already decided, by the page the person came from or by the saved task, must stay visible.
+        _boardCaseVisible = _model.BoardCaseId != null;
+
+        // Saved values in the optional part are never hidden from the person who edits them.
+        _startOpen = Existing != null && HasHiddenValues();
 
         _editContext = new EditContext(_model);
         _messageStore = new ValidationMessageStore(_editContext);
@@ -166,10 +191,52 @@
         }
     }
 
+    private bool HasHiddenValues()
+    {
+        return !string.IsNullOrWhiteSpace(_model.Description)
+            || !string.IsNullOrWhiteSpace(_model.Notes)
+            || _model.Category != TaskItemCategory.General
+            || _model.Priority != TaskItemPriority.Normal;
+    }
+
+    /// <summary>True when a field inside «Flere valg» has an error, so the section opens and the error is seen.</summary>
+    private bool HasHiddenError()
+    {
+        return HasError(nameof(TaskFormModel.Description))
+            || HasError(nameof(TaskFormModel.Category))
+            || HasError(nameof(TaskFormModel.Priority))
+            || HasError(nameof(TaskFormModel.Notes))
+            || (!_boardCaseVisible && HasError(nameof(TaskFormModel.BoardCaseId)));
+    }
+
+    private bool HasError(string fieldName)
+    {
+        return _editContext.GetValidationMessages(_editContext.Field(fieldName)).Any();
+    }
+
+    private void SetUnitMode(bool unitMode)
+    {
+        _unitMode = unitMode;
+        _scopeError = null;
+    }
+
+    private void SetHousingUnit(int? housingUnitId)
+    {
+        _model.HousingUnitId = housingUnitId;
+        _scopeError = null;
+    }
+
     private async Task SaveAsync()
     {
         if (_isSaving)
         {
+            return;
+        }
+
+        if (_unitMode && _model.HousingUnitId == null)
+        {
+            _scopeError = "Velg en boenhet, eller velg «Hele sameiet».";
+
             return;
         }
 

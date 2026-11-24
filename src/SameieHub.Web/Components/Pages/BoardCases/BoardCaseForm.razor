@@ -9,7 +9,7 @@
     }
 
     <section class="surface-card form-section">
-        <h2>Saksinformasjon</h2>
+        <p class="form-text mt-0">Felt merket med <span class="required-mark" aria-hidden="true">*</span> må fylles ut.</p>
         <div class="row g-3">
             <div class="col-12">
                 <label for="title" class="form-label">Tittel <span class="required-mark" aria-hidden="true">*</span></label>
@@ -20,9 +20,28 @@
             <div class="col-12">
                 <label for="description" class="form-label">Beskrivelse</label>
                 <InputTextArea id="description" class="form-control" rows="4" @bind-Value="_model.Description"
-                               maxlength="@BoardCase.MaxDescriptionLength" />
+                               maxlength="@BoardCase.MaxDescriptionLength" aria-describedby="description-help" />
+                <div id="description-help" class="form-text">Hva saken gjelder og hva styret skal ta stilling til.</div>
                 <ValidationMessage For="() => _model.Description" />
             </div>
+            <div class="col-md-6">
+                <label for="meetingDate" class="form-label">Registrert møtedato</label>
+                <InputDate id="meetingDate" class="form-control" @bind-Value="_model.MeetingDate"
+                           ParsingErrorMessage="Møtedatoen må være en gyldig dato." aria-describedby="meetingDate-help" />
+                <div id="meetingDate-help" class="form-text">Når saken er planlagt behandlet. Det er bare en registrert dato, ikke en innkalling til møte.</div>
+                <ValidationMessage For="() => _model.MeetingDate" />
+            </div>
+            <div class="col-12">
+                <ScopeField UnitMode="_unitMode" UnitModeChanged="SetUnitMode"
+                            HousingUnitId="_model.HousingUnitId" HousingUnitIdChanged="SetHousingUnit"
+                            For="() => _model.HousingUnitId" Units="AvailableHousingUnits" Error="@_scopeError"
+                            Help="Velg «Hele sameiet» hvis saken ikke gjelder en bestemt boenhet." />
+            </div>
+        </div>
+    </section>
+
+    <Disclosure Label="Flere valg" Hint="Prioritet · Merknader" Open="_startOpen" ForceOpen="HasHiddenError()">
+        <div class="row g-3">
             <div class="col-md-6">
                 <label for="priority" class="form-label">Prioritet</label>
                 <InputSelect id="priority" class="form-select" @bind-Value="_model.Priority">
@@ -33,34 +52,14 @@
                 </InputSelect>
                 <ValidationMessage For="() => _model.Priority" />
             </div>
-            <div class="col-md-6">
-                <label for="meetingDate" class="form-label">Møtedato</label>
-                <InputDate id="meetingDate" class="form-control" @bind-Value="_model.MeetingDate"
-                           ParsingErrorMessage="Møtedatoen må være en gyldig dato." />
-                <ValidationMessage For="() => _model.MeetingDate" />
-            </div>
             <div class="col-12">
-                <label for="housingUnitId" class="form-label">Tilknyttet boenhet</label>
-                <InputSelect id="housingUnitId" class="form-select" @bind-Value="_model.HousingUnitId" aria-describedby="housingUnitId-help">
-                    <option value="">Hele sameiet (ingen boenhet)</option>
-                    @foreach (var unit in AvailableHousingUnits)
-                    {
-                        <option value="@unit.Id">@unit.Address@(unit.IsActive ? "" : " (inaktiv)")</option>
-                    }
-                </InputSelect>
-                <div id="housingUnitId-help" class="form-text">Velg «Hele sameiet» hvis saken ikke gjelder en bestemt boenhet.</div>
-                <ValidationMessage For="() => _model.HousingUnitId" />
+                <label for="notes" class="form-label">Merknader</label>
+                <InputTextArea id="notes" class="form-control" rows="4" @bind-Value="_model.Notes"
+                               maxlength="@BoardCase.MaxNotesLength" />
+                <ValidationMessage For="() => _model.Notes" />
             </div>
         </div>
-    </section>
-
-    <section class="surface-card form-section">
-        <h2>Andre opplysninger</h2>
-        <label for="notes" class="form-label">Merknader</label>
-        <InputTextArea id="notes" class="form-control" rows="4" @bind-Value="_model.Notes"
-                       maxlength="@BoardCase.MaxNotesLength" />
-        <ValidationMessage For="() => _model.Notes" />
-    </section>
+    </Disclosure>
 
     <div class="form-actions">
         <button type="submit" class="btn btn-primary" disabled="@_isSaving">
@@ -83,17 +82,20 @@
     private EditContext _editContext = default!;
     private ValidationMessageStore _messageStore = default!;
     private InputText? _titleInput;
+    private bool _unitMode;
+    private bool _startOpen;
     private bool _isSaving;
     private string? _errorMessage;
+    private string? _scopeError;
 
     [Parameter]
     public BoardCase? Existing { get; set; }
 
-    /// <summary>The housing units the user can choose from. The page decides which ones are offered.</summary>
     /// <summary>The housing unit chosen when a new case is registered. Must be one of the available units.</summary>
     [Parameter]
     public int? InitialHousingUnitId { get; set; }
 
+    /// <summary>The housing units the user can choose from. The page decides which ones are offered.</summary>
     [Parameter, EditorRequired]
     public IReadOnlyList<HousingUnit> AvailableHousingUnits { get; set; } = [];
 
@@ -112,6 +114,9 @@
             ? new BoardCaseFormModel { HousingUnitId = InitialHousingUnitId }
             : BoardCaseFormModel.From(Existing);
 
+        _unitMode = _model.HousingUnitId != null;
+        _startOpen = Existing != null && (!string.IsNullOrWhiteSpace(_model.Notes) || _model.Priority != BoardCasePriority.Normal);
+
         _editContext = new EditContext(_model);
         _messageStore = new ValidationMessageStore(_editContext);
         _editContext.OnValidationRequested += (_, _) => _messageStore.Clear();
@@ -126,10 +131,35 @@
         }
     }
 
+    private bool HasHiddenError()
+    {
+        return _editContext.GetValidationMessages(_editContext.Field(nameof(BoardCaseFormModel.Priority))).Any()
+            || _editContext.GetValidationMessages(_editContext.Field(nameof(BoardCaseFormModel.Notes))).Any();
+    }
+
+    private void SetUnitMode(bool unitMode)
+    {
+        _unitMode = unitMode;
+        _scopeError = null;
+    }
+
+    private void SetHousingUnit(int? housingUnitId)
+    {
+        _model.HousingUnitId = housingUnitId;
+        _scopeError = null;
+    }
+
     private async Task SaveAsync()
     {
         if (_isSaving)
         {
+            return;
+        }
+
+        if (_unitMode && _model.HousingUnitId == null)
+        {
+            _scopeError = "Velg en boenhet, eller velg «Hele sameiet».";
+
             return;
         }
 

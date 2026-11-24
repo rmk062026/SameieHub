@@ -45,7 +45,7 @@ public class TaskEditTests : UiTestBase
         Assert.Equal("High", cut.Find("#priority").GetAttribute("value"));
         Assert.Equal("2026-12-01", cut.Find("#dueDate").GetAttribute("value"));
         Assert.Equal("Test Person", cut.Find("#assignedTo").GetAttribute("value"));
-        Assert.Equal(unit.Id.ToString(), cut.Find("#housingUnitId").GetAttribute("value"));
+        Assert.Equal(unit.Id.ToString(), cut.SelectedHousingUnit());
         Assert.Equal(boardCase.Id.ToString(), cut.Find("#boardCaseId").GetAttribute("value"));
         Assert.Equal("Fiktive merknader.", cut.Find("#notes").GetAttribute("value"));
     }
@@ -129,9 +129,9 @@ public class TaskEditTests : UiTestBase
 
         var cut = RenderEdit(task.Id);
 
-        Assert.Equal(linked.Id.ToString(), cut.Find("#housingUnitId").GetAttribute("value"));
+        Assert.Equal(linked.Id.ToString(), cut.SelectedHousingUnit());
         Assert.Equal(
-            ["Ingen boenhet", "Storgata 1A (inaktiv)", "Storgata 1B"],
+            ["Velg boenhet", "Storgata 1A (inaktiv)", "Storgata 1B"],
             cut.FindAll("#housingUnitId option").Select(option => option.TextContent));
         Assert.DoesNotContain(cut.FindAll("#housingUnitId option"), option => option.TextContent.Contains("1C"));
 
@@ -150,9 +150,9 @@ public class TaskEditTests : UiTestBase
         var active = await Service.RegisterAsync("Storgata 1A");
         var task = await RegisterFullTaskAsync(active.Id);
         var cut = RenderEdit(task.Id);
-        cut.Find("#housingUnitId").Change("");
+        cut.ChooseWholeCooperative();
         var target = await Service.RegisterAsync("Storgata 1B");
-        cut.Find("#housingUnitId").Change(target.Id.ToString());
+        cut.ChooseHousingUnit(target.Id);
         await Service.DeactivateAsync(target.Id);
 
         cut.Find("form").Submit();
@@ -169,7 +169,7 @@ public class TaskEditTests : UiTestBase
         var task = await RegisterFullTaskAsync(unit.Id, boardCase.Id);
         var cut = RenderEdit(task.Id);
 
-        cut.Find("#housingUnitId").Change("");
+        cut.ChooseWholeCooperative();
         cut.Find("#boardCaseId").Change("");
         cut.Find("form").Submit();
 

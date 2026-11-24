@@ -53,7 +53,7 @@ public class TaskCreateTests : UiTestBase
         cut.Find("#priority").Change("High");
         cut.Find("#dueDate").Change("2026-12-01");
         cut.Find("#assignedTo").Change("Test Person");
-        cut.Find("#housingUnitId").Change(unit.Id.ToString());
+        cut.ChooseHousingUnit(unit.Id);
         cut.Find("#boardCaseId").Change(boardCase.Id.ToString());
         cut.Find("#notes").Change("Fiktive merknader.");
         cut.Find("form").Submit();
@@ -102,7 +102,9 @@ public class TaskCreateTests : UiTestBase
 
         var cut = RenderLoaded();
 
-        Assert.Equal(["Ingen boenhet", "Storgata 1A"], cut.FindAll("#housingUnitId option").Select(option => option.TextContent));
+        Assert.True(cut.IsWholeCooperativeChosen());
+        cut.Find("#scope-unit").Change(true);
+        Assert.Equal(["Velg boenhet", "Storgata 1A"], cut.FindAll("#housingUnitId option").Select(option => option.TextContent));
     }
 
     [Fact]
@@ -200,7 +202,7 @@ public class TaskCreateTests : UiTestBase
         var unit = await Service.RegisterAsync("Storgata 1A");
         var cut = RenderLoaded();
         cut.Find("#title").Change("Oppgave");
-        cut.Find("#housingUnitId").Change(unit.Id.ToString());
+        cut.ChooseHousingUnit(unit.Id);
         await Service.DeactivateAsync(unit.Id);
 
         cut.Find("form").Submit();
@@ -346,7 +348,7 @@ public class TaskCreateTests : UiTestBase
 
         var cut = RenderLoaded($"?boenhet={unit.Id}");
 
-        Assert.Equal(unit.Id.ToString(), cut.Find("#housingUnitId").GetAttribute("value"));
+        Assert.Equal(unit.Id.ToString(), cut.SelectedHousingUnit());
         Assert.Empty(cut.FindAll(".alert-warning"));
         Assert.Equal($"/boenheter/{unit.Id}", cut.Find(".form-actions a").GetAttribute("href"));
         cut.Find("#title").Change("Oppgave");
@@ -362,7 +364,8 @@ public class TaskCreateTests : UiTestBase
 
         var cut = RenderLoaded($"?boenhet={inactive.Id}");
 
-        Assert.Equal("", cut.Find("#housingUnitId").GetAttribute("value") ?? "");
+        Assert.True(cut.IsWholeCooperativeChosen());
+        Assert.Empty(cut.FindAll("#housingUnitId"));
         Assert.DoesNotContain(cut.FindAll("#housingUnitId option"), option => option.TextContent.Contains("Storgata 1A"));
         Assert.Contains("Boenheten fra lenken finnes ikke eller er inaktiv", cut.Find(".alert-warning").TextContent);
         cut.Find("#title").Change("Oppgave");
@@ -378,7 +381,8 @@ public class TaskCreateTests : UiTestBase
     {
         var cut = RenderLoaded($"?boenhet={value}");
 
-        Assert.Equal("", cut.Find("#housingUnitId").GetAttribute("value") ?? "");
+        Assert.True(cut.IsWholeCooperativeChosen());
+        Assert.Empty(cut.FindAll("#housingUnitId"));
         Assert.Contains("Boenheten fra lenken finnes ikke eller er inaktiv", cut.Find(".alert-warning").TextContent);
     }
 
@@ -390,7 +394,7 @@ public class TaskCreateTests : UiTestBase
 
         var cut = RenderLoaded($"?boenhet={unit.Id}&styresak={boardCase.Id}");
 
-        Assert.Equal(unit.Id.ToString(), cut.Find("#housingUnitId").GetAttribute("value"));
+        Assert.Equal(unit.Id.ToString(), cut.SelectedHousingUnit());
         Assert.Equal(boardCase.Id.ToString(), cut.Find("#boardCaseId").GetAttribute("value"));
     }
 

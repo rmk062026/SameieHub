@@ -5,10 +5,10 @@
 @inject NavigationManager Navigation
 @inject ILogger<TaskCreate> Logger
 
-<PageTitle>Registrer oppgave – SameieHub</PageTitle>
+<PageTitle>Ny oppgave – SameieHub</PageTitle>
 
-<PageHeader Title="Registrer oppgave" Description="Bare tittelen er obligatorisk. Resten kan du fylle inn senere."
-            BackHref="/oppgaver" BackText="Oppgaver" />
+<PageHeader Title="Ny oppgave" Description="Bare tittelen er obligatorisk. Resten kan du fylle inn senere."
+            BackHref="@BackHref" BackText="@BackText" />
 
 @if (_isLoading)
 {
@@ -30,6 +30,23 @@ else
         <div class="alert alert-warning" role="status">@notice</div>
     }
 
+    @if (_contextBoardCase != null)
+    {
+        <section class="context-box" data-testid="case-context" aria-label="Styresaken oppgaven knyttes til">
+            <p class="mb-1">
+                Oppgaven knyttes til styresak <strong>#@_contextBoardCase.Id «@_contextBoardCase.Title»</strong>.
+                @_caseScopeText
+            </p>
+            <p class="mb-0 text-muted">Du kan endre boenheten under «Gjelder» hvis oppgaven gjelder noe annet, og fjerne koblingen til styresaken under «Styresak».</p>
+        </section>
+    }
+    else
+    {
+        <p class="form-intro" data-testid="task-explanation">
+            En oppgave er noe som skal gjøres. Hvis styret først må behandle eller vedta noe, kan du <a href="/styresaker/ny">registrere en styresak</a>.
+        </p>
+    }
+
     <TaskForm AvailableHousingUnits="_activeHousingUnits" AvailableBoardCases="_boardCases"
               InitialHousingUnitId="_preselectedHousingUnitId" InitialBoardCaseId="_preselectedBoardCaseId"
               SubmitText="Registrer oppgave" CancelHref="@CancelHref" OnSave="RegisterAsync" />
@@ -40,6 +57,8 @@ else
     private IReadOnlyList<BoardCase> _boardCases = [];
     private int? _preselectedHousingUnitId;
     private int? _preselectedBoardCaseId;
+    private BoardCase? _contextBoardCase;
+    private string _caseScopeText = string.Empty;
     private List<string> _preselectNotices = [];
     private bool _isLoading = true;
     private string? _loadError;
@@ -51,6 +70,10 @@ else
     /// <summary>Set by the shortcut on a board case page. It is only a suggestion and is checked below.</summary>
     [SupplyParameterFromQuery(Name = "styresak")]
     public string? BoardCaseParameter { get; set; }
+
+    private string BackHref => _preselectedBoardCaseId != null ? CancelHref : "/oppgaver";
+
+    private string BackText => _preselectedBoardCaseId != null ? "Tilbake til styresaken" : "Oppgaver";
 
     private string CancelHref => _preselectedBoardCaseId != null
         ? $"/styresaker/{_preselectedBoardCaseId}"
@@ -91,6 +114,8 @@ else
     {
         _preselectedHousingUnitId = null;
         _preselectedBoardCaseId = null;
+        _contextBoardCase = null;
+        _caseScopeText = string.Empty;
         _preselectNotices = [];
 
         if (HousingUnitParameter != null)
@@ -116,8 +141,33 @@ else
             else
             {
                 _preselectedBoardCaseId = boardCase.Id;
+                _contextBoardCase = boardCase;
+                SuggestHousingUnitFromBoardCase(boardCase);
             }
         }
+    }
+
+    /// <summary>The unit of the board case is only a suggestion. A unit given in the address has priority, and the person can change it.</summary>
+    private void SuggestHousingUnitFromBoardCase(BoardCase boardCase)
+    {
+        if (boardCase.HousingUnitId == null)
+        {
+            _caseScopeText = "Saken gjelder hele sameiet.";
+
+            return;
+        }
+
+        var unit = _activeHousingUnits.FirstOrDefault(activeUnit => activeUnit.Id == boardCase.HousingUnitId);
+
+        if (unit == null)
+        {
+            _caseScopeText = "Saken gjelder en boenhet som er inaktiv, så boenheten er ikke foreslått.";
+
+            return;
+        }
+
+        _caseScopeText = $"Saken gjelder {unit.Address}, og boenheten er foreslått under «Gjelder».";
+        _preselectedHousingUnitId ??= unit.Id;
     }
 
     private HousingUnit? FindActiveUnit(string value)

@@ -38,7 +38,7 @@ public class BoardCaseEditTests : UiTestBase
         Assert.Equal("Fiktiv beskrivelse.", cut.Find("#description").GetAttribute("value"));
         Assert.Equal("High", cut.Find("#priority").GetAttribute("value"));
         Assert.Equal("2026-12-03", cut.Find("#meetingDate").GetAttribute("value"));
-        Assert.Equal(unit.Id.ToString(), cut.Find("#housingUnitId").GetAttribute("value"));
+        Assert.Equal(unit.Id.ToString(), cut.SelectedHousingUnit());
         Assert.Equal("Fiktive merknader.", cut.Find("#notes").GetAttribute("value"));
     }
 
@@ -55,8 +55,8 @@ public class BoardCaseEditTests : UiTestBase
         var cut = await RenderEditAsync(boardCase);
 
         var options = cut.FindAll("#housingUnitId option").Select(option => option.TextContent).ToList();
-        Assert.Equal(["Hele sameiet (ingen boenhet)", "Storgata 1A (inaktiv)", "Storgata 1C"], options);
-        Assert.Equal(linked.Id.ToString(), cut.Find("#housingUnitId").GetAttribute("value"));
+        Assert.Equal(["Velg boenhet", "Storgata 1A (inaktiv)", "Storgata 1C"], options);
+        Assert.Equal(linked.Id.ToString(), cut.SelectedHousingUnit());
     }
 
     [Fact]
@@ -100,7 +100,7 @@ public class BoardCaseEditTests : UiTestBase
         var boardCase = await RegisterFullCaseAsync(unit.Id);
         var cut = await RenderEditAsync(boardCase);
 
-        cut.Find("#housingUnitId").Change("");
+        cut.ChooseWholeCooperative();
         cut.Find("form").Submit();
 
         cut.WaitForAssertion(() => Assert.Contains("status=endret", CurrentPath));

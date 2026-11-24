@@ -15,7 +15,7 @@ public static class BoardCaseFieldMessages
         ["Description"] = $"Beskrivelsen kan ha maks {BoardCase.MaxDescriptionLength} tegn.",
         ["Priority"] = "Velg en gyldig prioritet.",
         ["MeetingDate"] = $"Møtedatoen må være mellom {NorwegianDateFormat.Date(BoardCase.MinMeetingDate)} og {NorwegianDateFormat.Date(BoardCase.MaxMeetingDate)}.",
-        ["HousingUnitId"] = "Boenheten finnes ikke eller er inaktiv. Velg en aktiv boenhet, eller la saken gjelde hele sameiet.",
+        ["HousingUnitId"] = "Boenheten finnes ikke eller er inaktiv. Velg en aktiv boenhet, eller velg «Hele sameiet».",
         ["Notes"] = $"Merknader kan ha maks {BoardCase.MaxNotesLength} tegn."
     };
 

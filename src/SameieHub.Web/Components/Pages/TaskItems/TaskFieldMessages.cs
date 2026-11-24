@@ -17,7 +17,7 @@ public static class TaskFieldMessages
         ["Priority"] = "Velg en gyldig prioritet.",
         ["DueDate"] = $"Fristen må være mellom {NorwegianDateFormat.Date(TaskItem.MinDueDate)} og {NorwegianDateFormat.Date(TaskItem.MaxDueDate)}.",
         ["AssignedTo"] = $"Ansvarlig kan ha maks {TaskItem.MaxAssignedToLength} tegn.",
-        ["HousingUnitId"] = "Boenheten finnes ikke eller er inaktiv. Velg en aktiv boenhet, eller la oppgaven stå uten boenhet.",
+        ["HousingUnitId"] = "Boenheten finnes ikke eller er inaktiv. Velg en aktiv boenhet, eller velg «Hele sameiet».",
         ["BoardCaseId"] = "Styresaken finnes ikke. Velg en annen styresak, eller la oppgaven stå uten styresak.",
         ["Notes"] = $"Merknader kan ha maks {TaskItem.MaxNotesLength} tegn."
     };

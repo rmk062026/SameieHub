@@ -60,4 +60,34 @@ public static class UiTestHelpers
     {
         cut.FindButton(text).Click();
     }
+
+    /// <summary>Chooses «En boenhet» under «Gjelder» and then the housing unit with this Id.</summary>
+    public static void ChooseHousingUnit<T>(this IRenderedComponent<T> cut, int housingUnitId)
+        where T : Microsoft.AspNetCore.Components.IComponent
+    {
+        cut.Find("#scope-unit").Change(true);
+        cut.Find("#housingUnitId").Change(housingUnitId.ToString());
+    }
+
+    /// <summary>Chooses «Hele sameiet» under «Gjelder».</summary>
+    public static void ChooseWholeCooperative<T>(this IRenderedComponent<T> cut)
+        where T : Microsoft.AspNetCore.Components.IComponent
+    {
+        cut.Find("#scope-whole").Change(true);
+    }
+
+    /// <summary>The value of the housing unit that is selected under «Gjelder», or an empty text for the whole cooperative.</summary>
+    public static string SelectedHousingUnit<T>(this IRenderedComponent<T> cut)
+        where T : Microsoft.AspNetCore.Components.IComponent
+    {
+        var option = cut.FindAll("#housingUnitId option").FirstOrDefault(element => element.HasAttribute("selected"));
+
+        return option?.GetAttribute("value") ?? string.Empty;
+    }
+
+    public static bool IsWholeCooperativeChosen<T>(this IRenderedComponent<T> cut)
+        where T : Microsoft.AspNetCore.Components.IComponent
+    {
+        return cut.Find("#scope-whole").HasAttribute("checked");
+    }
 }
