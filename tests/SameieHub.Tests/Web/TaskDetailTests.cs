@@ -16,7 +16,7 @@ public class TaskDetailTests : UiTestBase
     private IRenderedComponent<TaskDetail> RenderDetail(int id)
     {
         var cut = Render<TaskDetail>(parameters => parameters.Add(page => page.Id, id));
-        cut.WaitForElement(".detail-grid, .empty-state, [role=alert]");
+        cut.WaitForElement("[data-testid=task-summary], .empty-state, [role=alert]");
 
         return cut;
     }
@@ -38,10 +38,15 @@ public class TaskDetailTests : UiTestBase
         return item.QuerySelector("dd")!.TextContent.Trim();
     }
 
+    private static string Feedback(IRenderedComponent<TaskDetail> cut)
+    {
+        return cut.FindByTestId("action-feedback").TextContent;
+    }
+
     // Information
 
     [Fact]
-    public async Task Render_Task_ShowsAllInformationInNorwegian()
+    public async Task Render_Task_ShowsTheMostImportantInformationFirst()
     {
         var unit = await Service.RegisterAsync("Storgata 1A");
         var boardCase = await BoardCases.RegisterAsync(new BoardCaseDetails { Title = "Maling av porter" });
@@ -49,30 +54,49 @@ public class TaskDetailTests : UiTestBase
         {
             Title = "Rense takrenner",
             Description = "Fiktiv beskrivelse.",
-            Category = TaskItemCategory.Maintenance,
             Priority = TaskItemPriority.High,
             DueDate = new DateOnly(2026, 12, 1),
             AssignedTo = "Test Person",
             HousingUnitId = unit.Id,
-            BoardCaseId = boardCase.Id,
+            BoardCaseId = boardCase.Id
+        });
+
+        var cut = RenderDetail(task.Id);
+
+        Assert.Equal("Rense takrenner", cut.FindByTestId("page-title").TextContent);
+        var summary = cut.FindByTestId("task-summary");
+        Assert.Contains("Ikke startet", summary.TextContent);
+        Assert.Equal("Høy prioritet", summary.QuerySelector("[data-testid=high-priority]")!.TextContent);
+        Assert.Equal("01.12.2026", DetailValue(cut, "Frist"));
+        Assert.Equal("Test Person", DetailValue(cut, "Ansvarlig"));
+        Assert.Equal("Storgata 1A", DetailValue(cut, "Gjelder"));
+        Assert.Equal($"#{boardCase.Id} Maling av porter", DetailValue(cut, "Styresak"));
+        Assert.Contains("Fiktiv beskrivelse.", cut.FindByTestId("task-description").TextContent);
+    }
+
+    [Fact]
+    public async Task Render_Task_KeepsRarelyUsedInformationInAClosedDetailsSection()
+    {
+        var task = await RegisterAsync(new TaskItemDetails
+        {
+            Title = "Rense takrenner",
+            Category = TaskItemCategory.Maintenance,
+            Priority = TaskItemPriority.Low,
             Notes = "Fiktive merknader."
         });
 
         var cut = RenderDetail(task.Id);
 
-        Assert.Equal("Rense takrenner", cut.Find("h1").TextContent);
-        Assert.Contains($"Oppgave #{task.Id}", cut.Find(".detail-meta").TextContent);
+        var details = cut.Find("details.disclosure");
+        Assert.False(details.HasAttribute("open"));
+        Assert.Equal("Detaljer", details.QuerySelector(".disclosure-label")!.TextContent);
+        Assert.Equal($"#{task.Id}", DetailValue(cut, "Oppgavenummer"));
         Assert.Equal("Vedlikehold", DetailValue(cut, "Kategori"));
-        Assert.Equal("Ikke startet", DetailValue(cut, "Status"));
-        Assert.Equal("Høy", DetailValue(cut, "Prioritet"));
-        Assert.Equal("01.12.2026", DetailValue(cut, "Frist"));
-        Assert.Equal("Test Person", DetailValue(cut, "Ansvarlig"));
-        Assert.Equal("Storgata 1A", DetailValue(cut, "Boenhet"));
-        Assert.Equal($"#{boardCase.Id} Maling av porter", DetailValue(cut, "Styresak"));
+        Assert.Equal("Lav", DetailValue(cut, "Prioritet"));
+        Assert.Equal("Fiktive merknader.", DetailValue(cut, "Merknader"));
         Assert.Equal("18.11.2026 11:30", DetailValue(cut, "Opprettet"));
         Assert.Equal("18.11.2026 11:30", DetailValue(cut, "Sist oppdatert"));
-        Assert.Contains("Fiktiv beskrivelse.", cut.Markup);
-        Assert.Contains("Fiktive merknader.", cut.Markup);
+        Assert.False(cut.HasTestId("high-priority"));
     }
 
     [Fact]
@@ -84,22 +108,23 @@ public class TaskDetailTests : UiTestBase
 
         var cut = RenderDetail(task.Id);
 
-        var hrefs = cut.FindAll(".detail-list a").Select(link => link.GetAttribute("href")).ToList();
+        var hrefs = cut.FindByTestId("task-summary").QuerySelectorAll("a").Select(link => link.GetAttribute("href")).ToList();
         Assert.Contains($"/boenheter/{unit.Id}", hrefs);
         Assert.Contains($"/styresaker/{boardCase.Id}", hrefs);
     }
 
     [Fact]
-    public async Task Render_TaskWithoutOptionalValues_ShowsNothingRegistered()
+    public async Task Render_TaskWithoutOptionalValues_SaysWhatIsMissing()
     {
         var task = await RegisterAsync();
 
         var cut = RenderDetail(task.Id);
 
         Assert.Equal("Ingen frist", DetailValue(cut, "Frist"));
-        Assert.Equal("Ikke registrert", DetailValue(cut, "Ansvarlig"));
-        Assert.Equal("Ingen boenhet", DetailValue(cut, "Boenhet"));
+        Assert.Equal("Ikke tildelt", DetailValue(cut, "Ansvarlig"));
+        Assert.Equal("Hele sameiet", DetailValue(cut, "Gjelder"));
         Assert.Equal("Ingen styresak", DetailValue(cut, "Styresak"));
+        Assert.Contains("Ikke registrert", cut.FindByTestId("task-description").TextContent);
         Assert.DoesNotContain(cut.FindAll(".detail-item dt"), term => term.TextContent == "Fullført");
     }
 
@@ -112,7 +137,7 @@ public class TaskDetailTests : UiTestBase
 
         var cut = RenderDetail(task.Id);
 
-        Assert.Equal("Storgata 1A (inaktiv)", DetailValue(cut, "Boenhet"));
+        Assert.Equal("Storgata 1A (inaktiv)", DetailValue(cut, "Gjelder"));
     }
 
     [Fact]
@@ -123,7 +148,8 @@ public class TaskDetailTests : UiTestBase
 
         var cut = RenderDetail(task.Id);
 
-        Assert.Equal("Oppgaven er registrert.", cut.Find(".alert-success").TextContent);
+        Assert.Contains("Oppgaven er registrert.", Feedback(cut));
+        Assert.Equal("status", cut.FindByTestId("action-feedback").GetAttribute("role"));
     }
 
     [Fact]
@@ -145,31 +171,33 @@ public class TaskDetailTests : UiTestBase
         TaskRepository.IsFailing = false;
         cut.Find("[role=alert] button").Click();
 
-        cut.WaitForElement(".detail-grid");
+        cut.WaitForElement("[data-testid=task-summary]");
     }
 
     [Fact]
-    public async Task Render_Task_HasEditAndBackLinks()
+    public async Task Render_Task_HasEditLinkBackLinkAndTheMainActionInTheHeader()
     {
         var task = await RegisterAsync();
 
         var cut = RenderDetail(task.Id);
 
-        Assert.Equal($"/oppgaver/{task.Id}/rediger", cut.Find(".page-actions a").GetAttribute("href"));
+        Assert.Equal($"/oppgaver/{task.Id}/rediger", cut.FindByTestId("page-actions").QuerySelector("a")!.GetAttribute("href"));
         Assert.Equal("/oppgaver", cut.Find("a.back-link").GetAttribute("href"));
+        Assert.Equal("Marker som fullført", cut.FindByTestId("primary-action").TextContent.Trim());
     }
 
     // Due dates
 
     [Fact]
-    public async Task Render_OverdueTask_ShowsOverdueTextInHeaderAndDueDate()
+    public async Task Render_OverdueTask_ShowsOverdueTextNextToTheDueDate()
     {
         var task = await RegisterAsync(new TaskItemDetails { Title = "Oppgave", DueDate = Today.AddDays(-1) });
 
         var cut = RenderDetail(task.Id);
 
-        Assert.Equal(2, cut.FindAll(".is-overdue").Count);
-        Assert.All(cut.FindAll(".is-overdue"), badge => Assert.Equal("Forfalt", badge.TextContent));
+        var badge = Assert.Single(cut.FindAll(".is-overdue"));
+        Assert.Equal("Forfalt", badge.TextContent);
+        Assert.Contains("17.11.2026", DetailValue(cut, "Frist"));
     }
 
     [Fact]
@@ -197,45 +225,49 @@ public class TaskDetailTests : UiTestBase
     // Status
 
     [Fact]
-    public async Task Start_ChangesStatusToInProgressThroughTheStatusSelect()
+    public async Task Start_ChangesStatusToInProgressFromTheMoreActionsMenu()
     {
         var task = await RegisterAsync();
         var cut = RenderDetail(task.Id);
+        Assert.False(cut.HasTestId("set-status-NotStarted"));
 
-        cut.Find("#newStatus").Change("InProgress");
-        ClickButton(cut, "Endre status");
+        cut.FindByTestId("set-status-InProgress").Click();
 
         Assert.Equal(TaskItemStatus.InProgress, (await Tasks.GetByIdAsync(task.Id))!.Status);
-        cut.WaitForAssertion(() => Assert.Equal("Statusen er endret.", cut.Find(".alert-success").TextContent));
-        Assert.Equal("Pågår", DetailValue(cut, "Status"));
+        Assert.Contains("Statusen er endret til «Pågår».", Feedback(cut));
+        Assert.Contains("Pågår", cut.FindByTestId("task-summary").TextContent);
+        Assert.False(cut.HasTestId("set-status-InProgress"));
+        Assert.True(cut.HasTestId("set-status-NotStarted"));
     }
 
     [Fact]
-    public async Task ChangeStatusButton_SameStatusSelected_IsDisabled()
+    public async Task MoreActions_StartsClosedAndClosesAgainAfterAnActionHasBeenUsed()
     {
         var task = await RegisterAsync();
-
         var cut = RenderDetail(task.Id);
+        Assert.False(cut.FindByTestId("more-menu").HasAttribute("open"));
 
-        Assert.True(cut.FindAll("button").First(button => button.TextContent.Trim() == "Endre status").HasAttribute("disabled"));
+        cut.FindByTestId("set-status-InProgress").Click();
+
+        Assert.False(cut.FindByTestId("more-menu").HasAttribute("open"));
     }
 
     [Fact]
-    public async Task Complete_SetsCompletedAndShowsTheCompletionTime()
+    public async Task Complete_SetsCompletedAndShowsTheResultAtTheAction()
     {
         var task = await RegisterAsync(new TaskItemDetails { Title = "Oppgave", DueDate = Today.AddDays(-1) });
         Clock.Advance(TimeSpan.FromHours(2));
         var cut = RenderDetail(task.Id);
         Assert.DoesNotContain(cut.FindAll(".detail-item dt"), term => term.TextContent == "Fullført");
 
-        ClickButton(cut, "Marker som fullført");
+        cut.FindByTestId("complete-task").Click();
 
         var stored = (await Tasks.GetByIdAsync(task.Id))!;
         Assert.Equal(TaskItemStatus.Completed, stored.Status);
         Assert.NotNull(stored.CompletedAt);
-        cut.WaitForAssertion(() => Assert.Equal("Oppgaven er markert som fullført.", cut.Find(".alert-success").TextContent));
+        Assert.Contains("Oppgaven er markert som fullført.", Feedback(cut));
         Assert.Equal("18.11.2026 13:30", DetailValue(cut, "Fullført"));
-        Assert.Equal("Fullført", DetailValue(cut, "Status"));
+        Assert.Contains("Fullført", cut.FindByTestId("task-summary").TextContent);
     }
 
     [Fact]
@@ -245,9 +277,27 @@ public class TaskDetailTests : UiTestBase
         var cut = RenderDetail(task.Id);
         Assert.NotEmpty(cut.FindAll(".is-overdue"));
 
-        ClickButton(cut, "Marker som fullført");
+        cut.FindByTestId("complete-task").Click();
 
-        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll(".is-overdue")));
+        Assert.Empty(cut.FindAll(".is-overdue"));
+    }
+
+    [Fact]
+    public async Task Complete_ThenUndo_RestoresTheStatusTheTaskHadAndSaysSo()
+    {
+        var task = await RegisterAsync();
+        await Tasks.ChangeStatusAsync(task.Id, TaskItemStatus.InProgress);
+        var cut = RenderDetail(task.Id);
+
+        cut.FindByTestId("complete-task").Click();
+        cut.FindByTestId("feedback-action").Click();
+
+        var stored = (await Tasks.GetByIdAsync(task.Id))!;
+        Assert.Equal(TaskItemStatus.InProgress, stored.Status);
+        Assert.Null(stored.CompletedAt);
+        Assert.Contains("Fullføringen er angret. Oppgaven står igjen som «Pågår».", Feedback(cut));
+        Assert.False(cut.HasTestId("feedback-action"));
+        Assert.True(cut.HasTestId("complete-task"));
     }
 
     [Fact]
@@ -258,27 +308,29 @@ public class TaskDetailTests : UiTestBase
         var cut = RenderDetail(task.Id);
         Assert.Empty(cut.FindAll(".is-overdue"));
 
-        ClickButton(cut, "Gjenåpne oppgaven");
+        cut.FindByTestId("reopen-task").Click();
 
         var stored = (await Tasks.GetByIdAsync(task.Id))!;
         Assert.Equal(TaskItemStatus.InProgress, stored.Status);
         Assert.Null(stored.CompletedAt);
-        cut.WaitForAssertion(() => Assert.Equal("Oppgaven er gjenåpnet.", cut.Find(".alert-success").TextContent));
+        Assert.Contains("Oppgaven er gjenåpnet og står nå som «Pågår».", Feedback(cut));
+        Assert.False(cut.HasTestId("feedback-action"));
         Assert.DoesNotContain(cut.FindAll(".detail-item dt"), term => term.TextContent == "Fullført");
         Assert.NotEmpty(cut.FindAll(".is-overdue"));
     }
 
     [Fact]
-    public async Task StatusButtons_CompletedTaskOffersReopenNotComplete()
+    public async Task StatusButtons_CompletedTaskOffersReopenNotComplete_AndAllOtherStatusesRemainReachable()
     {
         var task = await RegisterAsync();
         await Tasks.ChangeStatusAsync(task.Id, TaskItemStatus.Completed);
 
         var cut = RenderDetail(task.Id);
 
-        var buttons = cut.FindAll("button").Select(button => button.TextContent.Trim()).ToList();
-        Assert.Contains("Gjenåpne oppgaven", buttons);
-        Assert.DoesNotContain("Marker som fullført", buttons);
+        Assert.Equal("Gjenåpne oppgaven", cut.FindByTestId("primary-action").TextContent.Trim());
+        Assert.False(cut.HasTestId("complete-task"));
+        Assert.True(cut.HasTestId("set-status-NotStarted"));
+        Assert.True(cut.HasTestId("set-status-InProgress"));
     }
 
     [Fact]
@@ -288,13 +340,13 @@ public class TaskDetailTests : UiTestBase
         var cut = RenderDetail(task.Id);
         await Tasks.DeleteAsync(task.Id);
 
-        ClickButton(cut, "Marker som fullført");
+        cut.FindByTestId("complete-task").Click();
 
-        cut.WaitForAssertion(() => Assert.Contains("Oppgaven finnes ikke lenger", cut.Find("[role=alert]").TextContent));
+        Assert.Contains("Oppgaven finnes ikke lenger", cut.Find("[role=alert]").TextContent);
     }
 
     [Fact]
-    public async Task Complete_DatabaseUnavailable_ShowsErrorAndDoesNotLogTaskText()
+    public async Task Complete_DatabaseUnavailable_ShowsErrorUntilClosedAndDoesNotLogTaskText()
     {
         var logger = new CapturingLoggerProvider();
         Services.AddLogging(builder => builder.AddProvider(logger));
@@ -302,10 +354,29 @@ public class TaskDetailTests : UiTestBase
         var cut = RenderDetail(task.Id);
         TaskRepository.IsFailing = true;
 
-        ClickButton(cut, "Marker som fullført");
+        cut.FindByTestId("complete-task").Click();
 
-        cut.WaitForAssertion(() => Assert.Contains("Kunne ikke lagre endringen", cut.Find("[role=alert]").TextContent));
+        Assert.Contains("Kunne ikke lagre endringen", cut.Find("[role=alert]").TextContent);
         Assert.DoesNotContain(logger.Messages, message => message.Contains("Hemmelig"));
+
+        cut.FindByTestId("feedback-dismiss").Click();
+        Assert.Empty(cut.FindAll("[role=alert]"));
+    }
+
+    [Fact]
+    public async Task Complete_WhileSaving_DisablesTheButtonSoItCannotBeClickedTwice()
+    {
+        var task = await RegisterAsync();
+        var cut = RenderDetail(task.Id);
+        TaskRepository.UpdateBlocker = new TaskCompletionSource();
+
+        var first = cut.FindByTestId("complete-task").ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
+        cut.WaitForAssertion(() => Assert.True(cut.FindByTestId("primary-action").QuerySelector("button")!.HasAttribute("disabled")));
+        await cut.FindByTestId("primary-action").QuerySelector("button")!.ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
+        TaskRepository.UpdateBlocker.SetResult();
+        await first;
+
+        Assert.Equal(1, TaskRepository.UpdateCount);
     }
 
     // Deletion

@@ -8,11 +8,11 @@
             <li>
                 @if (tab.Href != null)
                 {
-                    <a class="quick-tab @(selected ? "is-selected" : "")" href="@tab.Href" aria-current="@(selected ? "page" : null)">@Text(tab)</a>
+                    <a data-testid="quick-tab-@tab.Key" class="quick-tab @(selected ? "is-selected" : "")" href="@tab.Href" aria-current="@(selected ? "page" : null)">@Text(tab)</a>
                 }
                 else
                 {
-                    <button type="button" class="quick-tab @(selected ? "is-selected" : "")" aria-pressed="@(selected ? "true" : "false")"
+                    <button type="button" data-testid="quick-tab-@tab.Key" class="quick-tab @(selected ? "is-selected" : "")" aria-pressed="@(selected ? "true" : "false")"
                             @onclick="() => Choose(tab)">@Text(tab)</button>
                 }
             </li>

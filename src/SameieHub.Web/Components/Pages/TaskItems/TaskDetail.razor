@@ -35,139 +35,126 @@ else
 {
     var today = TaskService.GetToday();
 
-    <PageHeader Title="@_task.Title" BackHref="/oppgaver" BackText="Oppgaver">
-        <a class="btn btn-primary" href="/oppgaver/@_task.Id/rediger">Rediger</a>
+    <PageHeader Title="@_task.Title" BackHref="/oppgaver" BackText="Oppgaver" MoreActionsKey="_menuVersion">
+        <ChildContent><a class="btn btn-outline-secondary" href="/oppgaver/@_task.Id/rediger">Rediger</a></ChildContent>
+        <PrimaryAction>
+            @if (_task.Status == TaskItemStatus.Completed)
+            {
+                <button type="button" class="btn btn-primary" data-testid="reopen-task" disabled="@_isBusy" @onclick="ReopenAsync">Gjenåpne oppgaven</button>
+            }
+            else
+            {
+                <button type="button" class="btn btn-primary" data-testid="complete-task" disabled="@_isBusy" @onclick="CompleteAsync">Marker som fullført</button>
+            }
+        </PrimaryAction>
+        <MoreActions>
+            @foreach (var status in TaskText.AllStatuses.Where(status => status != TaskItemStatus.Completed && status != _task.Status))
+            {
+                var newStatus = status;
+                <button type="button" data-testid="set-status-@newStatus" disabled="@_isBusy" @onclick="() => SetStatusAsync(newStatus)">Sett til «@TaskText.StatusText(newStatus)»</button>
+            }
+        </MoreActions>
     </PageHeader>
 
-    @if (_message != null)
-    {
-        <div class="alert alert-success" role="status">@_message</div>
-    }
-    @if (_actionError != null)
-    {
-        <div class="alert alert-danger" role="alert">@_actionError</div>
-    }
+    <ActionFeedback Message="@_message" ActionText="@(_undoTo == null ? null : "Angre")" OnAction="UndoAsync" OnDismiss="DismissMessage" />
+    <ActionFeedback Message="@_actionError" Kind="FeedbackKind.Error" OnDismiss="DismissError" />
 
-    <div class="detail-meta">
-        <span class="text-muted">Oppgave #@_task.Id</span>
-        <TaskStatusBadge Status="_task.Status" />
-        <TaskPriorityBadge Priority="_task.Priority" />
-        @if (_task.IsOverdue(today))
-        {
-            <span class="status-badge is-overdue">Forfalt</span>
-        }
-    </div>
-
-    <div class="detail-grid">
-        <section class="surface-card">
-            <h2>Oppgaveinformasjon</h2>
-            <dl class="detail-list">
-                <DetailItem Label="Kategori" Value="@TaskText.CategoryText(_task.Category)" />
-                <DetailItem Label="Status" Value="@TaskText.StatusText(_task.Status)" />
-                <DetailItem Label="Prioritet" Value="@TaskText.PriorityText(_task.Priority)" />
-                <div class="detail-item">
-                    <dt>Frist</dt>
-                    <dd><TaskDueDate Task="_task" Today="today" /></dd>
-                </div>
-                <DetailItem Label="Ansvarlig" Value="@_task.AssignedTo" />
-                <div class="detail-item">
-                    <dt>Boenhet</dt>
-                    <dd>
-                        @if (_task.HousingUnitId == null)
-                        {
-                            <span class="text-muted">Ingen boenhet</span>
-                        }
-                        else if (_housingUnit == null)
-                        {
-                            <span>Boenhet @_task.HousingUnitId</span>
-                        }
-                        else
-                        {
-                            <a href="/boenheter/@_housingUnit.Id">@_housingUnit.Address</a>
-                            @if (!_housingUnit.IsActive)
-                            {
-                                <span class="text-muted"> (inaktiv)</span>
-                            }
-                        }
-                    </dd>
-                </div>
-                <div class="detail-item">
-                    <dt>Styresak</dt>
-                    <dd>
-                        @if (_task.BoardCaseId == null)
-                        {
-                            <span class="text-muted">Ingen styresak</span>
-                        }
-                        else if (_boardCase == null)
-                        {
-                            <span>Styresak #@_task.BoardCaseId</span>
-                        }
-                        else
-                        {
-                            <a href="/styresaker/@_boardCase.Id">#@_boardCase.Id @_boardCase.Title</a>
-                        }
-                    </dd>
-                </div>
-                <DetailItem Label="Opprettet" Value="@NorwegianDateFormat.DateTime(_task.CreatedAt)" />
-                <DetailItem Label="Sist oppdatert" Value="@NorwegianDateFormat.DateTime(_task.UpdatedAt)" />
-                @if (_task.CompletedAt is { } completedAt)
-                {
-                    <DetailItem Label="Fullført" Value="@NorwegianDateFormat.DateTime(completedAt)" />
-                }
-            </dl>
-        </section>
-
-        <section class="surface-card">
-            <h2>Beskrivelse</h2>
-            @if (string.IsNullOrWhiteSpace(_task.Description))
-            {
-                <p class="text-muted mb-0">Ikke registrert</p>
-            }
-            else
-            {
-                <p class="notes-text mb-0">@_task.Description</p>
-            }
-        </section>
-
-        <section class="surface-card detail-wide">
-            <h2>Status</h2>
-            <div class="inline-form">
-                @if (_task.Status == TaskItemStatus.Completed)
-                {
-                    <button type="button" class="btn btn-primary" disabled="@_isBusy" @onclick="ReopenAsync">Gjenåpne oppgaven</button>
-                }
-                else
-                {
-                    <button type="button" class="btn btn-primary" disabled="@_isBusy" @onclick="CompleteAsync">Marker som fullført</button>
-                }
-                <label for="newStatus" class="visually-hidden">Ny status</label>
-                <select id="newStatus" class="form-select" @bind="_selectedStatus">
-                    @foreach (var status in TaskText.AllStatuses)
+    <section class="surface-card task-summary" data-testid="task-summary">
+        <dl class="detail-list">
+            <div class="detail-item">
+                <dt>Status</dt>
+                <dd>
+                    <TaskStatusBadge Status="_task.Status" />
+                    @if (_task.Priority == TaskItemPriority.High)
                     {
-                        <option value="@status">@TaskText.StatusText(status)</option>
+                        <span class="status-badge priority-high ms-1" data-testid="high-priority">Høy prioritet</span>
                     }
-                </select>
-                <button type="button" class="btn btn-outline-secondary" disabled="@(_isBusy || _selectedStatus == _task.Status)"
-                        @onclick="ChangeStatusAsync">Endre status</button>
+                </dd>
             </div>
-            @if (_task.CompletedAt is { } completed)
-            {
-                <p class="form-text mb-0">Fullført @NorwegianDateFormat.DateTime(completed). Tidspunktet fjernes hvis oppgaven gjenåpnes.</p>
-            }
-        </section>
+            <div class="detail-item">
+                <dt>Frist</dt>
+                <dd><TaskDueDate Task="_task" Today="today" /></dd>
+            </div>
+            <div class="detail-item">
+                <dt>Ansvarlig</dt>
+                <dd>
+                    @if (string.IsNullOrWhiteSpace(_task.AssignedTo))
+                    {
+                        <span class="text-muted">Ikke tildelt</span>
+                    }
+                    else
+                    {
+                        @_task.AssignedTo
+                    }
+                </dd>
+            </div>
+            <div class="detail-item">
+                <dt>Gjelder</dt>
+                <dd data-testid="task-housing-unit">
+                    @if (_task.HousingUnitId == null)
+                    {
+                        <span>Hele sameiet</span>
+                    }
+                    else if (_housingUnit == null)
+                    {
+                        <span>Boenhet @_task.HousingUnitId</span>
+                    }
+                    else
+                    {
+                        <a href="/boenheter/@_housingUnit.Id">@_housingUnit.Address</a>
+                        @if (!_housingUnit.IsActive)
+                        {
+                            <span class="text-muted"> (inaktiv)</span>
+                        }
+                    }
+                </dd>
+            </div>
+            <div class="detail-item">
+                <dt>Styresak</dt>
+                <dd data-testid="task-board-case">
+                    @if (_task.BoardCaseId == null)
+                    {
+                        <span class="text-muted">Ingen styresak</span>
+                    }
+                    else if (_boardCase == null)
+                    {
+                        <span>Styresak #@_task.BoardCaseId</span>
+                    }
+                    else
+                    {
+                        <a href="/styresaker/@_boardCase.Id">#@_boardCase.Id @_boardCase.Title</a>
+                    }
+                </dd>
+            </div>
+        </dl>
+    </section>
 
-        <section class="surface-card detail-wide">
-            <h2>Merknader</h2>
-            @if (string.IsNullOrWhiteSpace(_task.Notes))
+    <section class="surface-card" data-testid="task-description">
+        <h2>Beskrivelse</h2>
+        @if (string.IsNullOrWhiteSpace(_task.Description))
+        {
+            <p class="text-muted mb-0">Ikke registrert</p>
+        }
+        else
+        {
+            <p class="notes-text mb-0">@_task.Description</p>
+        }
+    </section>
+
+    <Disclosure Label="Detaljer" Hint="Kategori · Prioritet · Merknader · Opprettet · Sist oppdatert">
+        <dl class="detail-list">
+            <DetailItem Label="Oppgavenummer" Value="@($"#{_task.Id}")" />
+            <DetailItem Label="Kategori" Value="@TaskText.CategoryText(_task.Category)" />
+            <DetailItem Label="Prioritet" Value="@TaskText.PriorityText(_task.Priority)" />
+            <DetailItem Label="Merknader" Value="@_task.Notes" />
+            <DetailItem Label="Opprettet" Value="@NorwegianDateFormat.DateTime(_task.CreatedAt)" />
+            <DetailItem Label="Sist oppdatert" Value="@NorwegianDateFormat.DateTime(_task.UpdatedAt)" />
+            @if (_task.CompletedAt is { } completedAt)
             {
-                <p class="text-muted mb-0">Ikke registrert</p>
+                <DetailItem Label="Fullført" Value="@NorwegianDateFormat.DateTime(completedAt)" />
             }
-            else
-            {
-                <p class="notes-text mb-0">@_task.Notes</p>
-            }
-        </section>
-    </div>
+        </dl>
+    </Disclosure>
 
     <section class="surface-card danger-zone">
         @if (_deleteError != null)
@@ -208,13 +195,14 @@ else
     private TaskItem? _task;
     private HousingUnit? _housingUnit;
     private BoardCase? _boardCase;
-    private TaskItemStatus _selectedStatus;
     private bool _isLoading = true;
     private bool _isBusy;
     private bool _confirmingDelete;
     private bool _isDeleting;
+    private int _menuVersion;
     private string? _loadError;
     private string? _message;
+    private TaskItemStatus? _undoTo;
     private string? _actionError;
     private string? _deleteError;
 
@@ -232,6 +220,7 @@ else
             "endret" => "Endringene er lagret.",
             _ => null
         };
+        _undoTo = null;
 
         await LoadAsync();
     }
@@ -265,29 +254,52 @@ else
         _boardCase = _task?.BoardCaseId == null
             ? null
             : await BoardCaseService.GetByIdAsync(_task.BoardCaseId.Value);
-
-        if (_task != null)
-        {
-            _selectedStatus = _task.Status;
-        }
     }
 
     private async Task CompleteAsync()
     {
-        await RunActionAsync(TaskItemStatus.Completed, "Oppgaven er markert som fullført.");
+        if (_task == null || _task.Status == TaskItemStatus.Completed)
+        {
+            return;
+        }
+
+        await RunActionAsync(TaskItemStatus.Completed, "Oppgaven er markert som fullført.", _task.Status);
     }
 
     private async Task ReopenAsync()
     {
-        await RunActionAsync(TaskItemStatus.InProgress, "Oppgaven er gjenåpnet.");
+        var inProgress = TaskText.StatusText(TaskItemStatus.InProgress);
+
+        await RunActionAsync(TaskItemStatus.InProgress, $"Oppgaven er gjenåpnet og står nå som «{inProgress}».", null);
     }
 
-    private async Task ChangeStatusAsync()
+    private async Task SetStatusAsync(TaskItemStatus newStatus)
     {
-        await RunActionAsync(_selectedStatus, "Statusen er endret.");
+        await RunActionAsync(newStatus, $"Statusen er endret til «{TaskText.StatusText(newStatus)}».", null);
     }
 
-    private async Task RunActionAsync(TaskItemStatus newStatus, string successMessage)
+    private async Task UndoAsync()
+    {
+        if (_undoTo is not { } statusBefore || _task?.Status != TaskItemStatus.Completed)
+        {
+            return;
+        }
+
+        await RunActionAsync(statusBefore, $"Fullføringen er angret. Oppgaven står igjen som «{TaskText.StatusText(statusBefore)}».", null);
+    }
+
+    private void DismissMessage()
+    {
+        _message = null;
+        _undoTo = null;
+    }
+
+    private void DismissError()
+    {
+        _actionError = null;
+    }
+
+    private async Task RunActionAsync(TaskItemStatus newStatus, string successMessage, TaskItemStatus? undoTo)
     {
         if (_isBusy)
         {
@@ -296,6 +308,7 @@ else
 
         _isBusy = true;
         _message = null;
+        _undoTo = null;
         _actionError = null;
 
         try
@@ -303,6 +316,8 @@ else
             await TaskService.ChangeStatusAsync(Id, newStatus);
             await ReadTaskAsync();
             _message = successMessage;
+            _undoTo = undoTo;
+            _menuVersion++;
         }
         catch (KeyNotFoundException)
         {

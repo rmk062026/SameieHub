@@ -43,10 +43,21 @@ public class FakeTaskItemRepository : ITaskItemRepository
         return Task.FromResult(tasks);
     }
 
-    public Task UpdateAsync(TaskItem task)
+    /// <summary>When set, <see cref="UpdateAsync"/> waits until this completes, so tests can simulate a slow save.</summary>
+    public TaskCompletionSource? UpdateBlocker { get; set; }
+
+    /// <summary>How many times <see cref="UpdateAsync"/> has been called.</summary>
+    public int UpdateCount { get; private set; }
+
+    public async Task UpdateAsync(TaskItem task)
     {
         ThrowIfFailing();
-        return Task.CompletedTask;
+        UpdateCount++;
+
+        if (UpdateBlocker != null)
+        {
+            await UpdateBlocker.Task;
+        }
     }
 
     public Task<bool> DeleteAsync(int id)

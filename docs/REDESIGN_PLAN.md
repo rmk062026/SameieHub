@@ -33,7 +33,7 @@ Eieren har godkjent planen med disse valgene (svarer på spørsmålene i avsnitt
 
 **Justert plan:** «Neste styremøte» (avsnitt 3, 5.2 og R1) leses som **«Kommende saker med møtedato»**: åpne saker med møtedato, sortert på dato, uten å påstå at et møte er bekreftet.
 
-**Status:** R0 ferdig (se avsnitt 9b). R2 er neste og er ikke startet.
+**Status:** R0 og R2 er ferdige (se avsnitt 9b og 9c). R1 er neste og er ikke startet.
 
 ## 1. Kort oppsummering
 
@@ -427,7 +427,7 @@ Hver milepæl er avgrenset, kan godkjennes og rulles tilbake for seg, og avslutt
 |---|---|---|---|---|
 | **R0 Grunnlag** (ferdig) | Felles komponenter og stil: sidehode med én hovedhandling og «Flere handlinger»-meny, «Flere valg»-visning (`<details>` med tastaturstøtte), merker for aktive filtre, hurtigfaner, tilbakemelding med «Angre», kortliste på mobil, `data-testid` og UI-hjelpere i testene. Ingen synlig endring på sidene. | `Components/Shared`, `app.css`, `Tests/Web/UiTestHelpers.cs` | UI | Reduserer skjørhet før resten |
 | **R1 Oversikt** | Ny forside: «Må gjøres nå», «Kommende saker med møtedato», tre tall, elbillinglinje, «+ Ny». | `Pages/Dashboard.razor`, `DashboardChargingSection` | UI | F-09, F-17, F-22 |
-| **R2 Oppgaver** | Hurtigfaner, søk, «Flere filtre», radene som lenker, direkte fullføring, kortliste på mobil. Oppgavedetalj: hovedknapp i overskrift, bekreftelse ved knappen, «Detaljer». | `TaskItems/*` | UI | F-05, F-06, F-07 |
+| **R2 Oppgaver** (ferdig) | Hurtigfaner, søk, «Flere filtre», radene som lenker, direkte fullføring, kortliste på mobil. Oppgavedetalj: hovedknapp i overskrift, bekreftelse ved knappen, «Detaljer». | `TaskItems/*` | UI | F-05, F-06, F-07 |
 | **R3 Styresaker** | Liste (møtedato, faner), detalj (overskriftslinje, vedtak, oppgaver, «Detaljer», adskilt slett, «x av y»). | `BoardCases/*` | UI | F-03, F-04 |
 | **R4 Skjemaer og veiledning** | «Gjelder», «Flere valg», veiledning om styresak/oppgave, forhåndsutfylling fra sak/boenhet. Boenhetsskjema og detalj (F-12, F-13, F-14, F-15). | `*Form.razor`, `HousingUnits/*` | UI | Hovedproblemet om styresak/oppgave |
 | **R5 Elbillading** | Faner, statuslinje i stedet for tallkort, forklaring av differanse, nye etiketter, «Feil? Rett her». | `Charging/*` | UI | F-10, F-26, F-27, F-29 |
@@ -453,6 +453,29 @@ Byggeklossene ligger i `src/SameieHub.Web/Components/Shared`. De er små, bruker
 **Testgrunnlag:** `data-testid` på sidetittel, handlingsområde, hovedhandling og de nye komponentene, og hjelpere i `UiTestHelpers` (`FindByTestId`, `FindRowContaining`, `FindFieldByLabel`, `FindButton`, `ClickButton`). Eksisterende tester er ikke erstattet; hver side får nye velgere når den bygges om. Byggeklossene er testet i `UiBuildingBlocksTests`.
 
 **Kjente begrensninger:** `Disclosure` husker at personen har åpnet den fordi Blazor bare setter `open` når verdien endres (kontrollert i nettleser); `MoreMenu` lukkes ikke av Escape eller klikk utenfor; `.table-cards` krever `data-label` på hver celle.
+
+## 9c. R2 Oppgaver: hva som ble gjort og målt
+
+**Liste (`/oppgaver`):** hurtigfaner med antall, søk, «Flere filtre» (`Disclosure`), aktive filtre (`ActiveFilters`), radene som kort på mobil (`table-cards`), «Fullfør»/«Gjenåpne» på hver rad og meldinger ved raden (`ActionFeedback`). **Detalj (`/oppgaver/{id}`):** hovedhandling i overskriften, «Flere handlinger» for «Ikke startet»/«Pågår», «Detaljer» lukket, sletting uendret nederst.
+
+**Avgjørelser:**
+
+- **Definisjoner:** Åpne = ikke startet + pågår. Forfalte = ikke fullført og frist før norsk dato i dag (`TaskItem.IsOverdue`). Fullførte = status Fullført. «Pågår» forsvinner aldri fra Åpne. Eksisterende regler er ikke endret.
+- **Status og hurtigvalg:** å velge en bestemt status under «Flere filtre» erstatter hurtigvalget (ingen fane er da markert) og vises som merket «Status: …». Det hindrer at fanen og filteret motsier hverandre. Alle statuser, filtre og sorteringer finnes fortsatt.
+- **Angre:** tjenesten har bare `ChangeStatusAsync`. «Angre» setter derfor tilbake til statusen oppgaven hadde, og meldingen sier hvilken. Fullført-tidspunktet fjernes og «sist oppdatert» endres, akkurat som ved en vanlig gjenåpning. «Gjenåpne» gir «Pågår» (som før) og har ikke «Angre».
+- **Raden blir stående** på samme plass etter fullføring, så meldingen står der personen klikket. Meldingen forsvinner når visningen endres; feil blir stående til de lukkes.
+- **Ny `PageHeader.MoreActionsKey`:** endres verdien, lukkes «Flere handlinger» (brukes på detaljsiden etter en handling).
+- **Kategori, normal prioritet, oppgavenummer og tidsstempler** vises ikke i listen. Søk på oppgavenummer virker fortsatt.
+
+**Målt i nettleser** (demodata, isolert kopi, 1024 px; før = R0-grunnlaget uendret):
+
+| Mål | Før | Etter |
+|---|---|---|
+| Knapper og lenker i listen (15 rader) | 31 knapper, 46 lenker | 20 knapper/oppsummeringer, 31 lenker |
+| Synlige filterfelt | 8 | 1 (søk) + «Flere filtre» lukket |
+| Handlinger per rad | 3 (Åpne, Rediger, tittel) | 2 (tittel, Fullfør) |
+| Ansvarlig og frist synlig | bare fra 992 px (ansvarlig skjult under) | alltid, også på 375 px |
+| Vannrett rulling ved 375 px | ingen | ingen |
 
 ## 10. Risiko for regresjoner og hvordan de reduseres
 

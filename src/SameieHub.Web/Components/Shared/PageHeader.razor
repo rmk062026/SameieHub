@@ -17,7 +17,7 @@
             @ChildContent
             @if (MoreActions != null)
             {
-                <MoreMenu>@MoreActions</MoreMenu>
+                <MoreMenu @key="MoreActionsKey">@MoreActions</MoreMenu>
             }
             @if (PrimaryAction != null)
             {
@@ -51,4 +51,8 @@
     /// <summary>Rarely used actions, shown behind «Flere handlinger».</summary>
     [Parameter]
     public RenderFragment? MoreActions { get; set; }
+
+    /// <summary>Changing this value closes «Flere handlinger» (for example after one of them has been used).</summary>
+    [Parameter]
+    public object? MoreActionsKey { get; set; }
 }
