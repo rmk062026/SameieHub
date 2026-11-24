@@ -13,208 +13,61 @@ public class BoardCaseListTests : UiTestBase
         return await BoardCases.RegisterAsync((details ?? new BoardCaseDetails { Title = title }) with { Title = title });
     }
 
-    private static IReadOnlyList<string> RowTexts(IRenderedComponent<BoardCaseList> cut)
+    private async Task<BoardCase> RegisterWithStatusAsync(string title, BoardCaseStatus status)
     {
-        return cut.FindAll("tbody tr").Select(row => row.TextContent).ToList();
+        var boardCase = await RegisterAsync(title);
+
+        if (status == BoardCaseStatus.Decided)
+        {
+            await BoardCases.RegisterDecisionAsync(boardCase.Id, "Fiktivt vedtak.", null);
+        }
+
+        if (status != BoardCaseStatus.New)
+        {
+            await BoardCases.ChangeStatusAsync(boardCase.Id, status);
+        }
+
+        return boardCase;
+    }
+
+    private IRenderedComponent<BoardCaseList> RenderList()
+    {
+        var cut = Render<BoardCaseList>();
+        cut.WaitForElement("[data-testid=quick-tab-open], [data-testid=no-cases], [role=alert]");
+
+        return cut;
+    }
+
+    private static IReadOnlyList<string> Titles(IRenderedComponent<BoardCaseList> cut)
+    {
+        return cut.FindAll("[data-testid=case-title]").Select(link => link.TextContent).ToList();
     }
 
     private static void Select(IRenderedComponent<BoardCaseList> cut, string label, string value)
     {
-        cut.Find($"select[aria-label='{label}']").Change(value);
+        cut.FindFieldByLabel(label).Change(value);
     }
+
+    private static void Tab(IRenderedComponent<BoardCaseList> cut, string key)
+    {
+        cut.FindByTestId($"quick-tab-{key}").Click();
+    }
+
+    private static string TabText(IRenderedComponent<BoardCaseList> cut, string key)
+    {
+        return cut.FindByTestId($"quick-tab-{key}").TextContent.Trim();
+    }
+
+    // Empty, loading and errors
 
     [Fact]
     public void Render_NoCases_ShowsEmptyState()
     {
-        var cut = Render<BoardCaseList>();
+        var cut = RenderList();
 
-        cut.WaitForAssertion(() => Assert.Contains("Ingen styresaker registrert ennå", cut.Markup));
+        Assert.Contains("Ingen styresaker registrert ennå", cut.Markup);
         Assert.Empty(cut.FindAll("table"));
-    }
-
-    [Fact]
-    public async Task Render_Cases_ShowsNewestFirstByDefault()
-    {
-        await RegisterAsync("Eldst");
-        Clock.Advance(TimeSpan.FromHours(1));
-        await RegisterAsync("Nyest");
-
-        var cut = Render<BoardCaseList>();
-
-        cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll("tbody tr").Count));
-        var rows = RowTexts(cut);
-        Assert.Contains("Nyest", rows[0]);
-        Assert.Contains("Eldst", rows[1]);
-    }
-
-    [Fact]
-    public async Task Render_Case_ShowsIdTitleStatusPriorityNorwegianTimesAndHousingUnit()
-    {
-        var unit = await Service.RegisterAsync("Storgata 1A");
-        var boardCase = await RegisterAsync("Maling av porter", new BoardCaseDetails
-        {
-            Title = "Maling av porter",
-            Priority = BoardCasePriority.High,
-            HousingUnitId = unit.Id
-        });
-        Clock.Advance(TimeSpan.FromHours(2));
-        await BoardCases.ChangeStatusAsync(boardCase.Id, BoardCaseStatus.InProgress);
-
-        var cut = Render<BoardCaseList>();
-
-        cut.WaitForElement("tbody tr");
-        var row = RowTexts(cut).Single();
-        Assert.Contains($"#{boardCase.Id}", row);
-        Assert.Contains("Maling av porter", row);
-        Assert.Contains("Under behandling", row);
-        Assert.Contains("Høy", row);
-        Assert.Contains("18.11.2026 11:30", row);
-        Assert.Contains("18.11.2026 13:30", row);
-        Assert.Contains("Storgata 1A", row);
-    }
-
-    [Fact]
-    public async Task Render_CaseWithoutHousingUnit_SaysWholeCooperative()
-    {
-        await RegisterAsync("Vedtekter");
-
-        var cut = Render<BoardCaseList>();
-
-        cut.WaitForElement("tbody tr");
-        Assert.Contains("Hele sameiet", RowTexts(cut).Single());
-    }
-
-    [Fact]
-    public async Task Render_CaseLinkedToDeactivatedUnit_StillShowsTheUnit()
-    {
-        var unit = await Service.RegisterAsync("Storgata 1A");
-        await RegisterAsync("Maling", new BoardCaseDetails { Title = "Maling", HousingUnitId = unit.Id });
-        await Service.DeactivateAsync(unit.Id);
-
-        var cut = Render<BoardCaseList>();
-
-        cut.WaitForElement("tbody tr");
-        Assert.Contains("Storgata 1A", RowTexts(cut).Single());
-    }
-
-    [Fact]
-    public async Task Render_Cases_ShowsTotalAndStatusCounts()
-    {
-        var first = await RegisterAsync("Sak A");
-        await RegisterAsync("Sak B");
-        await RegisterAsync("Sak C");
-        await BoardCases.ChangeStatusAsync(first.Id, BoardCaseStatus.InProgress);
-
-        var cut = Render<BoardCaseList>();
-
-        cut.WaitForAssertion(() =>
-        {
-            var values = cut.FindAll(".stat-value").Select(element => element.TextContent).ToList();
-            Assert.Equal(["3", "2", "1", "0", "0"], values);
-        });
-    }
-
-    [Fact]
-    public async Task Render_Cases_LinksToDetailAndEditPages()
-    {
-        var boardCase = await RegisterAsync("Sak A");
-
-        var cut = Render<BoardCaseList>();
-
-        cut.WaitForElement("tbody tr");
-        var hrefs = cut.FindAll("tbody a").Select(link => link.GetAttribute("href")).ToList();
-        Assert.Contains($"/styresaker/{boardCase.Id}", hrefs);
-        Assert.Contains($"/styresaker/{boardCase.Id}/rediger", hrefs);
-    }
-
-    [Theory]
-    [InlineData("porter")]
-    [InlineData("FASADEN")]
-    [InlineData("#2")]
-    public async Task Search_FindsCaseByTitleDescriptionOrCaseNumber(string searchText)
-    {
-        await RegisterAsync("Vedtekter");
-        await RegisterAsync("Maling av porter", new BoardCaseDetails { Title = "Maling av porter", Description = "Gjelder fasaden" });
-        var cut = Render<BoardCaseList>();
-        cut.WaitForElement("tbody tr");
-
-        cut.Find("input[type=search]").Input(searchText);
-
-        var row = Assert.Single(RowTexts(cut));
-        Assert.Contains("Maling av porter", row);
-    }
-
-    [Fact]
-    public async Task StatusFilter_ShowsOnlyCasesWithThatStatus()
-    {
-        var inProgress = await RegisterAsync("Under arbeid");
-        await RegisterAsync("Ny sak");
-        await BoardCases.ChangeStatusAsync(inProgress.Id, BoardCaseStatus.InProgress);
-        var cut = Render<BoardCaseList>();
-        cut.WaitForElement("tbody tr");
-
-        Select(cut, "Filtrer på status", "InProgress");
-
-        Assert.Contains("Under arbeid", Assert.Single(RowTexts(cut)));
-    }
-
-    [Fact]
-    public async Task PriorityFilter_ShowsOnlyCasesWithThatPriority()
-    {
-        await RegisterAsync("Viktig", new BoardCaseDetails { Title = "Viktig", Priority = BoardCasePriority.High });
-        await RegisterAsync("Vanlig");
-        var cut = Render<BoardCaseList>();
-        cut.WaitForElement("tbody tr");
-
-        Select(cut, "Filtrer på prioritet", "High");
-
-        Assert.Contains("Viktig", Assert.Single(RowTexts(cut)));
-    }
-
-    [Fact]
-    public async Task HousingUnitFilter_ShowsCasesForThatUnitOrOnlyTheWholeCooperative()
-    {
-        var unit = await Service.RegisterAsync("Storgata 1A");
-        await RegisterAsync("For boenhet", new BoardCaseDetails { Title = "For boenhet", HousingUnitId = unit.Id });
-        await RegisterAsync("For hele sameiet");
-        var cut = Render<BoardCaseList>();
-        cut.WaitForElement("tbody tr");
-
-        Select(cut, "Filtrer på boenhet", unit.Id.ToString());
-        Assert.Contains("For boenhet", Assert.Single(RowTexts(cut)));
-
-        Select(cut, "Filtrer på boenhet", "none");
-        Assert.Contains("For hele sameiet", Assert.Single(RowTexts(cut)));
-    }
-
-    [Fact]
-    public async Task Sort_ByTitle_ChangesTheOrder()
-    {
-        await RegisterAsync("Vedtekter");
-        Clock.Advance(TimeSpan.FromHours(1));
-        await RegisterAsync("Brannvern");
-        var cut = Render<BoardCaseList>();
-        cut.WaitForElement("tbody tr");
-
-        Select(cut, "Sorter", "Title");
-
-        var rows = RowTexts(cut);
-        Assert.Contains("Brannvern", rows[0]);
-        Assert.Contains("Vedtekter", rows[1]);
-    }
-
-    [Fact]
-    public async Task Search_NoMatch_ShowsMessageAndResetShowsCasesAgain()
-    {
-        await RegisterAsync("Vedtekter");
-        var cut = Render<BoardCaseList>();
-        cut.WaitForElement("tbody tr");
-
-        cut.Find("input[type=search]").Input("finnes-ikke");
-
-        Assert.Contains("Ingen styresaker funnet", cut.Markup);
-        cut.Find(".empty-state button").Click();
-        Assert.Single(cut.FindAll("tbody tr"));
+        Assert.Empty(cut.FindAll("[data-testid^=quick-tab]"));
     }
 
     [Fact]
@@ -225,7 +78,7 @@ public class BoardCaseListTests : UiTestBase
         cut.WaitForAssertion(() => Assert.Contains("Kunne ikke hente styresakene", cut.Find("[role=alert]").TextContent));
 
         BoardCaseRepository.IsFailing = false;
-        cut.Find("button").Click();
+        cut.Find("[role=alert] button").Click();
 
         cut.WaitForAssertion(() => Assert.Contains("Ingen styresaker registrert ennå", cut.Markup));
     }
@@ -236,8 +89,345 @@ public class BoardCaseListTests : UiTestBase
         await RegisterAsync("Sak A");
         Services.GetRequiredService<NavigationManager>().NavigateTo("/styresaker?status=slettet");
 
-        var cut = Render<BoardCaseList>();
+        var cut = RenderList();
 
-        cut.WaitForAssertion(() => Assert.Equal("Styresaken er slettet permanent.", cut.Find("[role=status]").TextContent));
+        Assert.Equal("Styresaken er slettet permanent.", cut.Find(".alert-success").TextContent);
+    }
+
+    [Fact]
+    public void Render_HasNewCaseAsThePrimaryActionInTheHeader()
+    {
+        var cut = RenderList();
+
+        Assert.Equal("Styresaker", cut.FindByTestId("page-title").TextContent);
+        Assert.Equal("/styresaker/ny", cut.Find("a.btn-primary").GetAttribute("href"));
+    }
+
+    // Quick views
+
+    [Fact]
+    public async Task Render_ShowsCountsOnTheQuickViews_AndOpenMeansNotClosed()
+    {
+        await RegisterWithStatusAsync("Ny", BoardCaseStatus.New);
+        await RegisterWithStatusAsync("Under behandling", BoardCaseStatus.InProgress);
+        await RegisterWithStatusAsync("Vedtatt", BoardCaseStatus.Decided);
+        await RegisterWithStatusAsync("Avsluttet", BoardCaseStatus.Closed);
+
+        var cut = RenderList();
+
+        Assert.Equal("Åpne 3", TabText(cut, "open"));
+        Assert.Equal("Vedtatt 1", TabText(cut, "decided"));
+        Assert.Equal("Avsluttet 1", TabText(cut, "closed"));
+        Assert.Equal("true", cut.FindByTestId("quick-tab-open").GetAttribute("aria-pressed"));
+        Assert.Equal(3, Titles(cut).Count);
+        Assert.DoesNotContain("Avsluttet", Titles(cut));
+        Assert.Contains("ikke er avsluttet", cut.FindByTestId("tab-explanation").TextContent);
+    }
+
+    [Fact]
+    public async Task QuickView_DecidedAndClosed_ShowOnlyCasesWithThatStatus()
+    {
+        await RegisterWithStatusAsync("Åpen", BoardCaseStatus.InProgress);
+        await RegisterWithStatusAsync("Vedtatt sak", BoardCaseStatus.Decided);
+        await RegisterWithStatusAsync("Avsluttet sak", BoardCaseStatus.Closed);
+        var cut = RenderList();
+
+        Tab(cut, "decided");
+        Assert.Equal(["Vedtatt sak"], Titles(cut));
+        Assert.Equal("true", cut.FindByTestId("quick-tab-decided").GetAttribute("aria-pressed"));
+
+        Tab(cut, "closed");
+        Assert.Equal(["Avsluttet sak"], Titles(cut));
+    }
+
+    [Fact]
+    public async Task Count_OpenCasesMatchesTheOversiktNumber()
+    {
+        await RegisterWithStatusAsync("Ny", BoardCaseStatus.New);
+        await RegisterWithStatusAsync("Vedtatt", BoardCaseStatus.Decided);
+        await RegisterWithStatusAsync("Avsluttet", BoardCaseStatus.Closed);
+        var list = RenderList();
+
+        var dashboard = Render<SameieHub.Web.Components.Pages.Dashboard>();
+        dashboard.WaitForElement("[data-testid=status-summary]");
+        var card = dashboard.FindAll(".stat-card").First(element => element.QuerySelector(".stat-label")!.TextContent == "Åpne styresaker");
+
+        Assert.Equal($"Åpne {card.QuerySelector(".stat-value")!.TextContent}", TabText(list, "open"));
+    }
+
+    // Rows
+
+    [Fact]
+    public async Task Render_Case_ShowsTitleStatusMeetingDateScopeAndHighPriority()
+    {
+        var unit = await Service.RegisterAsync("Storgata 1A");
+        var boardCase = await RegisterAsync("Maling av porter", new BoardCaseDetails
+        {
+            Title = "Maling av porter",
+            Priority = BoardCasePriority.High,
+            MeetingDate = new DateOnly(2026, 12, 3),
+            HousingUnitId = unit.Id
+        });
+        await BoardCases.ChangeStatusAsync(boardCase.Id, BoardCaseStatus.InProgress);
+
+        var cut = RenderList();
+
+        var row = cut.FindByTestId("case-row");
+        var title = row.QuerySelector("[data-testid=case-title]")!;
+        Assert.Equal("Maling av porter", title.TextContent);
+        Assert.Equal($"/styresaker/{boardCase.Id}", title.GetAttribute("href"));
+        Assert.Equal("Høy prioritet", row.QuerySelector("[data-testid=high-priority]")!.TextContent);
+        Assert.Equal("03.12.2026", row.QuerySelector("[data-testid=case-meeting-date]")!.TextContent.Trim());
+        Assert.Contains("Under behandling", row.TextContent);
+        var scope = row.QuerySelector("[data-testid=case-scope] a")!;
+        Assert.Equal("Storgata 1A", scope.TextContent);
+        Assert.Equal($"/boenheter/{unit.Id}", scope.GetAttribute("href"));
+    }
+
+    [Fact]
+    public async Task Render_Case_DoesNotShowTimestampsNumberNormalPriorityOrActionButtons()
+    {
+        var boardCase = await RegisterAsync("Vanlig sak");
+
+        var cut = RenderList();
+
+        var row = cut.FindByTestId("case-row");
+        Assert.DoesNotContain("18.11.2026", row.TextContent);
+        Assert.DoesNotContain($"#{boardCase.Id}", row.TextContent);
+        Assert.DoesNotContain("Normal", row.TextContent);
+        Assert.False(cut.HasTestId("high-priority"));
+        Assert.Empty(row.QuerySelectorAll("button"));
+        Assert.Equal([$"/styresaker/{boardCase.Id}"], row.QuerySelectorAll("a").Select(link => link.GetAttribute("href")).ToList());
+        Assert.Equal(["Sak", "Møtedato", "Status"], cut.FindAll("thead th").Select(header => header.TextContent).ToList());
+    }
+
+    [Fact]
+    public async Task Render_CaseWithoutMeetingDateOrUnit_SaysSo()
+    {
+        await RegisterAsync("Vedtekter");
+
+        var cut = RenderList();
+
+        var row = cut.FindByTestId("case-row");
+        Assert.Equal("Ingen møtedato", row.QuerySelector("[data-testid=case-meeting-date]")!.TextContent.Trim());
+        Assert.Equal("Hele sameiet", row.QuerySelector("[data-testid=case-scope]")!.TextContent.Trim());
+    }
+
+    [Fact]
+    public async Task Render_CaseLinkedToDeactivatedUnit_StillShowsTheUnit()
+    {
+        var unit = await Service.RegisterAsync("Storgata 1A");
+        await RegisterAsync("Maling", new BoardCaseDetails { Title = "Maling", HousingUnitId = unit.Id });
+        await Service.DeactivateAsync(unit.Id);
+
+        var cut = RenderList();
+
+        Assert.Equal("Storgata 1A", cut.FindByTestId("case-scope").TextContent.Trim());
+    }
+
+    [Fact]
+    public async Task Render_TableCells_HaveLabelsSoTheRowCanBecomeACardOnASmallScreen()
+    {
+        await RegisterAsync("Sak");
+
+        var cut = RenderList();
+
+        var labels = cut.FindByTestId("case-row").QuerySelectorAll("td").Select(cell => cell.GetAttribute("data-label")).ToList();
+        Assert.Equal(["Sak", "Møtedato", "Status"], labels);
+        Assert.Contains("table-cards", cut.FindByTestId("case-table").ClassName);
+    }
+
+    // Sorting
+
+    [Fact]
+    public async Task Sort_OpenCasesByDefault_NearestMeetingDateFirstAndCasesWithoutDateLast()
+    {
+        await RegisterAsync("Uten dato");
+        await RegisterAsync("Senere", new BoardCaseDetails { Title = "Senere", MeetingDate = new DateOnly(2026, 12, 20) });
+        await RegisterAsync("Nærmest", new BoardCaseDetails { Title = "Nærmest", MeetingDate = new DateOnly(2026, 11, 20) });
+
+        var cut = RenderList();
+
+        Assert.Equal(["Nærmest", "Senere", "Uten dato"], Titles(cut));
+        Assert.Equal("MeetingDate", cut.FindFieldByLabel("Sortering").GetAttribute("value"));
+    }
+
+    [Fact]
+    public async Task Sort_OtherViewsByDefault_MostRecentlyUpdatedFirst()
+    {
+        var first = await RegisterWithStatusAsync("Eldst oppdatert", BoardCaseStatus.Closed);
+        Clock.Advance(TimeSpan.FromHours(1));
+        await RegisterWithStatusAsync("Sist oppdatert", BoardCaseStatus.Closed);
+        var cut = RenderList();
+
+        Tab(cut, "closed");
+
+        Assert.Equal(["Sist oppdatert", "Eldst oppdatert"], Titles(cut));
+        Assert.Equal("RecentlyUpdated", cut.FindFieldByLabel("Sortering").GetAttribute("value"));
+        Assert.NotNull(first);
+    }
+
+    [Fact]
+    public async Task Sort_ByTitleOrNewest_ChangesTheOrder_AndTheChoiceIsKeptWhenTheViewChanges()
+    {
+        await RegisterAsync("Vedtekter");
+        Clock.Advance(TimeSpan.FromHours(1));
+        await RegisterAsync("Brannvern");
+        var cut = RenderList();
+
+        Select(cut, "Sortering", "Title");
+        Assert.Equal(["Brannvern", "Vedtekter"], Titles(cut));
+
+        Select(cut, "Sortering", "Oldest");
+        Assert.Equal(["Vedtekter", "Brannvern"], Titles(cut));
+
+        Tab(cut, "decided");
+        Tab(cut, "open");
+        Assert.Equal(["Vedtekter", "Brannvern"], Titles(cut));
+    }
+
+    // Search and filters
+
+    [Theory]
+    [InlineData("porter")]
+    [InlineData("FASADEN")]
+    [InlineData("#2")]
+    public async Task Search_FindsCaseByTitleDescriptionOrCaseNumber(string searchText)
+    {
+        await RegisterAsync("Vedtekter");
+        await RegisterAsync("Maling av porter", new BoardCaseDetails { Title = "Maling av porter", Description = "Gjelder fasaden" });
+        var cut = RenderList();
+
+        cut.FindByTestId("case-search").Input(searchText);
+
+        Assert.Equal(["Maling av porter"], Titles(cut));
+        Assert.Contains("Søk:", cut.FindByTestId("active-filters").TextContent);
+    }
+
+    [Fact]
+    public async Task Search_IsCombinedWithTheSelectedQuickView()
+    {
+        await RegisterWithStatusAsync("Maling åpen", BoardCaseStatus.InProgress);
+        await RegisterWithStatusAsync("Maling avsluttet", BoardCaseStatus.Closed);
+        await RegisterAsync("Noe annet");
+        var cut = RenderList();
+
+        cut.FindByTestId("case-search").Input("maling");
+        Assert.Equal(["Maling åpen"], Titles(cut));
+
+        Tab(cut, "closed");
+        Assert.Equal(["Maling avsluttet"], Titles(cut));
+    }
+
+    [Fact]
+    public async Task Filter_AnyStatusCanBeChosen_ReplacesTheQuickViewAndShowsAnActiveFilter()
+    {
+        await RegisterWithStatusAsync("Ny", BoardCaseStatus.New);
+        await RegisterWithStatusAsync("Under arbeid", BoardCaseStatus.InProgress);
+        await RegisterWithStatusAsync("Avsluttet", BoardCaseStatus.Closed);
+        var cut = RenderList();
+
+        Select(cut, "Status", "InProgress");
+        Assert.Equal(["Under arbeid"], Titles(cut));
+        Assert.Contains("Status: Under behandling", cut.FindByTestId("active-filters").TextContent);
+        Assert.Equal("false", cut.FindByTestId("quick-tab-open").GetAttribute("aria-pressed"));
+
+        Select(cut, "Status", "all");
+        Assert.Equal(3, Titles(cut).Count);
+
+        Select(cut, "Status", "");
+        Assert.Equal(2, Titles(cut).Count);
+        Assert.Equal("true", cut.FindByTestId("quick-tab-open").GetAttribute("aria-pressed"));
+    }
+
+    [Fact]
+    public async Task Filter_Priority_ShowsOnlyCasesWithThatPriority_AndCanBeRemoved()
+    {
+        await RegisterAsync("Viktig", new BoardCaseDetails { Title = "Viktig", Priority = BoardCasePriority.High });
+        await RegisterAsync("Vanlig");
+        var cut = RenderList();
+
+        Select(cut, "Prioritet", "High");
+        Assert.Equal(["Viktig"], Titles(cut));
+
+        cut.Find("[aria-label='Fjern filteret Prioritet: Høy']").Click();
+        Assert.Equal(2, Titles(cut).Count);
+        Assert.False(cut.HasTestId("active-filters"));
+    }
+
+    [Fact]
+    public async Task Filter_HousingUnit_ShowsCasesForThatUnitOrOnlyTheWholeCooperative()
+    {
+        var unit = await Service.RegisterAsync("Storgata 1A");
+        await RegisterAsync("For boenhet", new BoardCaseDetails { Title = "For boenhet", HousingUnitId = unit.Id });
+        await RegisterAsync("For hele sameiet");
+        var cut = RenderList();
+
+        Select(cut, "Boenhet", unit.Id.ToString());
+        Assert.Equal(["For boenhet"], Titles(cut));
+        Assert.Contains("Boenhet: Storgata 1A", cut.FindByTestId("active-filters").TextContent);
+
+        Select(cut, "Boenhet", "none");
+        Assert.Equal(["For hele sameiet"], Titles(cut));
+        Assert.Contains("Boenhet: Hele sameiet", cut.FindByTestId("active-filters").TextContent);
+    }
+
+    [Fact]
+    public async Task Filter_MoreFiltersStartClosedButTellWhatIsInside()
+    {
+        await RegisterAsync("Sak");
+
+        var cut = RenderList();
+
+        var details = cut.Find("details.disclosure");
+        Assert.False(details.HasAttribute("open"));
+        Assert.Contains("Flere filtre", details.QuerySelector("summary")!.TextContent);
+        Assert.Contains("Sortering", details.QuerySelector(".disclosure-hint")!.TextContent);
+    }
+
+    // Empty results
+
+    [Fact]
+    public async Task Search_NoMatch_ExplainsThatCasesExistAndResetShowsCasesAgain()
+    {
+        await RegisterAsync("Vedtekter");
+        var cut = RenderList();
+
+        cut.FindByTestId("case-search").Input("finnes-ikke");
+
+        var empty = cut.FindByTestId("empty-list").TextContent;
+        Assert.Contains("Ingen styresaker funnet", empty);
+        Assert.Contains("Sameiet har 1 styresak i alt", empty);
+        Assert.Contains("Søk: «finnes-ikke»", cut.FindByTestId("active-filters").TextContent);
+
+        cut.ClickButton("Nullstill søk og filtre");
+
+        Assert.Single(Titles(cut));
+        Assert.False(cut.HasTestId("active-filters"));
+    }
+
+    [Fact]
+    public async Task Render_NoOpenCases_ExplainsAndOffersToShowClosedOnes()
+    {
+        await RegisterWithStatusAsync("Avsluttet", BoardCaseStatus.Closed);
+
+        var cut = RenderList();
+
+        Assert.Contains("Ingen styresaker funnet", cut.Markup);
+        cut.ClickButton("Vis også avsluttede");
+
+        Assert.Equal(["Avsluttet"], Titles(cut));
+        Assert.Contains("Status: Alle", cut.FindByTestId("active-filters").TextContent);
+    }
+
+    [Fact]
+    public async Task Render_AlwaysTellsHowManyOfAllCasesAreShown()
+    {
+        await RegisterWithStatusAsync("Åpen", BoardCaseStatus.New);
+        await RegisterWithStatusAsync("Avsluttet", BoardCaseStatus.Closed);
+
+        var cut = RenderList();
+
+        Assert.Contains("Viser 1 av 2 styresaker", cut.FindByTestId("list-summary").TextContent);
     }
 }

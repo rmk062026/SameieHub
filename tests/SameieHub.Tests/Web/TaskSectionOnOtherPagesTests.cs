@@ -13,7 +13,7 @@ public class TaskSectionOnOtherPagesTests : UiTestBase
     private IRenderedComponent<BoardCaseDetail> RenderBoardCase(int id)
     {
         var cut = Render<BoardCaseDetail>(parameters => parameters.Add(page => page.Id, id));
-        cut.WaitForElement(".detail-grid");
+        cut.WaitForElement("[data-testid=case-summary]");
 
         return cut;
     }
@@ -40,10 +40,10 @@ public class TaskSectionOnOtherPagesTests : UiTestBase
 
         var cut = RenderBoardCase(boardCase.Id);
 
-        var section = TasksSection(cut);
-        Assert.Contains("Ingen oppgaver er knyttet til denne styresaken", section.TextContent);
+        var section = cut.FindByTestId("case-tasks");
+        Assert.Contains("Ingen oppgaver er knyttet til denne saken", section.TextContent);
         Assert.Equal($"/oppgaver/ny?styresak={boardCase.Id}", section.QuerySelector("a.btn")!.GetAttribute("href"));
-        Assert.Empty(section.QuerySelectorAll("table"));
+        Assert.Empty(section.QuerySelectorAll("li"));
     }
 
     [Fact]
@@ -63,8 +63,7 @@ public class TaskSectionOnOtherPagesTests : UiTestBase
 
         var cut = RenderBoardCase(boardCase.Id);
 
-        var row = Assert.Single(TasksSection(cut).QuerySelectorAll("tbody tr"));
-        Assert.Contains($"#{linked.Id}", row.TextContent);
+        var row = Assert.Single(cut.FindByTestId("case-tasks").QuerySelectorAll("[data-testid=case-task]"));
         Assert.Contains("Kjøpe maling", row.TextContent);
         Assert.Contains("Pågår", row.TextContent);
         Assert.Contains("16.11.2026", row.TextContent);
@@ -82,7 +81,7 @@ public class TaskSectionOnOtherPagesTests : UiTestBase
 
         var cut = RenderBoardCase(boardCase.Id);
 
-        var section = TasksSection(cut);
+        var section = cut.FindByTestId("case-tasks");
         Assert.Contains("Ferdig oppgave", section.TextContent);
         Assert.NotNull(section.QuerySelector("a.btn"));
     }

@@ -34,186 +34,208 @@ else if (_boardCase == null)
 }
 else
 {
-    <PageHeader Title="@_boardCase.Title" BackHref="/styresaker" BackText="Styresaker">
-        <a class="btn btn-primary" href="/styresaker/@_boardCase.Id/rediger">Rediger</a>
+    var today = TaskService.GetToday();
+    var completedTasks = _linkedTasks.Count(task => task.Status == TaskItemStatus.Completed);
+
+    <PageHeader Title="@_boardCase.Title" BackHref="/styresaker" BackText="Styresaker" MoreActionsKey="_menuVersion">
+        <ChildContent><a class="btn btn-outline-secondary" href="/styresaker/@_boardCase.Id/rediger">Rediger</a></ChildContent>
+        <PrimaryAction>
+            @switch (NextStep)
+            {
+                case NextStepKind.Start:
+                    <button type="button" class="btn btn-primary" data-testid="main-action" disabled="@_isBusy" @onclick="StartAsync">Start behandling</button>
+                    break;
+                case NextStepKind.RegisterDecision:
+                    <button type="button" class="btn btn-primary" data-testid="main-action" disabled="@(_isBusy || _editingDecision)" @onclick="OpenDecisionForm">Registrer vedtak</button>
+                    break;
+                case NextStepKind.MarkDecided:
+                    <button type="button" class="btn btn-primary" data-testid="main-action" disabled="@_isBusy" @onclick="MarkDecidedAsync">Marker som vedtatt</button>
+                    break;
+                case NextStepKind.Close:
+                    <button type="button" class="btn btn-primary" data-testid="main-action" disabled="@_isBusy" @onclick="CloseAsync">Avslutt saken</button>
+                    break;
+                default:
+                    <button type="button" class="btn btn-primary" data-testid="main-action" disabled="@_isBusy" @onclick="ReopenAsync">Gjenåpne saken</button>
+                    break;
+            }
+        </PrimaryAction>
+        <MoreActions>
+            @foreach (var status in BoardCaseText.AllStatuses.Where(status => status != _boardCase.Status))
+            {
+                var newStatus = status;
+                <button type="button" data-testid="set-status-@newStatus" disabled="@_isBusy" @onclick="() => SetStatusAsync(newStatus)">Sett status til «@BoardCaseText.StatusText(newStatus)»</button>
+            }
+        </MoreActions>
     </PageHeader>
 
-    @if (_message != null)
+    @if (_feedbackArea == FeedbackArea.Header)
     {
-        <div class="alert alert-success" role="status">@_message</div>
-    }
-    @if (_actionError != null)
-    {
-        <div class="alert alert-danger" role="alert">@_actionError</div>
+        <ActionFeedback Message="@_message" OnDismiss="DismissFeedback" />
+        <ActionFeedback Message="@_actionError" Kind="FeedbackKind.Error" OnDismiss="DismissFeedback" />
     }
 
-    <div class="detail-meta">
-        <span class="text-muted">Sak #@_boardCase.Id</span>
-        <BoardCaseStatusBadge Status="_boardCase.Status" />
-        <BoardCasePriorityBadge Priority="_boardCase.Priority" />
-    </div>
-
-    <div class="detail-grid">
-        <section class="surface-card">
-            <h2>Saksinformasjon</h2>
-            <dl class="detail-list">
-                <DetailItem Label="Status" Value="@BoardCaseText.StatusText(_boardCase.Status)" />
-                <DetailItem Label="Prioritet" Value="@BoardCaseText.PriorityText(_boardCase.Priority)" />
-                <DetailItem Label="Møtedato" Value="@(_boardCase.MeetingDate is { } meetingDate ? NorwegianDateFormat.Date(meetingDate) : null)" />
-                <div class="detail-item">
-                    <dt>Boenhet</dt>
-                    <dd>
-                        @if (_boardCase.HousingUnitId == null)
-                        {
-                            <span>Hele sameiet</span>
-                        }
-                        else if (_housingUnit == null)
-                        {
-                            <span>Boenhet @_boardCase.HousingUnitId</span>
-                        }
-                        else
-                        {
-                            <a href="/boenheter/@_housingUnit.Id">@_housingUnit.Address</a>
-                            @if (!_housingUnit.IsActive)
-                            {
-                                <span class="text-muted"> (inaktiv)</span>
-                            }
-                        }
-                    </dd>
-                </div>
-                <DetailItem Label="Opprettet" Value="@NorwegianDateFormat.DateTime(_boardCase.CreatedAt)" />
-                <DetailItem Label="Sist oppdatert" Value="@NorwegianDateFormat.DateTime(_boardCase.UpdatedAt)" />
-            </dl>
-        </section>
-
-        <section class="surface-card">
-            <h2>Beskrivelse</h2>
-            @if (string.IsNullOrWhiteSpace(_boardCase.Description))
-            {
-                <p class="text-muted mb-0">Ikke registrert</p>
-            }
-            else
-            {
-                <p class="notes-text mb-0">@_boardCase.Description</p>
-            }
-        </section>
-
-        <section class="surface-card detail-wide">
-            <h2>Status</h2>
-            <div class="inline-form">
-                <label for="newStatus" class="visually-hidden">Ny status</label>
-                <select id="newStatus" class="form-select" @bind="_selectedStatus">
-                    @foreach (var status in BoardCaseText.AllStatuses)
+    <section class="surface-card task-summary" aria-label="Om saken" data-testid="case-summary">
+        <dl class="detail-list">
+            <div class="detail-item">
+                <dt>Status</dt>
+                <dd>
+                    <BoardCaseStatusBadge Status="_boardCase.Status" />
+                    @if (_boardCase.Priority == BoardCasePriority.High)
                     {
-                        <option value="@status">@BoardCaseText.StatusText(status)</option>
+                        <span class="status-badge priority-high ms-1" data-testid="high-priority">Høy prioritet</span>
                     }
-                </select>
-                <button type="button" class="btn btn-primary" disabled="@(_isBusy || _selectedStatus == _boardCase.Status)"
-                        @onclick="ChangeStatusAsync">Endre status</button>
-                @if (_boardCase.Status == BoardCaseStatus.Closed)
-                {
-                    <button type="button" class="btn btn-outline-secondary" disabled="@_isBusy" @onclick="ReopenAsync">Gjenåpne saken</button>
-                }
+                </dd>
             </div>
-            <p class="form-text mb-0">En sak kan bare settes til «Vedtatt» når et vedtak er registrert. En vedtatt sak trenger ikke avsluttes.</p>
-        </section>
+            <DetailItem Label="Registrert møtedato" Value="@(_boardCase.MeetingDate is { } meetingDate ? NorwegianDateFormat.Date(meetingDate) : null)" />
+            <div class="detail-item">
+                <dt>Gjelder</dt>
+                <dd data-testid="case-housing-unit">
+                    @if (_boardCase.HousingUnitId == null)
+                    {
+                        <span>Hele sameiet</span>
+                    }
+                    else if (_housingUnit == null)
+                    {
+                        <span>Boenhet @_boardCase.HousingUnitId</span>
+                    }
+                    else
+                    {
+                        <a href="/boenheter/@_housingUnit.Id">@_housingUnit.Address</a>
+                        @if (!_housingUnit.IsActive)
+                        {
+                            <span class="text-muted"> (inaktiv)</span>
+                        }
+                    }
+                </dd>
+            </div>
+        </dl>
+    </section>
 
-        <section class="surface-card detail-wide">
-            <h2>Vedtak</h2>
-            @if (_boardCase.Decision != null)
+    <section class="surface-card" aria-labelledby="description-title" data-testid="case-description">
+        <h2 id="description-title">Beskrivelse</h2>
+        @if (string.IsNullOrWhiteSpace(_boardCase.Description))
+        {
+            <p class="text-muted mb-0">Ikke registrert</p>
+        }
+        else
+        {
+            <p class="notes-text mb-0">@_boardCase.Description</p>
+        }
+    </section>
+
+    <section class="surface-card" aria-labelledby="decision-title" data-testid="decision-section">
+        <div class="section-heading">
+            <h2 id="decision-title">Vedtak</h2>
+            @if (!_editingDecision && !ShowsDecisionAsMainAction)
             {
-                <div class="decision-box">
-                    <p class="notes-text mb-2">@_boardCase.Decision</p>
-                    <p class="decision-date mb-0">
-                        Vedtaksdato:
-                        @if (_boardCase.DecisionDate is { } decisionDate)
-                        {
-                            <strong>@NorwegianDateFormat.Date(decisionDate)</strong>
-                        }
-                        else
-                        {
-                            <span class="text-muted">Ikke registrert</span>
-                        }
-                    </p>
-                </div>
-            }
-
-            <label for="decision" class="form-label">@(_boardCase.Decision == null ? "Registrer vedtak" : "Korriger vedtak")</label>
-            <textarea id="decision" class="form-control" rows="4" maxlength="@BoardCase.MaxDecisionLength"
-                      @bind="_decisionText" @bind:event="oninput"></textarea>
-
-            <label for="decisionDate" class="form-label mt-3">Vedtaksdato</label>
-            <input id="decisionDate" type="date" class="form-control date-input" @bind="_decisionDate"
-                   aria-describedby="decisionDate-help" />
-            <div id="decisionDate-help" class="form-text">Datoen styret fattet vedtaket. Kan stå tom.</div>
-
-            <div class="form-actions mt-3">
-                <button type="button" class="btn btn-primary" disabled="@_isBusy" @onclick="SaveDecisionAsync">
-                    @(_boardCase.Decision == null ? "Registrer vedtak" : "Lagre vedtak")
+                <button type="button" class="btn btn-outline-primary btn-sm" data-testid="open-decision-form" disabled="@_isBusy" @onclick="OpenDecisionForm">
+                    @(_boardCase.Decision == null ? "Registrer vedtak" : "Endre vedtak")
                 </button>
-                @if (_boardCase.Decision != null)
-                {
-                    <button type="button" class="btn btn-outline-secondary" disabled="@_isBusy" @onclick="ClearDecisionAsync">Fjern vedtak</button>
-                }
-            </div>
-            @if (_boardCase.Decision == null)
-            {
-                <p class="form-text mb-0">Ingen vedtak er registrert.</p>
             }
-        </section>
+        </div>
 
-        <section class="surface-card detail-wide">
-            <div class="section-heading">
-                <h2>Oppgaver</h2>
-                <a class="btn btn-outline-primary btn-sm" href="/oppgaver/ny?styresak=@_boardCase.Id">Registrer oppgave</a>
+        @if (_feedbackArea == FeedbackArea.Decision)
+        {
+            <ActionFeedback Message="@_message" OnDismiss="DismissFeedback" />
+            <ActionFeedback Message="@_actionError" Kind="FeedbackKind.Error" OnDismiss="DismissFeedback" />
+        }
+
+        @if (_boardCase.Decision != null)
+        {
+            <div class="decision-box" data-testid="decision-box">
+                <p class="notes-text mb-2">@_boardCase.Decision</p>
+                <p class="decision-date mb-0">
+                    Vedtaksdato:
+                    @if (_boardCase.DecisionDate is { } decisionDate)
+                    {
+                        <strong>@NorwegianDateFormat.Date(decisionDate)</strong>
+                    }
+                    else
+                    {
+                        <span class="text-muted">Ikke registrert</span>
+                    }
+                </p>
             </div>
-            @if (_linkedTasks.Count == 0)
-            {
-                <p class="text-muted mb-0">Ingen oppgaver er knyttet til denne styresaken.</p>
-            }
-            else
-            {
-                var today = TaskService.GetToday();
+        }
+        else if (!_editingDecision)
+        {
+            <p class="text-muted mb-0" data-testid="no-decision">
+                Ingen vedtak er registrert ennå. En sak kan bare settes til «Vedtatt» når et vedtak er registrert.
+            </p>
+        }
 
-                <div class="table-responsive">
-                    <table class="table data-table">
-                        <caption class="visually-hidden">Oppgaver knyttet til styresaken</caption>
-                        <thead>
-                            <tr>
-                                <th scope="col" class="col-id">Nr.</th>
-                                <th scope="col">Oppgave</th>
-                                <th scope="col">Status</th>
-                                <th scope="col">Frist</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var task in _linkedTasks)
-                            {
-                                <tr>
-                                    <td class="col-id">#@task.Id</td>
-                                    <td><a class="unit-link" href="/oppgaver/@task.Id">@task.Title</a></td>
-                                    <td><TaskStatusBadge Status="task.Status" /></td>
-                                    <td><TaskDueDate Task="task" Today="today" /></td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
+        @if (_editingDecision)
+        {
+            <div class="mt-3" data-testid="decision-form">
+                <label for="decision" class="form-label">@(_boardCase.Decision == null ? "Vedtak" : "Vedtak (endrer det som er registrert)")</label>
+                <textarea id="decision" class="form-control" rows="4" maxlength="@BoardCase.MaxDecisionLength" @ref="_decisionInput"
+                          @bind="_decisionText" @bind:event="oninput"></textarea>
+
+                <label for="decisionDate" class="form-label mt-3">Vedtaksdato</label>
+                <input id="decisionDate" type="date" class="form-control date-input" @bind="_decisionDate"
+                       aria-describedby="decisionDate-help" />
+                <div id="decisionDate-help" class="form-text">Datoen styret fattet vedtaket. Kan stå tom.</div>
+
+                <div class="form-actions mt-3">
+                    <button type="button" class="btn btn-primary" disabled="@_isBusy" @onclick="SaveDecisionAsync">
+                        @(_boardCase.Decision == null ? "Registrer vedtak" : "Lagre vedtak")
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" disabled="@_isBusy" @onclick="CancelDecisionForm">Avbryt</button>
+                    @if (_boardCase.Decision != null)
+                    {
+                        <button type="button" class="btn btn-outline-danger" disabled="@_isBusy" @onclick="ClearDecisionAsync">Fjern vedtak</button>
+                    }
                 </div>
-            }
-        </section>
+            </div>
+        }
+    </section>
 
-        <section class="surface-card detail-wide">
-            <h2>Merknader</h2>
-            @if (string.IsNullOrWhiteSpace(_boardCase.Notes))
+    <section class="surface-card" aria-labelledby="tasks-title" data-testid="case-tasks">
+        <div class="section-heading">
+            <h2 id="tasks-title">
+                Oppgaver til saken
+                @if (_linkedTasks.Count > 0)
+                {
+                    <span class="text-muted fs-6 fw-normal" data-testid="task-progress">(@completedTasks av @_linkedTasks.Count fullført)</span>
+                }
+            </h2>
+            <a class="btn btn-outline-primary btn-sm" data-testid="new-task" href="/oppgaver/ny?styresak=@_boardCase.Id">Ny oppgave</a>
+        </div>
+        @if (_linkedTasks.Count == 0)
+        {
+            <p class="text-muted mb-0">Ingen oppgaver er knyttet til denne saken ennå. En oppgave er noe noen skal gjøre, for eksempel for å følge opp et vedtak.</p>
+        }
+        else
+        {
+            <ul class="follow-up-list">
+                @foreach (var task in _linkedTasks)
+                {
+                    <li data-testid="case-task">
+                        <a class="unit-link" href="/oppgaver/@task.Id">@task.Title</a>
+                        <span class="follow-up-meta">
+                            <span data-testid="case-task-assignee">@(string.IsNullOrWhiteSpace(task.AssignedTo) ? "Ikke tildelt" : task.AssignedTo)</span>
+                            <span class="follow-up-due"><TaskDueDate Task="task" Today="today" /></span>
+                            <TaskStatusBadge Status="task.Status" />
+                        </span>
+                    </li>
+                }
+            </ul>
+            @if (completedTasks == _linkedTasks.Count && _boardCase.Status != BoardCaseStatus.Closed)
             {
-                <p class="text-muted mb-0">Ikke registrert</p>
+                <p class="text-muted small mt-2 mb-0" data-testid="close-hint">Alle oppgavene er fullført. Vurder om saken kan avsluttes.</p>
             }
-            else
-            {
-                <p class="notes-text mb-0">@_boardCase.Notes</p>
-            }
-        </section>
-    </div>
+        }
+    </section>
+
+    <Disclosure Label="Detaljer" Hint="Saksnummer · Prioritet · Merknader · Opprettet · Sist oppdatert">
+        <dl class="detail-list">
+            <DetailItem Label="Saksnummer" Value="@($"#{_boardCase.Id}")" />
+            <DetailItem Label="Prioritet" Value="@BoardCaseText.PriorityText(_boardCase.Priority)" />
+            <DetailItem Label="Merknader" Value="@_boardCase.Notes" />
+            <DetailItem Label="Opprettet" Value="@NorwegianDateFormat.DateTime(_boardCase.CreatedAt)" />
+            <DetailItem Label="Sist oppdatert" Value="@NorwegianDateFormat.DateTime(_boardCase.UpdatedAt)" />
+        </dl>
+    </Disclosure>
 
     <section class="surface-card danger-zone">
         @if (_deleteError != null)
@@ -251,16 +273,24 @@ else
 }
 
 @code {
+    private enum NextStepKind { Start, RegisterDecision, MarkDecided, Close, Reopen }
+
+    private enum FeedbackArea { Header, Decision }
+
     private BoardCase? _boardCase;
     private HousingUnit? _housingUnit;
     private IReadOnlyList<TaskItem> _linkedTasks = [];
-    private BoardCaseStatus _selectedStatus;
     private string _decisionText = string.Empty;
     private DateOnly? _decisionDate;
+    private ElementReference _decisionInput;
+    private bool _focusDecisionInput;
+    private bool _editingDecision;
     private bool _isLoading = true;
     private bool _isBusy;
     private bool _confirmingDelete;
     private bool _isDeleting;
+    private int _menuVersion;
+    private FeedbackArea _feedbackArea = FeedbackArea.Header;
     private string? _loadError;
     private string? _message;
     private string? _actionError;
@@ -272,6 +302,18 @@ else
     [SupplyParameterFromQuery(Name = "status")]
     public string? Status { get; set; }
 
+    /// <summary>The most natural next step for the case, shown as the one main button of the page.</summary>
+    private NextStepKind NextStep => _boardCase!.Status switch
+    {
+        BoardCaseStatus.New => NextStepKind.Start,
+        BoardCaseStatus.InProgress => _boardCase.Decision == null ? NextStepKind.RegisterDecision : NextStepKind.MarkDecided,
+        BoardCaseStatus.Decided => NextStepKind.Close,
+        _ => NextStepKind.Reopen
+    };
+
+    /// <summary>The page already offers «Registrer vedtak» as its main button, so the heading of the decision section does not repeat it.</summary>
+    private bool ShowsDecisionAsMainAction => NextStep == NextStepKind.RegisterDecision;
+
     protected override async Task OnParametersSetAsync()
     {
         _message = Status switch
@@ -280,8 +322,18 @@ else
             "endret" => "Endringene er lagret.",
             _ => null
         };
+        _feedbackArea = FeedbackArea.Header;
 
         await LoadAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_focusDecisionInput)
+        {
+            _focusDecisionInput = false;
+            await _decisionInput.FocusAsync();
+        }
     }
 
     private async Task LoadAsync()
@@ -316,31 +368,65 @@ else
 
         if (_boardCase != null)
         {
-            _selectedStatus = _boardCase.Status;
             _decisionText = _boardCase.Decision ?? string.Empty;
             _decisionDate = _boardCase.DecisionDate;
         }
     }
 
-    private async Task ChangeStatusAsync()
+    private async Task StartAsync()
     {
-        await RunActionAsync(
-            () => BoardCaseService.ChangeStatusAsync(Id, _selectedStatus),
-            "Statusen er endret.",
-            _ => "Saken kan ikke settes til «Vedtatt» før et vedtak er registrert.");
+        await ChangeStatusAsync(BoardCaseStatus.InProgress, $"Saken er satt til «{BoardCaseText.StatusText(BoardCaseStatus.InProgress)}».");
+    }
+
+    private async Task MarkDecidedAsync()
+    {
+        await ChangeStatusAsync(BoardCaseStatus.Decided, "Saken er markert som vedtatt.");
+    }
+
+    private async Task CloseAsync()
+    {
+        await ChangeStatusAsync(BoardCaseStatus.Closed, "Saken er avsluttet.");
     }
 
     private async Task ReopenAsync()
     {
+        await ChangeStatusAsync(BoardCaseStatus.InProgress, $"Saken er gjenåpnet og står nå som «{BoardCaseText.StatusText(BoardCaseStatus.InProgress)}».");
+    }
+
+    private async Task SetStatusAsync(BoardCaseStatus newStatus)
+    {
+        await ChangeStatusAsync(newStatus, $"Statusen er endret til «{BoardCaseText.StatusText(newStatus)}».");
+    }
+
+    private async Task ChangeStatusAsync(BoardCaseStatus newStatus, string successMessage)
+    {
         await RunActionAsync(
-            () => BoardCaseService.ChangeStatusAsync(Id, BoardCaseStatus.InProgress),
-            "Saken er gjenåpnet.",
-            _ => "Saken kunne ikke gjenåpnes.");
+            FeedbackArea.Header,
+            () => BoardCaseService.ChangeStatusAsync(Id, newStatus),
+            successMessage,
+            _ => "Saken kan ikke settes til «Vedtatt» før et vedtak er registrert.");
+    }
+
+    private void OpenDecisionForm()
+    {
+        _editingDecision = true;
+        _focusDecisionInput = true;
+        _message = null;
+        _actionError = null;
+    }
+
+    private void CancelDecisionForm()
+    {
+        _editingDecision = false;
+        _decisionText = _boardCase!.Decision ?? string.Empty;
+        _decisionDate = _boardCase.DecisionDate;
+        _actionError = null;
     }
 
     private async Task SaveDecisionAsync()
     {
         await RunActionAsync(
+            FeedbackArea.Decision,
             () => BoardCaseService.RegisterDecisionAsync(Id, _decisionText, _decisionDate),
             "Vedtaket er lagret.",
             DecisionRejectedMessage);
@@ -349,6 +435,7 @@ else
     private async Task ClearDecisionAsync()
     {
         await RunActionAsync(
+            FeedbackArea.Decision,
             () => BoardCaseService.ClearDecisionAsync(Id),
             "Vedtaket og vedtaksdatoen er fjernet.",
             _ => "Et vedtak kan ikke fjernes mens saken har status «Vedtatt». Endre statusen først.");
@@ -367,7 +454,13 @@ else
         return $"Vedtaket må fylles ut og kan ha maks {BoardCase.MaxDecisionLength} tegn.";
     }
 
-    private async Task RunActionAsync(Func<Task> action, string successMessage, Func<Exception, string> rejectedMessage)
+    private void DismissFeedback()
+    {
+        _message = null;
+        _actionError = null;
+    }
+
+    private async Task RunActionAsync(FeedbackArea area, Func<Task> action, string successMessage, Func<Exception, string> rejectedMessage)
     {
         if (_isBusy)
         {
@@ -377,17 +470,23 @@ else
         _isBusy = true;
         _message = null;
         _actionError = null;
+        _feedbackArea = area;
 
         try
         {
             await action();
             await ReadCaseAsync();
             _message = successMessage;
+            _menuVersion++;
+
+            if (area == FeedbackArea.Decision)
+            {
+                _editingDecision = false;
+            }
         }
         catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
         {
             _actionError = rejectedMessage(exception);
-            _selectedStatus = _boardCase!.Status;
         }
         catch (KeyNotFoundException)
         {

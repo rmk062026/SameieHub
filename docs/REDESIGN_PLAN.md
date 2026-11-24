@@ -33,7 +33,7 @@ Eieren har godkjent planen med disse valgene (svarer på spørsmålene i avsnitt
 
 **Justert plan:** «Neste styremøte» (avsnitt 3, 5.2 og R1) leses som **«Kommende saker med møtedato»**: åpne saker med møtedato, sortert på dato, uten å påstå at et møte er bekreftet.
 
-**Status:** R0, R2 og R1 er ferdige (se avsnitt 9b, 9c og 9d). R3 er neste og er ikke startet.
+**Status:** R0, R2, R1 og R3 er ferdige (se avsnitt 9b–9e). R4 er neste og er ikke startet.
 
 ## 1. Kort oppsummering
 
@@ -428,7 +428,7 @@ Hver milepæl er avgrenset, kan godkjennes og rulles tilbake for seg, og avslutt
 | **R0 Grunnlag** (ferdig) | Felles komponenter og stil: sidehode med én hovedhandling og «Flere handlinger»-meny, «Flere valg»-visning (`<details>` med tastaturstøtte), merker for aktive filtre, hurtigfaner, tilbakemelding med «Angre», kortliste på mobil, `data-testid` og UI-hjelpere i testene. Ingen synlig endring på sidene. | `Components/Shared`, `app.css`, `Tests/Web/UiTestHelpers.cs` | UI | Reduserer skjørhet før resten |
 | **R1 Oversikt** (ferdig) | Ny forside: «Må gjøres nå», «Kommende saker med møtedato», tre tall, elbillinglinje, «+ Ny». | `Pages/Dashboard.razor`, `DashboardChargingSection` | UI | F-09, F-17, F-22 |
 | **R2 Oppgaver** (ferdig) | Hurtigfaner, søk, «Flere filtre», radene som lenker, direkte fullføring, kortliste på mobil. Oppgavedetalj: hovedknapp i overskrift, bekreftelse ved knappen, «Detaljer». | `TaskItems/*` | UI | F-05, F-06, F-07 |
-| **R3 Styresaker** | Liste (møtedato, faner), detalj (overskriftslinje, vedtak, oppgaver, «Detaljer», adskilt slett, «x av y»). | `BoardCases/*` | UI | F-03, F-04 |
+| **R3 Styresaker** (ferdig) | Liste (møtedato, faner), detalj (overskriftslinje, vedtak, oppgaver, «Detaljer», adskilt slett, «x av y»). | `BoardCases/*` | UI | F-03, F-04 |
 | **R4 Skjemaer og veiledning** | «Gjelder», «Flere valg», veiledning om styresak/oppgave, forhåndsutfylling fra sak/boenhet. Boenhetsskjema og detalj (F-12, F-13, F-14, F-15). | `*Form.razor`, `HousingUnits/*` | UI | Hovedproblemet om styresak/oppgave |
 | **R5 Elbillading** | Faner, statuslinje i stedet for tallkort, forklaring av differanse, nye etiketter, «Feil? Rett her». | `Charging/*` | UI | F-10, F-26, F-27, F-29 |
 | **R6 Navigasjon og mobil** | Menyrekkefølge og navn, «+ Ny»-valg, hopp-lenke, trykkflater, kontroll av alle sider på 375 px. (Fast nedre tabellinje bare hvis eieren velger det.) | `Layout/*`, `app.css` | UI | F-31 |
@@ -501,6 +501,34 @@ Byggeklossene ligger i `src/SameieHub.Web/Components/Shared`. De er små, bruker
 | Synlige lenker | 29 | 20 |
 | Vannrett rulling ved 375 px | ingen | ingen |
 | Tom database, 375 px | 4 nuller og tre tomme lister | «Kom i gang» (819 px) |
+
+## 9e. R3 Styresaker: hva som ble gjort og målt
+
+**Liste:** hurtigvalg Åpne/Vedtatt/Avsluttet med antall, søk, «Flere filtre» (status, prioritet, boenhet, sortering), aktive filtre, rader med tittel, hva saken gjelder, møtedato og status (kort på mobil). **Detalj:** én hovedhandling som følger saken, status/møtedato/«Gjelder»/beskrivelse øverst, tydelig vedtaksdel, «Oppgaver til saken» med framdrift og «Ny oppgave», «Detaljer» lukket, sletting adskilt nederst.
+
+**Avgjørelser:**
+
+- **«Åpne» betyr ikke avsluttet** (Ny, Under behandling og Vedtatt), fordi en vedtatt sak ikke trenger å avsluttes og fordi Oversikt teller «Åpne styresaker» slik. «Vedtatt» er dermed en delmengde av «Åpne». Det står en kort forklaring under fanene. En test sikrer at tallet er det samme som på Oversikt.
+- **Status og hurtigvalg** følger samme regel som i oppgavelisten: å velge en bestemt status under «Flere filtre» erstatter hurtigvalget, og «Alle (også avsluttede)» finnes.
+- **Sortering:** standard er møtedato (nærmeste først, saker uten dato sist) for «Åpne» og sist oppdatert for de andre. Alle eksisterende sorteringer finnes, og valgt sortering beholdes når visningen byttes.
+- **Hovedhandling per status:** Ny → «Start behandling»; Under behandling → «Registrer vedtak» (eller «Marker som vedtatt» når vedtak finnes); Vedtatt → «Avslutt saken»; Avsluttet → «Gjenåpne saken». Alle andre statuser ligger i «Flere handlinger», også «Vedtatt» uten vedtak, der den eksisterende regelen gir en forklarende feil ved handlingen.
+- **Ingen automatisk avslutning.** Er alle oppgaver fullført, står bare et diskret forslag om å vurdere avslutning.
+- **Møtedato:** vises som «Registrert møtedato» og aldri som et bekreftet møte. Ingen møtemodell er laget; dagens dato på saken kan senere kobles til egen møteadministrasjon.
+- **Domenet er ikke endret.** Ingen ny pakke, ingen globale komponenter endret (bare gjenbruk av R0–R2).
+
+**Målt i nettleser** (demodata, isolert kopi, 1024 px; før = R2-tilstand):
+
+| Mål | Før | Etter |
+|---|---|---|
+| Liste: høyde | 1 730 px | 1 232 px |
+| Liste: kolonner | 7 | 3 |
+| Liste: knapper | 25 | 5 |
+| Liste: lenker | 37 | 12 |
+| Liste: synlige filterfelt | 5 | 1 (søk), resten bak «Flere filtre» |
+| Detalj: høyde | 1 814 px | 1 102 px (sak uten vedtak, 1 oppgave) |
+| Detalj: seksjoner | 7 | 5 |
+| Detalj: synlige skjemafelt uten å velge noe | 3 | 0 |
+| Vannrett rulling ved 375 px | ingen | ingen |
 
 ## 10. Risiko for regresjoner og hvordan de reduseres
 

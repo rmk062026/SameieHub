@@ -11,7 +11,7 @@ public class BoardCaseDetailTests : UiTestBase
     private IRenderedComponent<BoardCaseDetail> RenderDetail(int id)
     {
         var cut = Render<BoardCaseDetail>(parameters => parameters.Add(page => page.Id, id));
-        cut.WaitForElement(".detail-grid");
+        cut.WaitForElement("[data-testid=case-summary]");
 
         return cut;
     }
@@ -26,10 +26,35 @@ public class BoardCaseDetailTests : UiTestBase
         cut.FindAll("button").First(button => button.TextContent.Trim() == text).Click();
     }
 
+    private static void OpenDecisionForm(IRenderedComponent<BoardCaseDetail> cut)
+    {
+        cut.FindByTestId("open-decision-form").Click();
+    }
+
+    private static string DetailValue(IRenderedComponent<BoardCaseDetail> cut, string label)
+    {
+        var item = cut.FindAll(".detail-item").First(element => element.QuerySelector("dt")!.TextContent == label);
+
+        return item.QuerySelector("dd")!.TextContent.Trim();
+    }
+
+    private static string Feedback(IRenderedComponent<BoardCaseDetail> cut)
+    {
+        return cut.FindByTestId("action-feedback").TextContent;
+    }
+
+    private async Task<BoardCase> RegisterInProgressAsync()
+    {
+        var boardCase = await RegisterAsync();
+        await BoardCases.ChangeStatusAsync(boardCase.Id, BoardCaseStatus.InProgress);
+
+        return boardCase;
+    }
+
     // Information
 
     [Fact]
-    public async Task Render_FullyRegisteredCase_ShowsAllInformationInNorwegian()
+    public async Task Render_FullyRegisteredCase_ShowsTheMostImportantInformationFirst()
     {
         var unit = await Service.RegisterAsync("Storgata 1A");
         var boardCase = await RegisterAsync(new BoardCaseDetails
@@ -38,23 +63,50 @@ public class BoardCaseDetailTests : UiTestBase
             Description = "Fiktiv beskrivelse.",
             Priority = BoardCasePriority.High,
             MeetingDate = new DateOnly(2026, 12, 3),
-            HousingUnitId = unit.Id,
-            Notes = "Fiktive merknader."
+            HousingUnitId = unit.Id
         });
         await BoardCases.RegisterDecisionAsync(boardCase.Id, "Fiktivt vedtak.", null);
 
         var cut = RenderDetail(boardCase.Id);
 
-        var text = cut.Markup;
-        Assert.Contains("Maling av fellesarealer", cut.Find("h1").TextContent);
-        Assert.Contains($"Sak #{boardCase.Id}", text);
-        Assert.Contains("Ny", cut.Find(".detail-meta .status-new").TextContent);
-        Assert.Contains("Høy", cut.Find(".detail-meta .priority-high").TextContent);
-        Assert.Contains("Fiktiv beskrivelse.", text);
-        Assert.Contains("03.12.2026", text);
-        Assert.Contains("18.11.2026 11:30", text);
-        Assert.Contains("Fiktive merknader.", text);
-        Assert.Equal("Fiktivt vedtak.", cut.Find("#decision").GetAttribute("value"));
+        Assert.Equal("Maling av fellesarealer", cut.FindByTestId("page-title").TextContent);
+        var summary = cut.FindByTestId("case-summary");
+        Assert.Contains("Ny", summary.QuerySelector(".status-new")!.TextContent);
+        Assert.Equal("Høy prioritet", summary.QuerySelector("[data-testid=high-priority]")!.TextContent);
+        Assert.Equal("03.12.2026", DetailValue(cut, "Registrert møtedato"));
+        Assert.Equal("Storgata 1A", DetailValue(cut, "Gjelder"));
+        Assert.Contains("Fiktiv beskrivelse.", cut.FindByTestId("case-description").TextContent);
+        Assert.Contains("Fiktivt vedtak.", cut.FindByTestId("decision-box").TextContent);
+    }
+
+    [Fact]
+    public async Task Render_Case_KeepsRarelyUsedInformationInAClosedDetailsSection()
+    {
+        var boardCase = await RegisterAsync(new BoardCaseDetails { Title = "Sak", Priority = BoardCasePriority.Low, Notes = "Fiktive merknader." });
+
+        var cut = RenderDetail(boardCase.Id);
+
+        var details = cut.Find("details.disclosure");
+        Assert.False(details.HasAttribute("open"));
+        Assert.Equal("Detaljer", details.QuerySelector(".disclosure-label")!.TextContent);
+        Assert.Equal($"#{boardCase.Id}", DetailValue(cut, "Saksnummer"));
+        Assert.Equal("Lav", DetailValue(cut, "Prioritet"));
+        Assert.Equal("Fiktive merknader.", DetailValue(cut, "Merknader"));
+        Assert.Equal("18.11.2026 11:30", DetailValue(cut, "Opprettet"));
+        Assert.Equal("18.11.2026 11:30", DetailValue(cut, "Sist oppdatert"));
+        Assert.False(cut.HasTestId("high-priority"));
+    }
+
+    [Fact]
+    public async Task Render_MeetingDate_IsCalledARegisteredDateAndNeverAConfirmedMeeting()
+    {
+        var boardCase = await RegisterAsync(new BoardCaseDetails { Title = "Sak", MeetingDate = new DateOnly(2026, 12, 3) });
+
+        var cut = RenderDetail(boardCase.Id);
+
+        Assert.Contains(cut.FindAll(".detail-item dt"), term => term.TextContent == "Registrert møtedato");
+        Assert.DoesNotContain("Neste styremøte", cut.Markup);
+        Assert.DoesNotContain("bekreftet", cut.Markup);
     }
 
     [Fact]
@@ -89,9 +141,10 @@ public class BoardCaseDetailTests : UiTestBase
 
         var cut = RenderDetail(boardCase.Id);
 
-        Assert.Contains("Hele sameiet", cut.Markup);
-        Assert.Contains("Ikke registrert", cut.Markup);
-        Assert.Contains("Ingen vedtak er registrert.", cut.Markup);
+        Assert.Equal("Hele sameiet", DetailValue(cut, "Gjelder"));
+        Assert.Equal("Ikke registrert", DetailValue(cut, "Registrert møtedato"));
+        Assert.Contains("Ikke registrert", cut.FindByTestId("case-description").TextContent);
+        Assert.Contains("Ingen vedtak er registrert ennå", cut.FindByTestId("no-decision").TextContent);
         Assert.Empty(cut.FindAll("a[href^='/boenheter/']"));
     }
 
@@ -102,7 +155,7 @@ public class BoardCaseDetailTests : UiTestBase
 
         var cut = RenderDetail(boardCase.Id);
 
-        Assert.Equal($"/styresaker/{boardCase.Id}/rediger", cut.Find(".page-actions a").GetAttribute("href"));
+        Assert.Equal($"/styresaker/{boardCase.Id}/rediger", cut.FindByTestId("page-actions").QuerySelector("a")!.GetAttribute("href"));
         Assert.Equal("/styresaker", cut.Find("a.back-link").GetAttribute("href"));
     }
 
@@ -125,36 +178,141 @@ public class BoardCaseDetailTests : UiTestBase
         BoardCaseRepository.IsFailing = false;
         cut.Find("[role=alert] button").Click();
 
-        cut.WaitForElement(".detail-grid");
+        cut.WaitForElement("[data-testid=case-summary]");
     }
 
-    // Status
+    [Theory]
+    [InlineData("opprettet", "Styresaken er registrert.")]
+    [InlineData("endret", "Endringene er lagret.")]
+    public async Task Render_StatusInTheAddress_ShowsTheSuccessMessage(string status, string expectedMessage)
+    {
+        var boardCase = await RegisterAsync();
+        Services.GetRequiredService<NavigationManager>().NavigateTo($"/styresaker/{boardCase.Id}?status={status}");
+
+        var cut = RenderDetail(boardCase.Id);
+
+        Assert.Equal(expectedMessage, cut.FindByTestId("action-feedback").TextContent.Replace("Lukk", ""));
+        Assert.Equal("status", cut.FindByTestId("action-feedback").GetAttribute("role"));
+    }
+
+    // The main action follows the natural next step
 
     [Fact]
-    public async Task ChangeStatus_ToInProgress_ShowsNewStatusAndStoresIt()
+    public async Task MainAction_NewCase_StartsTheTreatment()
     {
         var boardCase = await RegisterAsync();
         var cut = RenderDetail(boardCase.Id);
+        Assert.Equal("Start behandling", cut.FindByTestId("main-action").TextContent.Trim());
 
-        cut.Find("#newStatus").Change("InProgress");
-        ClickButton(cut, "Endre status");
+        cut.FindByTestId("main-action").Click();
 
-        cut.WaitForAssertion(() => Assert.Contains("Under behandling", cut.Find(".detail-meta .status-badge").TextContent));
-        Assert.Contains("Statusen er endret.", cut.Find("[role=status]").TextContent);
+        Assert.Equal(BoardCaseStatus.InProgress, (await BoardCases.GetByIdAsync(boardCase.Id))!.Status);
+        Assert.Contains("Saken er satt til «Under behandling».", Feedback(cut));
+        Assert.Contains("Under behandling", cut.FindByTestId("case-summary").TextContent);
+    }
+
+    [Fact]
+    public async Task MainAction_InProgressWithoutDecision_OpensTheDecisionForm_AndDoesNotChangeTheStatus()
+    {
+        var boardCase = await RegisterInProgressAsync();
+        var cut = RenderDetail(boardCase.Id);
+        Assert.Equal("Registrer vedtak", cut.FindByTestId("main-action").TextContent.Trim());
+        Assert.False(cut.HasTestId("decision-form"));
+
+        cut.FindByTestId("main-action").Click();
+
+        Assert.True(cut.HasTestId("decision-form"));
         Assert.Equal(BoardCaseStatus.InProgress, (await BoardCases.GetByIdAsync(boardCase.Id))!.Status);
     }
 
     [Fact]
-    public async Task ChangeStatus_ToDecidedWithoutDecision_IsRejectedWithNorwegianMessageAndNothingChanges()
+    public async Task MainAction_RegisterDecision_IsDisabledWhileTheFormIsOpen_AndTheSectionButtonIsNotRepeated()
+    {
+        var boardCase = await RegisterInProgressAsync();
+        var cut = RenderDetail(boardCase.Id);
+        Assert.False(cut.HasTestId("open-decision-form"));
+
+        cut.FindByTestId("main-action").Click();
+
+        Assert.True(cut.FindByTestId("main-action").HasAttribute("disabled"));
+        Assert.True(cut.HasTestId("decision-form"));
+    }
+
+    [Fact]
+    public async Task MainAction_InProgressWithDecision_MarksTheCaseAsDecided()
+    {
+        var boardCase = await RegisterInProgressAsync();
+        await BoardCases.RegisterDecisionAsync(boardCase.Id, "Fiktivt vedtak.", null);
+        var cut = RenderDetail(boardCase.Id);
+        Assert.Equal("Marker som vedtatt", cut.FindByTestId("main-action").TextContent.Trim());
+
+        cut.FindByTestId("main-action").Click();
+
+        Assert.Equal(BoardCaseStatus.Decided, (await BoardCases.GetByIdAsync(boardCase.Id))!.Status);
+        Assert.Contains("Saken er markert som vedtatt.", Feedback(cut));
+    }
+
+    [Fact]
+    public async Task MainAction_DecidedCase_OffersToCloseItAndNothingClosesItAutomatically()
+    {
+        var boardCase = await RegisterAsync();
+        await BoardCases.RegisterDecisionAsync(boardCase.Id, "Fiktivt vedtak.", null);
+        await BoardCases.ChangeStatusAsync(boardCase.Id, BoardCaseStatus.Decided);
+        var cut = RenderDetail(boardCase.Id);
+        Assert.Equal("Avslutt saken", cut.FindByTestId("main-action").TextContent.Trim());
+        Assert.Equal(BoardCaseStatus.Decided, (await BoardCases.GetByIdAsync(boardCase.Id))!.Status);
+
+        cut.FindByTestId("main-action").Click();
+
+        Assert.Equal(BoardCaseStatus.Closed, (await BoardCases.GetByIdAsync(boardCase.Id))!.Status);
+        Assert.Contains("Saken er avsluttet.", Feedback(cut));
+    }
+
+    [Fact]
+    public async Task MainAction_ClosedCase_ReopensItAsInProgressAndSaysSo()
+    {
+        var boardCase = await RegisterAsync();
+        await BoardCases.ChangeStatusAsync(boardCase.Id, BoardCaseStatus.Closed);
+        var cut = RenderDetail(boardCase.Id);
+        Assert.Equal("Gjenåpne saken", cut.FindByTestId("main-action").TextContent.Trim());
+
+        cut.FindByTestId("main-action").Click();
+
+        Assert.Equal(BoardCaseStatus.InProgress, (await BoardCases.GetByIdAsync(boardCase.Id))!.Status);
+        Assert.Contains("gjenåpnet og står nå som «Under behandling»", Feedback(cut));
+    }
+
+    // All statuses stay reachable, and the rules are kept
+
+    [Fact]
+    public async Task MoreActions_OfferEveryOtherStatus_AndCloseAfterUse()
     {
         var boardCase = await RegisterAsync();
         var cut = RenderDetail(boardCase.Id);
 
-        cut.Find("#newStatus").Change("Decided");
-        ClickButton(cut, "Endre status");
+        Assert.False(cut.HasTestId("set-status-New"));
+        Assert.True(cut.HasTestId("set-status-InProgress"));
+        Assert.True(cut.HasTestId("set-status-Decided"));
+        Assert.True(cut.HasTestId("set-status-Closed"));
 
-        cut.WaitForAssertion(() =>
-            Assert.Contains("før et vedtak er registrert", cut.Find("[role=alert]").TextContent));
+        cut.FindByTestId("set-status-InProgress").Click();
+
+        Assert.Equal(BoardCaseStatus.InProgress, (await BoardCases.GetByIdAsync(boardCase.Id))!.Status);
+        Assert.Contains("Statusen er endret til «Under behandling».", Feedback(cut));
+        Assert.False(cut.FindByTestId("more-menu").HasAttribute("open"));
+        Assert.True(cut.HasTestId("set-status-New"));
+    }
+
+    [Fact]
+    public async Task ChangeStatus_ToDecidedWithoutDecision_IsRejectedWithNorwegianMessageAtTheActionAndNothingChanges()
+    {
+        var boardCase = await RegisterAsync();
+        var cut = RenderDetail(boardCase.Id);
+
+        cut.FindByTestId("set-status-Decided").Click();
+
+        var alert = cut.Find("[role=alert]");
+        Assert.Contains("før et vedtak er registrert", alert.TextContent);
         Assert.Equal(BoardCaseStatus.New, (await BoardCases.GetByIdAsync(boardCase.Id))!.Status);
     }
 
@@ -165,51 +323,167 @@ public class BoardCaseDetailTests : UiTestBase
         await BoardCases.RegisterDecisionAsync(boardCase.Id, "Fiktivt vedtak.", null);
         var cut = RenderDetail(boardCase.Id);
 
-        cut.Find("#newStatus").Change("Decided");
-        ClickButton(cut, "Endre status");
+        cut.FindByTestId("set-status-Decided").Click();
 
-        cut.WaitForAssertion(() => Assert.Contains("Vedtatt", cut.Find(".detail-meta .status-badge").TextContent));
+        Assert.Contains("Vedtatt", cut.FindByTestId("case-summary").TextContent);
         Assert.Equal(BoardCaseStatus.Decided, (await BoardCases.GetByIdAsync(boardCase.Id))!.Status);
     }
 
     [Fact]
-    public async Task Reopen_ClosedCase_BecomesInProgress()
+    public async Task ChangeStatus_DecidedStatusWithoutDecisionDate_IsAllowed()
     {
         var boardCase = await RegisterAsync();
-        await BoardCases.ChangeStatusAsync(boardCase.Id, BoardCaseStatus.Closed);
+        await BoardCases.RegisterDecisionAsync(boardCase.Id, "Fiktivt vedtak.", null);
         var cut = RenderDetail(boardCase.Id);
 
-        ClickButton(cut, "Gjenåpne saken");
+        cut.FindByTestId("set-status-Decided").Click();
 
-        cut.WaitForAssertion(() => Assert.Contains("Under behandling", cut.Find(".detail-meta .status-badge").TextContent));
+        Assert.Contains("Vedtatt", cut.FindByTestId("case-summary").TextContent);
+    }
+
+    [Fact]
+    public async Task ChangeStatus_DatabaseUnavailable_ShowsErrorAndKeepsTheStatus()
+    {
+        var boardCase = await RegisterAsync();
+        var cut = RenderDetail(boardCase.Id);
+        BoardCaseRepository.IsFailing = true;
+
+        cut.FindByTestId("main-action").Click();
+
+        Assert.Contains("Kunne ikke lagre endringen", cut.Find("[role=alert]").TextContent);
+        BoardCaseRepository.IsFailing = false;
+        Assert.Equal(BoardCaseStatus.New, (await BoardCases.GetByIdAsync(boardCase.Id))!.Status);
+    }
+
+    // Tasks and the closing hint
+
+    [Fact]
+    public async Task Tasks_ShowProgressAndEachTaskWithAssigneeDueDateStatusAndLink()
+    {
+        var boardCase = await RegisterAsync();
+        var done = await Tasks.RegisterAsync(new TaskItemDetails { Title = "Ferdig", BoardCaseId = boardCase.Id, AssignedTo = "Lise Prøve" });
+        await Tasks.ChangeStatusAsync(done.Id, TaskItemStatus.Completed);
+        var open = await Tasks.RegisterAsync(new TaskItemDetails
+        {
+            Title = "Åpen",
+            BoardCaseId = boardCase.Id,
+            DueDate = new DateOnly(2026, 11, 10)
+        });
+        await Tasks.RegisterAsync(new TaskItemDetails { Title = "Annen sak sin oppgave" });
+
+        var cut = RenderDetail(boardCase.Id);
+
+        Assert.Equal("(1 av 2 fullført)", cut.FindByTestId("task-progress").TextContent);
+        var rows = cut.FindAll("[data-testid=case-task]");
+        Assert.Equal(2, rows.Count);
+        var openRow = rows.First(row => row.TextContent.Contains("Åpen"));
+        Assert.Equal($"/oppgaver/{open.Id}", openRow.QuerySelector("a")!.GetAttribute("href"));
+        Assert.Equal("Ikke tildelt", openRow.QuerySelector("[data-testid=case-task-assignee]")!.TextContent);
+        Assert.Contains("10.11.2026", openRow.TextContent);
+        Assert.Equal("Forfalt", openRow.QuerySelector(".is-overdue")!.TextContent);
+        var doneRow = rows.First(row => row.TextContent.Contains("Ferdig"));
+        Assert.Equal("Lise Prøve", doneRow.QuerySelector("[data-testid=case-task-assignee]")!.TextContent);
+        Assert.Contains("Fullført", doneRow.QuerySelector(".status-badge")!.TextContent);
+        Assert.DoesNotContain("Annen sak sin oppgave", cut.Markup);
+    }
+
+    [Fact]
+    public async Task Tasks_NewTaskLinkSuggestsTheCase_AndNoTasksIsExplained()
+    {
+        var boardCase = await RegisterAsync();
+
+        var cut = RenderDetail(boardCase.Id);
+
+        Assert.Equal($"/oppgaver/ny?styresak={boardCase.Id}", cut.FindByTestId("new-task").GetAttribute("href"));
+        Assert.Equal("Ny oppgave", cut.FindByTestId("new-task").TextContent);
+        Assert.Contains("Ingen oppgaver er knyttet til denne saken", cut.FindByTestId("case-tasks").TextContent);
+        Assert.False(cut.HasTestId("task-progress"));
+        Assert.False(cut.HasTestId("close-hint"));
+    }
+
+    [Fact]
+    public async Task Tasks_AllCompleted_ShowsADiscreetHintAndDoesNotChangeTheStatus()
+    {
+        var boardCase = await RegisterInProgressAsync();
+        var task = await Tasks.RegisterAsync(new TaskItemDetails { Title = "Ferdig", BoardCaseId = boardCase.Id });
+        await Tasks.ChangeStatusAsync(task.Id, TaskItemStatus.Completed);
+
+        var cut = RenderDetail(boardCase.Id);
+
+        Assert.Contains("Vurder om saken kan avsluttes", cut.FindByTestId("close-hint").TextContent);
         Assert.Equal(BoardCaseStatus.InProgress, (await BoardCases.GetByIdAsync(boardCase.Id))!.Status);
     }
 
     [Fact]
-    public async Task Render_CaseNotClosed_HasNoReopenButton()
+    public async Task Tasks_NotAllCompletedOrCaseClosed_ShowsNoHint()
     {
         var boardCase = await RegisterAsync();
+        var done = await Tasks.RegisterAsync(new TaskItemDetails { Title = "Ferdig", BoardCaseId = boardCase.Id });
+        await Tasks.ChangeStatusAsync(done.Id, TaskItemStatus.Completed);
+        await Tasks.RegisterAsync(new TaskItemDetails { Title = "Åpen", BoardCaseId = boardCase.Id });
 
-        var cut = RenderDetail(boardCase.Id);
+        Assert.False(RenderDetail(boardCase.Id).HasTestId("close-hint"));
 
-        Assert.DoesNotContain(cut.FindAll("button"), button => button.TextContent.Trim() == "Gjenåpne saken");
+        var open = (await Tasks.GetAllAsync()).First(task => task.Title == "Åpen");
+        await Tasks.ChangeStatusAsync(open.Id, TaskItemStatus.Completed);
+        await BoardCases.ChangeStatusAsync(boardCase.Id, BoardCaseStatus.Closed);
+
+        Assert.False(RenderDetail(boardCase.Id).HasTestId("close-hint"));
     }
 
     // Decision
 
     [Fact]
-    public async Task Decision_Register_IsStoredWithoutChangingStatus()
+    public async Task Decision_NoDecision_ExplainsItAndOffersToRegisterOne()
+    {
+        var boardCase = await RegisterAsync();
+
+        var cut = RenderDetail(boardCase.Id);
+
+        Assert.False(cut.HasTestId("decision-box"));
+        Assert.False(cut.HasTestId("decision-form"));
+        Assert.Contains("kan bare settes til «Vedtatt» når et vedtak er registrert", cut.FindByTestId("no-decision").TextContent);
+        Assert.Equal("Registrer vedtak", cut.FindByTestId("open-decision-form").TextContent.Trim());
+    }
+
+    [Fact]
+    public async Task Decision_Register_IsStoredWithoutChangingStatusAndShownAtTheDecision()
     {
         var boardCase = await RegisterAsync();
         var cut = RenderDetail(boardCase.Id);
+        OpenDecisionForm(cut);
 
         cut.Find("#decision").Input("Fiktivt vedtak.");
         ClickButton(cut, "Registrer vedtak");
 
-        cut.WaitForAssertion(() => Assert.Contains("Vedtaket er lagret.", cut.Find("[role=status]").TextContent));
+        var section = cut.FindByTestId("decision-section");
+        Assert.Contains("Vedtaket er lagret.", section.QuerySelector("[data-testid=action-feedback]")!.TextContent);
+        Assert.Contains("Fiktivt vedtak.", cut.FindByTestId("decision-box").TextContent);
+        Assert.False(cut.HasTestId("decision-form"));
         var stored = await BoardCases.GetByIdAsync(boardCase.Id);
         Assert.Equal("Fiktivt vedtak.", stored!.Decision);
         Assert.Equal(BoardCaseStatus.New, stored.Status);
+    }
+
+    [Fact]
+    public async Task Decision_EditForm_StartsWithTheRegisteredDecisionAndCanBeCancelledWithoutChanges()
+    {
+        var boardCase = await RegisterAsync();
+        await BoardCases.RegisterDecisionAsync(boardCase.Id, "Fiktivt vedtak.", new DateOnly(2026, 12, 3));
+        var cut = RenderDetail(boardCase.Id);
+        Assert.Equal("Endre vedtak", cut.FindByTestId("open-decision-form").TextContent.Trim());
+
+        OpenDecisionForm(cut);
+
+        Assert.Equal("Fiktivt vedtak.", cut.Find("#decision").GetAttribute("value"));
+        Assert.Equal("2026-12-03", cut.Find("#decisionDate").GetAttribute("value"));
+
+        cut.Find("#decision").Input("Ikke lagret.");
+        ClickButton(cut, "Avbryt");
+
+        Assert.False(cut.HasTestId("decision-form"));
+        Assert.Equal("Fiktivt vedtak.", (await BoardCases.GetByIdAsync(boardCase.Id))!.Decision);
+        Assert.Contains("Fiktivt vedtak.", cut.FindByTestId("decision-box").TextContent);
     }
 
     [Fact]
@@ -218,25 +492,29 @@ public class BoardCaseDetailTests : UiTestBase
         var boardCase = await RegisterAsync();
         await BoardCases.RegisterDecisionAsync(boardCase.Id, "Feil vedtak.", null);
         var cut = RenderDetail(boardCase.Id);
+        OpenDecisionForm(cut);
 
         cut.Find("#decision").Input("Riktig vedtak.");
         ClickButton(cut, "Lagre vedtak");
 
-        cut.WaitForAssertion(() => Assert.Contains("Vedtaket er lagret.", cut.Find("[role=status]").TextContent));
+        Assert.Contains("Vedtaket er lagret.", Feedback(cut));
         Assert.Equal("Riktig vedtak.", (await BoardCases.GetByIdAsync(boardCase.Id))!.Decision);
     }
 
     [Fact]
-    public async Task Decision_Blank_ShowsMessageAndKeepsTheStoredDecision()
+    public async Task Decision_Blank_ShowsMessageAtTheFormAndKeepsTheStoredDecision()
     {
         var boardCase = await RegisterAsync();
         await BoardCases.RegisterDecisionAsync(boardCase.Id, "Fiktivt vedtak.", null);
         var cut = RenderDetail(boardCase.Id);
+        OpenDecisionForm(cut);
 
         cut.Find("#decision").Input("   ");
         ClickButton(cut, "Lagre vedtak");
 
-        cut.WaitForAssertion(() => Assert.Contains("Vedtaket må fylles ut", cut.Find("[role=alert]").TextContent));
+        var alert = cut.FindByTestId("decision-section").QuerySelector("[role=alert]")!;
+        Assert.Contains("Vedtaket må fylles ut", alert.TextContent);
+        Assert.True(cut.HasTestId("decision-form"));
         Assert.Equal("Fiktivt vedtak.", (await BoardCases.GetByIdAsync(boardCase.Id))!.Decision);
     }
 
@@ -246,12 +524,13 @@ public class BoardCaseDetailTests : UiTestBase
         var boardCase = await RegisterAsync();
         await BoardCases.RegisterDecisionAsync(boardCase.Id, "Registrert ved en feil.", null);
         var cut = RenderDetail(boardCase.Id);
+        OpenDecisionForm(cut);
 
         ClickButton(cut, "Fjern vedtak");
 
-        cut.WaitForAssertion(() => Assert.Contains("Vedtaket og vedtaksdatoen er fjernet.", cut.Find("[role=status]").TextContent));
+        Assert.Contains("Vedtaket og vedtaksdatoen er fjernet.", Feedback(cut));
         Assert.Null((await BoardCases.GetByIdAsync(boardCase.Id))!.Decision);
-        Assert.Contains("Ingen vedtak er registrert.", cut.Markup);
+        Assert.True(cut.HasTestId("no-decision"));
     }
 
     [Fact]
@@ -261,50 +540,214 @@ public class BoardCaseDetailTests : UiTestBase
         await BoardCases.RegisterDecisionAsync(boardCase.Id, "Fiktivt vedtak.", null);
         await BoardCases.ChangeStatusAsync(boardCase.Id, BoardCaseStatus.Decided);
         var cut = RenderDetail(boardCase.Id);
+        OpenDecisionForm(cut);
 
         ClickButton(cut, "Fjern vedtak");
 
-        cut.WaitForAssertion(() =>
-            Assert.Contains("kan ikke fjernes mens saken har status «Vedtatt»", cut.Find("[role=alert]").TextContent));
+        Assert.Contains("kan ikke fjernes mens saken har status «Vedtatt»", cut.Find("[role=alert]").TextContent);
         Assert.Equal("Fiktivt vedtak.", (await BoardCases.GetByIdAsync(boardCase.Id))!.Decision);
     }
 
     [Fact]
-    public async Task Actions_DatabaseUnavailable_ShowsErrorAndKeepsTheCase()
+    public async Task Decision_DatabaseUnavailable_ShowsErrorAndKeepsTheFormOpen()
     {
         var boardCase = await RegisterAsync();
         var cut = RenderDetail(boardCase.Id);
+        OpenDecisionForm(cut);
         BoardCaseRepository.IsFailing = true;
 
         cut.Find("#decision").Input("Fiktivt vedtak.");
         ClickButton(cut, "Registrer vedtak");
 
-        cut.WaitForAssertion(() => Assert.Contains("Kunne ikke lagre endringen", cut.Find("[role=alert]").TextContent));
+        Assert.Contains("Kunne ikke lagre endringen", cut.Find("[role=alert]").TextContent);
+        Assert.True(cut.HasTestId("decision-form"));
     }
 
     [Fact]
-    public async Task Actions_CaseDeletedMeanwhile_ShowsNotFoundMessage()
+    public async Task Decision_CaseDeletedMeanwhile_ShowsNotFoundMessage()
     {
         var boardCase = await RegisterAsync();
         var cut = RenderDetail(boardCase.Id);
+        OpenDecisionForm(cut);
         await BoardCases.DeleteAsync(boardCase.Id);
 
         cut.Find("#decision").Input("Fiktivt vedtak.");
         ClickButton(cut, "Registrer vedtak");
 
-        cut.WaitForAssertion(() => Assert.Contains("finnes ikke lenger", cut.Find("[role=alert]").TextContent));
+        Assert.Contains("finnes ikke lenger", cut.Find("[role=alert]").TextContent);
+    }
+
+    // Decision date
+
+    private async Task<BoardCase> RegisterCaseWithDecisionAsync(DateOnly? decisionDate)
+    {
+        var boardCase = await RegisterAsync();
+        await BoardCases.RegisterDecisionAsync(boardCase.Id, "Fiktivt vedtak.", decisionDate);
+
+        return boardCase;
+    }
+
+    [Fact]
+    public async Task DecisionDate_Registered_IsShownInNorwegianFormatTogetherWithTheDecisionText()
+    {
+        var boardCase = await RegisterCaseWithDecisionAsync(new DateOnly(2026, 12, 3));
+
+        var cut = RenderDetail(boardCase.Id);
+
+        var box = cut.FindByTestId("decision-box");
+        Assert.Contains("Fiktivt vedtak.", box.TextContent);
+        Assert.Contains("Vedtaksdato:", box.TextContent);
+        Assert.Contains("03.12.2026", box.TextContent);
+    }
+
+    [Fact]
+    public async Task DecisionDate_DecisionWithoutDate_ShowsThatTheDateIsNotRegistered()
+    {
+        var boardCase = await RegisterCaseWithDecisionAsync(null);
+
+        var cut = RenderDetail(boardCase.Id);
+
+        Assert.Contains("Ikke registrert", cut.FindByTestId("decision-box").TextContent);
+    }
+
+    [Fact]
+    public async Task DecisionDate_RegisterDecisionWithDate_IsStoredAndShown()
+    {
+        var boardCase = await RegisterAsync();
+        var cut = RenderDetail(boardCase.Id);
+        OpenDecisionForm(cut);
+
+        cut.Find("#decision").Input("Fiktivt vedtak.");
+        cut.Find("#decisionDate").Change("2026-12-03");
+        ClickButton(cut, "Registrer vedtak");
+
+        Assert.Contains("03.12.2026", cut.FindByTestId("decision-box").TextContent);
+        var stored = await BoardCases.GetByIdAsync(boardCase.Id);
+        Assert.Equal("Fiktivt vedtak.", stored!.Decision);
+        Assert.Equal(new DateOnly(2026, 12, 3), stored.DecisionDate);
+        Assert.Equal(BoardCaseStatus.New, stored.Status);
+    }
+
+    [Fact]
+    public async Task DecisionDate_RegisterDecisionWithoutDate_IsStoredWithNoDate()
+    {
+        var boardCase = await RegisterAsync();
+        var cut = RenderDetail(boardCase.Id);
+        OpenDecisionForm(cut);
+
+        cut.Find("#decision").Input("Fiktivt vedtak.");
+        ClickButton(cut, "Registrer vedtak");
+
+        Assert.Contains("Vedtaket er lagret.", Feedback(cut));
+        Assert.Null((await BoardCases.GetByIdAsync(boardCase.Id))!.DecisionDate);
+    }
+
+    [Fact]
+    public async Task DecisionDate_ChangeOnlyTheDate_IsStoredAndUpdatedAtChanges()
+    {
+        var boardCase = await RegisterCaseWithDecisionAsync(new DateOnly(2026, 12, 3));
+        var cut = RenderDetail(boardCase.Id);
+        OpenDecisionForm(cut);
+        Clock.Advance(TimeSpan.FromHours(3));
+
+        cut.Find("#decisionDate").Change("2026-12-10");
+        ClickButton(cut, "Lagre vedtak");
+
+        Assert.Contains("10.12.2026", cut.FindByTestId("decision-box").TextContent);
+        var stored = await BoardCases.GetByIdAsync(boardCase.Id);
+        Assert.Equal("Fiktivt vedtak.", stored!.Decision);
+        Assert.True(stored.UpdatedAt > stored.CreatedAt);
+    }
+
+    [Fact]
+    public async Task DecisionDate_SaveWithoutChanges_KeepsUpdatedAt()
+    {
+        var boardCase = await RegisterCaseWithDecisionAsync(new DateOnly(2026, 12, 3));
+        var before = (await BoardCases.GetByIdAsync(boardCase.Id))!.UpdatedAt;
+        var cut = RenderDetail(boardCase.Id);
+        OpenDecisionForm(cut);
+        Clock.Advance(TimeSpan.FromHours(3));
+
+        ClickButton(cut, "Lagre vedtak");
+
+        Assert.Contains("Vedtaket er lagret.", Feedback(cut));
+        Assert.Equal(before, (await BoardCases.GetByIdAsync(boardCase.Id))!.UpdatedAt);
+    }
+
+    [Fact]
+    public async Task DecisionDate_RemoveTheDate_KeepsTheDecisionText()
+    {
+        var boardCase = await RegisterCaseWithDecisionAsync(new DateOnly(2026, 12, 3));
+        var cut = RenderDetail(boardCase.Id);
+        OpenDecisionForm(cut);
+
+        cut.Find("#decisionDate").Change("");
+        ClickButton(cut, "Lagre vedtak");
+
+        Assert.Contains("Ikke registrert", cut.FindByTestId("decision-box").TextContent);
+        var stored = await BoardCases.GetByIdAsync(boardCase.Id);
+        Assert.Equal("Fiktivt vedtak.", stored!.Decision);
+        Assert.Null(stored.DecisionDate);
+    }
+
+    [Fact]
+    public async Task DecisionDate_InvalidDate_ShowsNorwegianMessageAndKeepsTheStoredDecision()
+    {
+        var boardCase = await RegisterCaseWithDecisionAsync(new DateOnly(2026, 12, 3));
+        var cut = RenderDetail(boardCase.Id);
+        OpenDecisionForm(cut);
+
+        cut.Find("#decision").Input("Nytt vedtak.");
+        cut.Find("#decisionDate").Change("1999-01-01");
+        ClickButton(cut, "Lagre vedtak");
+
+        Assert.Equal("Vedtaksdatoen må være mellom 01.01.2000 og 31.12.2100.", cut.Find("[role=alert]").TextContent.Replace("Lukk", ""));
+        var stored = await BoardCases.GetByIdAsync(boardCase.Id);
+        Assert.Equal("Fiktivt vedtak.", stored!.Decision);
+        Assert.Equal(new DateOnly(2026, 12, 3), stored.DecisionDate);
+    }
+
+    [Fact]
+    public async Task DecisionDate_DateWithoutDecisionText_IsRejected()
+    {
+        var boardCase = await RegisterAsync();
+        var cut = RenderDetail(boardCase.Id);
+        OpenDecisionForm(cut);
+
+        cut.Find("#decisionDate").Change("2026-12-03");
+        ClickButton(cut, "Registrer vedtak");
+
+        Assert.Contains("Vedtaket må fylles ut", cut.Find("[role=alert]").TextContent);
+        Assert.Null((await BoardCases.GetByIdAsync(boardCase.Id))!.DecisionDate);
+    }
+
+    [Fact]
+    public async Task DecisionDate_RemovingTheDecision_AlsoRemovesTheDate()
+    {
+        var boardCase = await RegisterCaseWithDecisionAsync(new DateOnly(2026, 12, 3));
+        var cut = RenderDetail(boardCase.Id);
+        OpenDecisionForm(cut);
+
+        ClickButton(cut, "Fjern vedtak");
+
+        Assert.Contains("Vedtaket og vedtaksdatoen er fjernet.", Feedback(cut));
+        var stored = await BoardCases.GetByIdAsync(boardCase.Id);
+        Assert.Null(stored!.Decision);
+        Assert.Null(stored.DecisionDate);
     }
 
     // Deletion
 
     [Fact]
-    public async Task Render_Case_ShowsDeleteButtonButNoConfirmationAndDeletesNothing()
+    public async Task Render_Case_ShowsDeleteButtonSeparatelyButNoConfirmationAndDeletesNothing()
     {
         var boardCase = await RegisterAsync();
 
         var cut = RenderDetail(boardCase.Id);
 
         Assert.Empty(cut.FindAll("[role=alertdialog]"));
+        Assert.Contains(cut.FindAll(".danger-zone button"), button => button.TextContent.Trim() == "Slett styresaken …");
+        Assert.DoesNotContain("Slett", cut.FindByTestId("more-menu").TextContent);
         Assert.NotNull(await BoardCases.GetByIdAsync(boardCase.Id));
     }
 
@@ -394,197 +837,5 @@ public class BoardCaseDetailTests : UiTestBase
         ClickButton(cut, "Ja, slett permanent");
 
         cut.WaitForAssertion(() => Assert.Contains("finnes ikke lenger", cut.Find("[role=alert]").TextContent));
-    }
-
-    // Decision date
-
-    private async Task<BoardCase> RegisterCaseWithDecisionAsync(DateOnly? decisionDate)
-    {
-        var boardCase = await RegisterAsync();
-        await BoardCases.RegisterDecisionAsync(boardCase.Id, "Fiktivt vedtak.", decisionDate);
-
-        return boardCase;
-    }
-
-    [Fact]
-    public async Task DecisionDate_Registered_IsShownInNorwegianFormatTogetherWithTheDecisionText()
-    {
-        var boardCase = await RegisterCaseWithDecisionAsync(new DateOnly(2026, 12, 3));
-
-        var cut = RenderDetail(boardCase.Id);
-
-        var box = cut.Find(".decision-box");
-        Assert.Contains("Fiktivt vedtak.", box.TextContent);
-        Assert.Contains("Vedtaksdato:", box.TextContent);
-        Assert.Contains("03.12.2026", box.TextContent);
-        Assert.Equal("2026-12-03", cut.Find("#decisionDate").GetAttribute("value"));
-    }
-
-    [Fact]
-    public async Task DecisionDate_DecisionWithoutDate_ShowsThatTheDateIsNotRegistered()
-    {
-        var boardCase = await RegisterCaseWithDecisionAsync(null);
-
-        var cut = RenderDetail(boardCase.Id);
-
-        Assert.Contains("Ikke registrert", cut.Find(".decision-box").TextContent);
-    }
-
-    [Fact]
-    public async Task DecisionDate_NoDecision_ShowsNoDecisionBox()
-    {
-        var boardCase = await RegisterAsync();
-
-        var cut = RenderDetail(boardCase.Id);
-
-        Assert.Empty(cut.FindAll(".decision-box"));
-        Assert.Contains("Ingen vedtak er registrert.", cut.Markup);
-    }
-
-    [Fact]
-    public async Task DecisionDate_RegisterDecisionWithDate_IsStoredAndShown()
-    {
-        var boardCase = await RegisterAsync();
-        var cut = RenderDetail(boardCase.Id);
-
-        cut.Find("#decision").Input("Fiktivt vedtak.");
-        cut.Find("#decisionDate").Change("2026-12-03");
-        ClickButton(cut, "Registrer vedtak");
-
-        cut.WaitForAssertion(() => Assert.Contains("03.12.2026", cut.Find(".decision-box").TextContent));
-        var stored = await BoardCases.GetByIdAsync(boardCase.Id);
-        Assert.Equal("Fiktivt vedtak.", stored!.Decision);
-        Assert.Equal(new DateOnly(2026, 12, 3), stored.DecisionDate);
-        Assert.Equal(BoardCaseStatus.New, stored.Status);
-    }
-
-    [Fact]
-    public async Task DecisionDate_RegisterDecisionWithoutDate_IsStoredWithNoDate()
-    {
-        var boardCase = await RegisterAsync();
-        var cut = RenderDetail(boardCase.Id);
-
-        cut.Find("#decision").Input("Fiktivt vedtak.");
-        ClickButton(cut, "Registrer vedtak");
-
-        cut.WaitForAssertion(() => Assert.Contains("Vedtaket er lagret.", cut.Find("[role=status]").TextContent));
-        Assert.Null((await BoardCases.GetByIdAsync(boardCase.Id))!.DecisionDate);
-    }
-
-    [Fact]
-    public async Task DecisionDate_ChangeOnlyTheDate_IsStoredAndUpdatedAtChanges()
-    {
-        var boardCase = await RegisterCaseWithDecisionAsync(new DateOnly(2026, 12, 3));
-        var cut = RenderDetail(boardCase.Id);
-        Clock.Advance(TimeSpan.FromHours(3));
-
-        cut.Find("#decisionDate").Change("2026-12-10");
-        ClickButton(cut, "Lagre vedtak");
-
-        cut.WaitForAssertion(() => Assert.Contains("10.12.2026", cut.Find(".decision-box").TextContent));
-        var stored = await BoardCases.GetByIdAsync(boardCase.Id);
-        Assert.Equal("Fiktivt vedtak.", stored!.Decision);
-        Assert.True(stored.UpdatedAt > stored.CreatedAt);
-    }
-
-    [Fact]
-    public async Task DecisionDate_SaveWithoutChanges_KeepsUpdatedAt()
-    {
-        var boardCase = await RegisterCaseWithDecisionAsync(new DateOnly(2026, 12, 3));
-        var before = (await BoardCases.GetByIdAsync(boardCase.Id))!.UpdatedAt;
-        var cut = RenderDetail(boardCase.Id);
-        Clock.Advance(TimeSpan.FromHours(3));
-
-        ClickButton(cut, "Lagre vedtak");
-
-        cut.WaitForAssertion(() => Assert.Contains("Vedtaket er lagret.", cut.Find("[role=status]").TextContent));
-        Assert.Equal(before, (await BoardCases.GetByIdAsync(boardCase.Id))!.UpdatedAt);
-    }
-
-    [Fact]
-    public async Task DecisionDate_RemoveTheDate_KeepsTheDecisionText()
-    {
-        var boardCase = await RegisterCaseWithDecisionAsync(new DateOnly(2026, 12, 3));
-        var cut = RenderDetail(boardCase.Id);
-
-        cut.Find("#decisionDate").Change("");
-        ClickButton(cut, "Lagre vedtak");
-
-        cut.WaitForAssertion(() => Assert.Contains("Ikke registrert", cut.Find(".decision-box").TextContent));
-        var stored = await BoardCases.GetByIdAsync(boardCase.Id);
-        Assert.Equal("Fiktivt vedtak.", stored!.Decision);
-        Assert.Null(stored.DecisionDate);
-    }
-
-    [Fact]
-    public async Task DecisionDate_InvalidDate_ShowsNorwegianMessageAndKeepsTheStoredDecision()
-    {
-        var boardCase = await RegisterCaseWithDecisionAsync(new DateOnly(2026, 12, 3));
-        var cut = RenderDetail(boardCase.Id);
-
-        cut.Find("#decision").Input("Nytt vedtak.");
-        cut.Find("#decisionDate").Change("1999-01-01");
-        ClickButton(cut, "Lagre vedtak");
-
-        cut.WaitForAssertion(() =>
-            Assert.Equal("Vedtaksdatoen må være mellom 01.01.2000 og 31.12.2100.", cut.Find("[role=alert]").TextContent));
-        var stored = await BoardCases.GetByIdAsync(boardCase.Id);
-        Assert.Equal("Fiktivt vedtak.", stored!.Decision);
-        Assert.Equal(new DateOnly(2026, 12, 3), stored.DecisionDate);
-    }
-
-    [Fact]
-    public async Task DecisionDate_DateWithoutDecisionText_IsRejected()
-    {
-        var boardCase = await RegisterAsync();
-        var cut = RenderDetail(boardCase.Id);
-
-        cut.Find("#decisionDate").Change("2026-12-03");
-        ClickButton(cut, "Registrer vedtak");
-
-        cut.WaitForAssertion(() => Assert.Contains("Vedtaket må fylles ut", cut.Find("[role=alert]").TextContent));
-        Assert.Null((await BoardCases.GetByIdAsync(boardCase.Id))!.DecisionDate);
-    }
-
-    [Fact]
-    public async Task DecisionDate_RemovingTheDecision_AlsoRemovesTheDate()
-    {
-        var boardCase = await RegisterCaseWithDecisionAsync(new DateOnly(2026, 12, 3));
-        var cut = RenderDetail(boardCase.Id);
-
-        ClickButton(cut, "Fjern vedtak");
-
-        cut.WaitForAssertion(() => Assert.Contains("Vedtaket og vedtaksdatoen er fjernet.", cut.Find("[role=status]").TextContent));
-        var stored = await BoardCases.GetByIdAsync(boardCase.Id);
-        Assert.Null(stored!.Decision);
-        Assert.Null(stored.DecisionDate);
-        Assert.Equal("", cut.Find("#decisionDate").GetAttribute("value") ?? "");
-    }
-
-    [Fact]
-    public async Task DecisionDate_DecidedStatusWithoutDate_IsAllowed()
-    {
-        var boardCase = await RegisterCaseWithDecisionAsync(null);
-        var cut = RenderDetail(boardCase.Id);
-
-        cut.Find("#newStatus").Change("Decided");
-        ClickButton(cut, "Endre status");
-
-        cut.WaitForAssertion(() => Assert.Contains("Vedtatt", cut.Find(".detail-meta .status-badge").TextContent));
-    }
-
-    // Messages after saving, passed in the address
-
-    [Theory]
-    [InlineData("opprettet", "Styresaken er registrert.")]
-    [InlineData("endret", "Endringene er lagret.")]
-    public async Task Render_StatusInTheAddress_ShowsTheSuccessMessage(string status, string expectedMessage)
-    {
-        var boardCase = await RegisterAsync();
-        Services.GetRequiredService<NavigationManager>().NavigateTo($"/styresaker/{boardCase.Id}?status={status}");
-
-        var cut = RenderDetail(boardCase.Id);
-
-        Assert.Equal(expectedMessage, cut.Find("[role=status]").TextContent);
     }
 }

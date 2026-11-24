@@ -5,8 +5,8 @@
 
 <PageTitle>Styresaker – SameieHub</PageTitle>
 
-<PageHeader Title="Styresaker" Description="Saker som styret behandler, med status og vedtak.">
-    <a class="btn btn-primary" href="/styresaker/ny">Registrer styresak</a>
+<PageHeader Title="Styresaker" Description="Saker som styret skal behandle og eventuelt vedta.">
+    <PrimaryAction><a class="btn btn-primary" href="/styresaker/ny">Ny styresak</a></PrimaryAction>
 </PageHeader>
 
 @if (StatusMessage != null)
@@ -29,106 +29,134 @@ else if (_loadError != null)
 }
 else if (_allCases.Count == 0)
 {
-    <section class="surface-card empty-state">
+    <section class="surface-card empty-state" data-testid="no-cases">
         <h2>Ingen styresaker registrert ennå</h2>
         <p>Registrer den første styresaken for å komme i gang.</p>
-        <a class="btn btn-primary" href="/styresaker/ny">Registrer styresak</a>
+        <a class="btn btn-primary" href="/styresaker/ny">Ny styresak</a>
     </section>
 }
 else
 {
-    <div class="stat-row">
-        <div class="stat-card"><span class="stat-value">@_allCases.Count</span><span class="stat-label">Totalt</span></div>
-        @foreach (var status in BoardCaseText.AllStatuses)
-        {
-            <div class="stat-card">
-                <span class="stat-value">@CountWithStatus(status)</span>
-                <span class="stat-label">@BoardCaseText.StatusText(status)</span>
-            </div>
-        }
-    </div>
-
-    <div class="toolbar">
-        <input type="search" class="form-control" aria-label="Søk i styresaker"
-               placeholder="Søk på saksnummer, tittel eller beskrivelse"
-               @bind="_searchText" @bind:event="oninput" />
-        <select class="form-select" aria-label="Filtrer på status" @bind="_statusValue">
-            <option value="">Alle statuser</option>
-            @foreach (var status in BoardCaseText.AllStatuses)
-            {
-                <option value="@status">@BoardCaseText.StatusText(status)</option>
-            }
-        </select>
-        <select class="form-select" aria-label="Filtrer på prioritet" @bind="_priorityValue">
-            <option value="">Alle prioriteter</option>
-            @foreach (var priority in BoardCaseText.AllPriorities)
-            {
-                <option value="@priority">@BoardCaseText.PriorityText(priority)</option>
-            }
-        </select>
-        <select class="form-select" aria-label="Filtrer på boenhet" @bind="_housingUnitValue">
-            <option value="">Alle boenheter</option>
-            <option value="@WholeCooperativeValue">Hele sameiet (ingen boenhet)</option>
-            @foreach (var unit in _housingUnits)
-            {
-                <option value="@unit.Id">@unit.Address@(unit.IsActive ? "" : " (inaktiv)")</option>
-            }
-        </select>
-        <select class="form-select" aria-label="Sorter" @bind="_sortOrder">
-            @foreach (var order in Enum.GetValues<BoardCaseSortOrder>())
-            {
-                <option value="@order">@BoardCaseText.SortOrderText(order)</option>
-            }
-        </select>
-    </div>
-
     var visibleCases = GetVisibleCases();
+
+    <QuickTabs AriaLabel="Vis styresaker" Tabs="GetTabs()" Selected="@_tab" SelectedChanged="ChooseTab" />
+    <p class="text-muted small" data-testid="tab-explanation">Åpne er alle saker som ikke er avsluttet, også de som er vedtatt.</p>
+
+    <div class="list-search">
+        <label for="case-search" class="visually-hidden">Søk i styresaker</label>
+        <input id="case-search" type="search" class="form-control" data-testid="case-search"
+               placeholder="Søk i tittel, beskrivelse eller saksnummer"
+               @bind="_searchText" @bind:event="oninput" />
+    </div>
+
+    <Disclosure Label="Flere filtre" Hint="Status · Prioritet · Boenhet · Sortering">
+        <div class="filter-grid">
+            <div>
+                <label for="filter-status" class="form-label">Status</label>
+                <select id="filter-status" class="form-select" @bind="StatusValue">
+                    <option value="">Følger valgt visning</option>
+                    @foreach (var status in BoardCaseText.AllStatuses)
+                    {
+                        <option value="@status">@BoardCaseText.StatusText(status)</option>
+                    }
+                    <option value="@AllValue">Alle (også avsluttede)</option>
+                </select>
+            </div>
+            <div>
+                <label for="filter-priority" class="form-label">Prioritet</label>
+                <select id="filter-priority" class="form-select" @bind="_priorityValue">
+                    <option value="">Alle prioriteter</option>
+                    @foreach (var priority in BoardCaseText.AllPriorities)
+                    {
+                        <option value="@priority">@BoardCaseText.PriorityText(priority)</option>
+                    }
+                </select>
+            </div>
+            <div>
+                <label for="filter-unit" class="form-label">Boenhet</label>
+                <select id="filter-unit" class="form-select" @bind="_housingUnitValue">
+                    <option value="">Alle boenheter</option>
+                    <option value="@WholeCooperativeValue">Hele sameiet (ingen boenhet)</option>
+                    @foreach (var unit in _housingUnits)
+                    {
+                        <option value="@unit.Id">@unit.Address@(unit.IsActive ? "" : " (inaktiv)")</option>
+                    }
+                </select>
+            </div>
+            <div>
+                <label for="filter-sort" class="form-label">Sortering</label>
+                <select id="filter-sort" class="form-select" @bind="SortOrder">
+                    @foreach (var order in Enum.GetValues<BoardCaseSortOrder>())
+                    {
+                        <option value="@order">@BoardCaseText.SortOrderText(order)</option>
+                    }
+                </select>
+            </div>
+        </div>
+    </Disclosure>
+
+    <ActiveFilters Filters="GetActiveFilters()" OnRemove="RemoveFilter" OnClearAll="ResetFilters" />
 
     @if (visibleCases.Count == 0)
     {
-        <section class="surface-card empty-state">
+        <section class="surface-card empty-state" data-testid="empty-list">
             <h2>Ingen styresaker funnet</h2>
-            <p>Ingen saker passer med søket og filtrene dine.</p>
+            <p>Sameiet har @_allCases.Count @(_allCases.Count == 1 ? "styresak" : "styresaker") i alt, men ingen passer med valgt visning, søk og filtre.</p>
             <button type="button" class="btn btn-outline-primary" @onclick="ResetFilters">Nullstill søk og filtre</button>
+            @if (_tab == OpenTab && !HasExtraFilters)
+            {
+                <button type="button" class="btn btn-link" @onclick="ShowAll">Vis også avsluttede</button>
+            }
         </section>
     }
     else
     {
-        <p class="summary" role="status">Viser <strong>@visibleCases.Count</strong> av @_allCases.Count @(_allCases.Count == 1 ? "styresak" : "styresaker")</p>
+        <p class="summary" role="status" data-testid="list-summary">Viser <strong>@visibleCases.Count</strong> av @_allCases.Count @(_allCases.Count == 1 ? "styresak" : "styresaker")</p>
 
-        <div class="data-table-card table-responsive">
-            <table class="table data-table">
-                <caption class="visually-hidden">Registrerte styresaker</caption>
+        <div class="data-table-card">
+            <table class="table data-table table-cards" data-testid="case-table">
+                <caption class="visually-hidden">Styresaker</caption>
                 <thead>
                     <tr>
-                        <th scope="col" class="col-id">Sak</th>
-                        <th scope="col">Tittel</th>
+                        <th scope="col">Sak</th>
+                        <th scope="col">Møtedato</th>
                         <th scope="col">Status</th>
-                        <th scope="col" class="d-none d-md-table-cell">Prioritet</th>
-                        <th scope="col" class="d-none d-lg-table-cell">Opprettet</th>
-                        <th scope="col" class="d-none d-lg-table-cell">Sist oppdatert</th>
-                        <th scope="col" class="col-actions"><span class="visually-hidden">Handlinger</span></th>
                     </tr>
                 </thead>
                 <tbody>
                     @foreach (var boardCase in visibleCases)
                     {
-                        <tr>
-                            <td class="col-id">#@boardCase.Id</td>
-                            <td>
-                                <a class="unit-link" href="/styresaker/@boardCase.Id">@boardCase.Title</a>
-                                <div class="unit-sub">@HousingUnitText(boardCase)</div>
+                        <tr data-testid="case-row" data-case-id="@boardCase.Id">
+                            <td data-label="Sak">
+                                <div>
+                                    <a class="unit-link" data-testid="case-title" href="/styresaker/@boardCase.Id">@boardCase.Title</a>
+                                    @if (boardCase.Priority == BoardCasePriority.High)
+                                    {
+                                        <span class="status-badge priority-high ms-1" data-testid="high-priority">Høy prioritet</span>
+                                    }
+                                    <div class="unit-sub" data-testid="case-scope">
+                                        @if (boardCase.HousingUnitId is { } unitId)
+                                        {
+                                            <a href="/boenheter/@unitId">@HousingUnitText(unitId)</a>
+                                        }
+                                        else
+                                        {
+                                            <span>Hele sameiet</span>
+                                        }
+                                    </div>
+                                </div>
                             </td>
-                            <td><BoardCaseStatusBadge Status="boardCase.Status" /></td>
-                            <td class="d-none d-md-table-cell"><BoardCasePriorityBadge Priority="boardCase.Priority" /></td>
-                            <td class="d-none d-lg-table-cell">@NorwegianDateFormat.DateTime(boardCase.CreatedAt)</td>
-                            <td class="d-none d-lg-table-cell">@NorwegianDateFormat.DateTime(boardCase.UpdatedAt)</td>
-                            <td class="col-actions">
-                                <a class="btn btn-outline-primary btn-sm" href="/styresaker/@boardCase.Id"
-                                   aria-label="Åpne sak @boardCase.Id">Åpne</a>
-                                <a class="btn btn-link btn-sm" href="/styresaker/@boardCase.Id/rediger"
-                                   aria-label="Rediger sak @boardCase.Id">Rediger</a>
+                            <td data-label="Møtedato" data-testid="case-meeting-date">
+                                @if (boardCase.MeetingDate is { } meetingDate)
+                                {
+                                    @NorwegianDateFormat.Date(meetingDate)
+                                }
+                                else
+                                {
+                                    <span class="text-muted">Ingen møtedato</span>
+                                }
                             </td>
+                            <td data-label="Status"><BoardCaseStatusBadge Status="boardCase.Status" /></td>
                         </tr>
                     }
                 </tbody>
@@ -138,15 +166,20 @@ else
 }
 
 @code {
+    private const string OpenTab = "open";
+    private const string DecidedTab = "decided";
+    private const string ClosedTab = "closed";
+    private const string AllValue = "all";
     private const string WholeCooperativeValue = "none";
 
     private IReadOnlyList<BoardCase> _allCases = [];
     private IReadOnlyList<HousingUnit> _housingUnits = [];
+    private string _tab = OpenTab;
     private string _searchText = string.Empty;
     private string _statusValue = string.Empty;
     private string _priorityValue = string.Empty;
     private string _housingUnitValue = string.Empty;
-    private BoardCaseSortOrder _sortOrder = BoardCaseSortOrder.Newest;
+    private BoardCaseSortOrder? _chosenSortOrder;
     private bool _isLoading = true;
     private string? _loadError;
 
@@ -154,6 +187,27 @@ else
     public string? Status { get; set; }
 
     private string? StatusMessage => Status == "slettet" ? "Styresaken er slettet permanent." : null;
+
+    /// <summary>Choosing a specific status replaces the quick choice, so the two can never contradict each other.</summary>
+    private string StatusValue
+    {
+        get => _statusValue;
+        set
+        {
+            _statusValue = value;
+            _tab = value == string.Empty ? OpenTab : string.Empty;
+        }
+    }
+
+    /// <summary>Open cases are shown by meeting date, the nearest first. Other views show the most recently updated case first.</summary>
+    private BoardCaseSortOrder SortOrder
+    {
+        get => _chosenSortOrder ?? (_tab == OpenTab ? BoardCaseSortOrder.MeetingDate : BoardCaseSortOrder.RecentlyUpdated);
+        set => _chosenSortOrder = value;
+    }
+
+    private bool HasExtraFilters =>
+        _searchText.Trim().Length > 0 || _priorityValue != string.Empty || _housingUnitValue != string.Empty;
 
     protected override async Task OnInitializedAsync()
     {
@@ -183,9 +237,20 @@ else
         }
     }
 
-    private int CountWithStatus(BoardCaseStatus status)
+    private List<QuickTab> GetTabs()
     {
-        return _allCases.Count(boardCase => boardCase.Status == status);
+        return
+        [
+            new QuickTab(OpenTab, "Åpne", _allCases.Count(boardCase => boardCase.Status != BoardCaseStatus.Closed)),
+            new QuickTab(DecidedTab, "Vedtatt", _allCases.Count(boardCase => boardCase.Status == BoardCaseStatus.Decided)),
+            new QuickTab(ClosedTab, "Avsluttet", _allCases.Count(boardCase => boardCase.Status == BoardCaseStatus.Closed))
+        ];
+    }
+
+    private void ChooseTab(string key)
+    {
+        _tab = key;
+        _statusValue = string.Empty;
     }
 
     private List<BoardCase> GetVisibleCases()
@@ -193,32 +258,88 @@ else
         var criteria = new BoardCaseFilterCriteria
         {
             SearchText = _searchText,
-            Status = Enum.TryParse<BoardCaseStatus>(_statusValue, out var status) ? status : null,
+            Status = _tab switch
+            {
+                DecidedTab => BoardCaseStatus.Decided,
+                ClosedTab => BoardCaseStatus.Closed,
+                _ => Enum.TryParse<BoardCaseStatus>(_statusValue, out var status) ? status : null
+            },
             Priority = Enum.TryParse<BoardCasePriority>(_priorityValue, out var priority) ? priority : null,
             HousingUnitId = int.TryParse(_housingUnitValue, out var housingUnitId) ? housingUnitId : null,
             WholeCooperativeOnly = _housingUnitValue == WholeCooperativeValue
         };
 
-        return BoardCaseSorting.Sort(BoardCaseFilter.Apply(_allCases, criteria), _sortOrder);
-    }
+        var cases = BoardCaseFilter.Apply(_allCases, criteria);
 
-    private string HousingUnitText(BoardCase boardCase)
-    {
-        if (boardCase.HousingUnitId == null)
+        if (_tab == OpenTab)
         {
-            return "Hele sameiet";
+            cases = cases.Where(boardCase => boardCase.Status != BoardCaseStatus.Closed).ToList();
         }
 
-        var unit = _housingUnits.FirstOrDefault(existing => existing.Id == boardCase.HousingUnitId);
+        return BoardCaseSorting.Sort(cases, SortOrder);
+    }
 
-        return unit == null ? $"Boenhet {boardCase.HousingUnitId}" : unit.Address;
+    private List<ActiveFilter> GetActiveFilters()
+    {
+        var filters = new List<ActiveFilter>();
+
+        if (_searchText.Trim().Length > 0)
+        {
+            filters.Add(new ActiveFilter("search", $"Søk: «{_searchText.Trim()}»"));
+        }
+
+        if (_statusValue != string.Empty)
+        {
+            var text = _statusValue == AllValue ? "Alle" : BoardCaseText.StatusText(Enum.Parse<BoardCaseStatus>(_statusValue));
+            filters.Add(new ActiveFilter("status", $"Status: {text}"));
+        }
+
+        if (Enum.TryParse<BoardCasePriority>(_priorityValue, out var priority))
+        {
+            filters.Add(new ActiveFilter("priority", $"Prioritet: {BoardCaseText.PriorityText(priority)}"));
+        }
+
+        if (_housingUnitValue == WholeCooperativeValue)
+        {
+            filters.Add(new ActiveFilter("unit", "Boenhet: Hele sameiet"));
+        }
+        else if (int.TryParse(_housingUnitValue, out var housingUnitId))
+        {
+            filters.Add(new ActiveFilter("unit", $"Boenhet: {HousingUnitText(housingUnitId)}"));
+        }
+
+        return filters;
+    }
+
+    private void RemoveFilter(string key)
+    {
+        switch (key)
+        {
+            case "search": _searchText = string.Empty; break;
+            case "status": StatusValue = string.Empty; break;
+            case "priority": _priorityValue = string.Empty; break;
+            case "unit": _housingUnitValue = string.Empty; break;
+        }
     }
 
     private void ResetFilters()
     {
+        _tab = OpenTab;
         _searchText = string.Empty;
         _statusValue = string.Empty;
         _priorityValue = string.Empty;
         _housingUnitValue = string.Empty;
+    }
+
+    private void ShowAll()
+    {
+        StatusValue = AllValue;
+    }
+
+    private string HousingUnitText(int unitId)
+    {
+        var unit = _housingUnits.FirstOrDefault(existing => existing.Id == unitId);
+
+        return unit == null ? $"Boenhet {unitId}" : unit.Address;
     }
 }
