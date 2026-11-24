@@ -4,16 +4,26 @@
         {
             <a class="back-link" href="@BackHref">← @BackText</a>
         }
-        <h1>@Title</h1>
+        <h1 data-testid="page-title">@Title</h1>
         @if (Description != null)
         {
             <p>@Description</p>
         }
     </div>
 
-    @if (ChildContent != null)
+    @if (ChildContent != null || MoreActions != null || PrimaryAction != null)
     {
-        <div class="page-actions">@ChildContent</div>
+        <div class="page-actions" data-testid="page-actions">
+            @ChildContent
+            @if (MoreActions != null)
+            {
+                <MoreMenu>@MoreActions</MoreMenu>
+            }
+            @if (PrimaryAction != null)
+            {
+                <span class="page-primary-action" data-testid="primary-action">@PrimaryAction</span>
+            }
+        </div>
     }
 </header>
 
@@ -30,6 +40,15 @@
     [Parameter]
     public string BackText { get; set; } = "Tilbake";
 
+    /// <summary>The actions of the page as they were before the redesign. New pages use <see cref="PrimaryAction"/> and <see cref="MoreActions"/>.</summary>
     [Parameter]
     public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>The one filled button of the page, on the right.</summary>
+    [Parameter]
+    public RenderFragment? PrimaryAction { get; set; }
+
+    /// <summary>Rarely used actions, shown behind «Flere handlinger».</summary>
+    [Parameter]
+    public RenderFragment? MoreActions { get; set; }
 }

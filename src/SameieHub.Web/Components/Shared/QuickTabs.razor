@@ -1,0 +1,43 @@
+@* A few ready-made choices above a list (for example Åpne, Forfalte, Fullførte), with a count. Without addresses they are buttons that
+   filter the list. With addresses they are links to sibling pages, and the selected one is marked as the current page. *@
+<nav class="quick-tabs-nav" aria-label="@AriaLabel">
+    <ul class="quick-tabs">
+        @foreach (var tab in Tabs)
+        {
+            var selected = tab.Key == Selected;
+            <li>
+                @if (tab.Href != null)
+                {
+                    <a class="quick-tab @(selected ? "is-selected" : "")" href="@tab.Href" aria-current="@(selected ? "page" : null)">@Text(tab)</a>
+                }
+                else
+                {
+                    <button type="button" class="quick-tab @(selected ? "is-selected" : "")" aria-pressed="@(selected ? "true" : "false")"
+                            @onclick="() => Choose(tab)">@Text(tab)</button>
+                }
+            </li>
+        }
+    </ul>
+</nav>
+
+@code {
+    [Parameter]
+    public string AriaLabel { get; set; } = "Velg visning";
+
+    [Parameter]
+    public IReadOnlyList<QuickTab> Tabs { get; set; } = [];
+
+    [Parameter]
+    public string? Selected { get; set; }
+
+    [Parameter]
+    public EventCallback<string> SelectedChanged { get; set; }
+
+    private static string Text(QuickTab tab) => tab.Count is { } count ? $"{tab.Text} {count}" : tab.Text;
+
+    private async Task Choose(QuickTab tab)
+    {
+        Selected = tab.Key;
+        await SelectedChanged.InvokeAsync(tab.Key);
+    }
+}

@@ -1,0 +1,28 @@
+@* The filters that are switched on in a list, so a person never forgets that the list is filtered. Shows nothing when no filter is on. *@
+@if (Filters.Count > 0)
+{
+    <div class="active-filters" data-testid="active-filters" role="group" aria-label="Aktive filtre">
+        @foreach (var filter in Filters)
+        {
+            <span class="filter-chip">
+                <span>@filter.Text</span>
+                <button type="button" class="filter-chip-remove" aria-label="Fjern filteret @filter.Text" @onclick="() => OnRemove.InvokeAsync(filter.Key)">×</button>
+            </span>
+        }
+        @if (Filters.Count > 1)
+        {
+            <button type="button" class="btn btn-link btn-sm" @onclick="OnClearAll">Fjern alle filtre</button>
+        }
+    </div>
+}
+
+@code {
+    [Parameter]
+    public IReadOnlyList<ActiveFilter> Filters { get; set; } = [];
+
+    [Parameter]
+    public EventCallback<string> OnRemove { get; set; }
+
+    [Parameter]
+    public EventCallback OnClearAll { get; set; }
+}

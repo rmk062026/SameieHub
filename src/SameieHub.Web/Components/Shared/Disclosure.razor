@@ -1,0 +1,51 @@
+@* Optional details that start closed. The summary says what is inside, so nothing is hidden without a hint.
+   Anything inside that needs attention (for example a field with an error) must set ForceOpen, and it then stays open.
+   Opening and closing by the person is done by the browser itself. Blazor only sets the attribute when its value changes, so a
+   re-render of the page never closes a disclosure the person has opened. *@
+<details class="disclosure" open="@_open">
+    <summary>
+        <span class="disclosure-label">@Label</span>
+        @if (!string.IsNullOrWhiteSpace(Hint))
+        {
+            <span class="disclosure-hint">@Hint</span>
+        }
+    </summary>
+    <div class="disclosure-body">
+        @ChildContent
+    </div>
+</details>
+
+@code {
+    private bool _open;
+
+    [Parameter, EditorRequired]
+    public string Label { get; set; } = string.Empty;
+
+    /// <summary>A short list of what is inside, for example "Kategori · Prioritet · Merknader".</summary>
+    [Parameter]
+    public string? Hint { get; set; }
+
+    /// <summary>Starts open.</summary>
+    [Parameter]
+    public bool Open { get; set; }
+
+    /// <summary>Opens it, for example because a field inside has an error. It is not closed again when this becomes false.</summary>
+    [Parameter]
+    public bool ForceOpen { get; set; }
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    protected override void OnInitialized()
+    {
+        _open = Open;
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (ForceOpen)
+        {
+            _open = true;
+        }
+    }
+}

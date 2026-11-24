@@ -1,0 +1,16 @@
+@* Rarely used actions behind one summary. It is the browser's own details element, so Enter and Space open it and nothing needs scripts.
+   Irreversible actions (for example delete) may be placed inside, but must still ask for confirmation. *@
+<details class="more-menu" data-testid="more-menu">
+    <summary class="btn btn-outline-secondary">@Label</summary>
+    <div class="more-menu-items" role="group" aria-label="@Label">
+        @ChildContent
+    </div>
+</details>
+
+@code {
+    [Parameter]
+    public string Label { get; set; } = "Flere handlinger";
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+}

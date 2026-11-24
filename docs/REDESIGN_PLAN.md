@@ -1,10 +1,39 @@
 # Plan for forenkling av brukeropplevelsen (M5D)
 
-Dette er en **analyse og designplan**. Ingenting i programmet er endret: ikke grensesnittet, ikke domenet og ikke databasen. Planen skal gjennomgås og godkjennes før noe bygges.
+Dette er en **analyse og designplan**. Planen er gjennomgått og godkjent med presiseringene i [avsnitt 0](#0-godkjente-designvalg-og-status). R0 (felles byggeklosser) er laget; ingen eksisterende side er endret, og domenet og databasen er urørt.
 
 Målet er at et vanlig styremedlem uten IT-bakgrunn skal kunne bruke SameieHub uten opplæring: se hva som må gjøres nå, vite hvor ting registreres, og finne informasjonen igjen. All viktig funksjonalitet beholdes. Møteadministrasjon er **ikke** en del av planen; den er reservert for eierens egen utvikling, og planen sier bare hvor den bør få plass.
 
 Planen bygger på [USABILITY_REVIEW.md](USABILITY_REVIEW.md) (funnene `F-xx`), [UI_DESIGN.md](UI_DESIGN.md), [REQUIREMENTS.md](REQUIREMENTS.md) og [ARCHITECTURE.md](ARCHITECTURE.md), på gjennomgang av alle Razor-sider, og på en ny måling i nettleser mot demodata (kopi av databasen; ingen data er endret).
+
+## 0. Godkjente designvalg og status
+
+Eieren har godkjent planen med disse valgene (svarer på spørsmålene i avsnitt 11):
+
+| # | Valg |
+|---|---|
+| 1 | Menypunktet «Dashboard» heter **«Oversikt»**. |
+| 2 | **Hamburgermenyen beholdes** på mobil (ingen fast tabellinje). |
+| 3 | Oppgaver kan **fullføres direkte fra listen**, med tydelig bekreftelse og «Angre». |
+| 4 | **Kategori** beholdes og ligger under «Flere valg». |
+| 5 | **Prioritet** beholdes; «Høy» skal vises tydelig. |
+| 6 | **Ingen bygningsmodell** og ingen flere boenheter per styresak. |
+| 7 | **Ikke utled et bekreftet styremøte** fra møtedatoen på en styresak. Oversikt bruker **«Kommende saker med møtedato»** i stedet for «Neste styremøte» frem til møteadministrasjon finnes. |
+| 8 | Forskjellen på styresak og oppgave forklares enkelt og likt overalt (avsnitt 4.1). |
+| 9 | Utskrift venter til møteadministrasjon finnes. |
+| 10 | Rekkefølge: **R0 → R2 → R1 → R3 → R4 → R5 → R6 → R7**. |
+
+**Regler som gjelder alle milepæler:**
+
+- Nødvendige lenker skjules ikke. Opprettes en oppgave fra en styresak, er den koblede styresaken alltid synlig, selv om andre valgfrie felt ligger under «Flere valg».
+- Forhåndsutfylling er et redigerbart forslag, ikke en forretningsregel.
+- Feil, advarsler og nødvendig informasjon skjules aldri. Et felt med feil åpner «Flere valg» automatisk.
+- Sletting er tydelig adskilt og krever bekreftelse.
+- Møteadministrasjon er ikke en del av redesignet.
+
+**Justert plan:** «Neste styremøte» (avsnitt 3, 5.2 og R1) leses som **«Kommende saker med møtedato»**: åpne saker med møtedato, sortert på dato, uten å påstå at et møte er bekreftet.
+
+**Status:** R0 ferdig (se avsnitt 9b). R2 er neste og er ikke startet.
 
 ## 1. Kort oppsummering
 
@@ -396,8 +425,8 @@ Hver milepæl er avgrenset, kan godkjennes og rulles tilbake for seg, og avslutt
 
 | Milepæl | Innhold | Hovedfiler | Type | Dekker |
 |---|---|---|---|---|
-| **R0 Grunnlag** | Felles komponenter og stil: sidehode med én hovedhandling og «Flere handlinger»-meny, «Flere valg»-visning (`<details>` med tastaturstøtte), merker for aktive filtre, `data-testid` på nøkkelelementer, UI-hjelpere i testene (`FindRowWithText`, `FindFieldByLabel`). Ingen synlig endring på sidene ennå. | `Components/Shared`, `app.css`, `UiTestBase` | UI | Reduserer skjørhet før resten |
-| **R1 Oversikt** | Ny forside: «Må gjøres nå», «Neste styremøte», tre tall, elbillinglinje, «+ Ny». | `Pages/Dashboard.razor`, `DashboardChargingSection` | UI | F-09, F-17, F-22 |
+| **R0 Grunnlag** (ferdig) | Felles komponenter og stil: sidehode med én hovedhandling og «Flere handlinger»-meny, «Flere valg»-visning (`<details>` med tastaturstøtte), merker for aktive filtre, hurtigfaner, tilbakemelding med «Angre», kortliste på mobil, `data-testid` og UI-hjelpere i testene. Ingen synlig endring på sidene. | `Components/Shared`, `app.css`, `Tests/Web/UiTestHelpers.cs` | UI | Reduserer skjørhet før resten |
+| **R1 Oversikt** | Ny forside: «Må gjøres nå», «Kommende saker med møtedato», tre tall, elbillinglinje, «+ Ny». | `Pages/Dashboard.razor`, `DashboardChargingSection` | UI | F-09, F-17, F-22 |
 | **R2 Oppgaver** | Hurtigfaner, søk, «Flere filtre», radene som lenker, direkte fullføring, kortliste på mobil. Oppgavedetalj: hovedknapp i overskrift, bekreftelse ved knappen, «Detaljer». | `TaskItems/*` | UI | F-05, F-06, F-07 |
 | **R3 Styresaker** | Liste (møtedato, faner), detalj (overskriftslinje, vedtak, oppgaver, «Detaljer», adskilt slett, «x av y»). | `BoardCases/*` | UI | F-03, F-04 |
 | **R4 Skjemaer og veiledning** | «Gjelder», «Flere valg», veiledning om styresak/oppgave, forhåndsutfylling fra sak/boenhet. Boenhetsskjema og detalj (F-12, F-13, F-14, F-15). | `*Form.razor`, `HousingUnits/*` | UI | Hovedproblemet om styresak/oppgave |
@@ -405,7 +434,25 @@ Hver milepæl er avgrenset, kan godkjennes og rulles tilbake for seg, og avslutt
 | **R6 Navigasjon og mobil** | Menyrekkefølge og navn, «+ Ny»-valg, hopp-lenke, trykkflater, kontroll av alle sider på 375 px. (Fast nedre tabellinje bare hvis eieren velger det.) | `Layout/*`, `app.css` | UI | F-31 |
 | **R7 Innstillinger og sluttkontroll** | «Gjenopprett» lukket som standard, helhetlig kontroll mot tilgjengelighet, språk og konsistens, oppdatering av `UI_DESIGN.md`. | `Pages/Settings/*`, docs | UI | – |
 
-**Anbefalt rekkefølge:** R0 → R2 → R1 → R3 → R4 → R5 → R6 → R7. Oppgaver først fordi det er den mest brukte og den med flest funn (F-05/06/07). R1 etter R2 slik at Oversikt kan lenke til de nye listene.
+**Godkjent rekkefølge:** R0 → R2 → R1 → R3 → R4 → R5 → R6 → R7. Oppgaver først fordi det er den mest brukte og den med flest funn (F-05/06/07). R1 etter R2 slik at Oversikt kan lenke til de nye listene.
+
+## 9b. Felles byggeklosser (R0) og hvordan R1–R7 bruker dem
+
+Byggeklossene ligger i `src/SameieHub.Web/Components/Shared`. De er små, bruker `<details>`, Bootstrap og eksisterende CSS-variabler (`--sh-*`), og trenger ingen skript eller nye pakker. Ingen side bruker dem ennå, bortsett fra at `PageHeader` er utvidet bakoverkompatibelt.
+
+| Komponent | Hva den gjør | Brukes i |
+|---|---|---|
+| `PageHeader` (utvidet) | Tittel, én hovedhandling (`PrimaryAction`) og `MoreActions` bak «Flere handlinger». Gammel bruk (`ChildContent`) virker som før. | Alle sider, R2–R7 |
+| `MoreMenu` | «Flere handlinger» som `<details>`; tastaturbart. Lukkes ikke ved klikk utenfor. | Detaljsider (rediger, slett adskilt) |
+| `Disclosure` | «Flere valg» som starter lukket, med en kort oppsummering av innholdet. `ForceOpen` åpner den når noe inni trenger oppmerksomhet (feil). | Skjemaer (R4), detaljsider |
+| `ActiveFilters` | Merker for aktive filtre, fjern ett eller alle. Vises ikke uten filtre. | Lister (R2, R3) |
+| `QuickTabs` | Hurtigfaner med antall, som knapper (`aria-pressed`) eller lenker (`aria-current`). | Oppgaver, Styresaker, Elbillading (R5) |
+| `ActionFeedback` | Bekreftelse (`role=status`) med valgfri «Angre», eller feil (`role=alert`) som ikke fjernes av seg selv. | Direkte fullføring (R2) |
+| `.table-cards` (CSS) | Tabellrader blir kort på smal skjerm; cellene trenger `data-label`. | Lister på mobil |
+
+**Testgrunnlag:** `data-testid` på sidetittel, handlingsområde, hovedhandling og de nye komponentene, og hjelpere i `UiTestHelpers` (`FindByTestId`, `FindRowContaining`, `FindFieldByLabel`, `FindButton`, `ClickButton`). Eksisterende tester er ikke erstattet; hver side får nye velgere når den bygges om. Byggeklossene er testet i `UiBuildingBlocksTests`.
+
+**Kjente begrensninger:** `Disclosure` husker at personen har åpnet den fordi Blazor bare setter `open` når verdien endres (kontrollert i nettleser); `MoreMenu` lukkes ikke av Escape eller klikk utenfor; `.table-cards` krever `data-label` på hver celle.
 
 ## 10. Risiko for regresjoner og hvordan de reduseres
 
@@ -422,7 +469,9 @@ Hver milepæl er avgrenset, kan godkjennes og rulles tilbake for seg, og avslutt
 
 Domenekode, repositories og migreringer berøres ikke, så risikoen for dataregresjoner er liten.
 
-## 11. Designvalg som krever avklaring fra eieren
+## 11. Designvalg som krevde avklaring fra eieren
+
+Svarene står i [avsnitt 0](#0-godkjente-designvalg-og-status). Spørsmålene er beholdt som historikk.
 
 1. **Menynavn:** «Oversikt» i stedet for «Dashboard», OK? Og skal «Sikkerhetskopi» bli «Innstillinger» først når det finnes flere valg?
 2. **Mobil navigasjon:** beholde hamburger-menyen (anbefalt, minst inngrep) eller innføre fast tabellinje nederst?

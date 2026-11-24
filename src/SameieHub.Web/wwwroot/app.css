@@ -651,3 +651,255 @@ a:focus-visible,
         font-size: 1rem;
     }
 }
+
+/* Building blocks for the redesign (R0). They are not used on any page yet; see docs/REDESIGN_PLAN.md. */
+
+.page-primary-action {
+    display: inline-flex;
+}
+
+/* More actions: the browser's own details element, so it works with the keyboard without scripts. */
+.more-menu {
+    position: relative;
+}
+
+    .more-menu > summary {
+        list-style: none;
+        cursor: pointer;
+    }
+
+        .more-menu > summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .more-menu > summary:focus-visible {
+            box-shadow: var(--sh-focus);
+        }
+
+@media (max-width: 575.98px) {
+    .more-menu .more-menu-items {
+        right: auto;
+        left: 0;
+        min-width: 12rem;
+        max-width: calc(100vw - 2rem);
+    }
+}
+
+.more-menu-items {
+    position: absolute;
+    right: 0;
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    min-width: 15rem;
+    margin-top: 0.25rem;
+    padding: 0.5rem;
+    background: var(--sh-surface);
+    border: 1px solid var(--sh-border);
+    border-radius: var(--sh-radius);
+    box-shadow: 0 0.5rem 1.5rem rgba(23, 35, 47, 0.15);
+}
+
+    .more-menu-items > a,
+    .more-menu-items > button {
+        padding: 0.5rem 0.75rem;
+        text-align: left;
+        text-decoration: none;
+        color: var(--sh-text);
+        background: none;
+        border: 0;
+        border-radius: 0.35rem;
+    }
+
+        .more-menu-items > a:hover,
+        .more-menu-items > button:hover {
+            background: var(--sh-bg);
+        }
+
+        .more-menu-items > .text-danger {
+            color: var(--sh-danger);
+        }
+
+/* Optional details that start closed. */
+.disclosure {
+    border-top: 1px solid var(--sh-border);
+    border-bottom: 1px solid var(--sh-border);
+    margin: 1rem 0;
+}
+
+    .disclosure > summary {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 0.25rem 0.75rem;
+        padding: 0.75rem 0.25rem;
+        cursor: pointer;
+    }
+
+        .disclosure > summary:focus-visible {
+            box-shadow: var(--sh-focus);
+        }
+
+.disclosure-label {
+    font-weight: 600;
+}
+
+.disclosure-hint {
+    color: var(--sh-muted);
+    font-size: 0.9rem;
+}
+
+.disclosure-body {
+    padding: 0.25rem 0.25rem 1rem;
+}
+
+/* Active filters of a list */
+.active-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0.5rem 0 1rem;
+}
+
+.filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.2rem 0.4rem 0.2rem 0.75rem;
+    background: #e4eef6;
+    border: 1px solid #c4d7e8;
+    border-radius: 999px;
+    font-size: 0.9rem;
+}
+
+.filter-chip-remove {
+    width: 1.75rem;
+    height: 1.75rem;
+    line-height: 1;
+    color: var(--sh-primary-dark);
+    background: none;
+    border: 0;
+    border-radius: 50%;
+}
+
+    .filter-chip-remove:hover {
+        background: #c4d7e8;
+    }
+
+    .filter-chip-remove:focus-visible {
+        box-shadow: var(--sh-focus);
+    }
+
+/* Ready-made choices above a list */
+.quick-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin: 0 0 1rem;
+    padding: 0;
+    list-style: none;
+}
+
+.quick-tab {
+    display: inline-block;
+    min-height: 2.5rem;
+    padding: 0.4rem 0.9rem;
+    color: var(--sh-text);
+    text-decoration: none;
+    background: var(--sh-surface);
+    border: 1px solid var(--sh-border);
+    border-radius: 999px;
+}
+
+    .quick-tab:hover {
+        border-color: var(--sh-primary);
+    }
+
+    .quick-tab:focus-visible {
+        box-shadow: var(--sh-focus);
+    }
+
+    .quick-tab.is-selected {
+        color: #fff;
+        background: var(--sh-primary);
+        border-color: var(--sh-primary);
+    }
+
+/* The answer to an action, shown where it was done */
+.action-feedback {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem 0.75rem;
+    padding: 0.6rem 0.9rem;
+    border: 1px solid;
+    border-radius: var(--sh-radius);
+}
+
+    .action-feedback.is-success {
+        background: #e8f5ee;
+        border-color: #b7dcc7;
+    }
+
+    .action-feedback.is-error {
+        background: #fdecea;
+        border-color: #f1b8b3;
+    }
+
+.action-feedback-text {
+    flex: 1 1 12rem;
+}
+
+/*
+   Lists that become cards on a narrow screen without sideways scrolling. Put the class table-cards on the table and a data-label on every
+   cell (the label is shown in front of the value on small screens). The first cell is the title of the card.
+*/
+@media (max-width: 575.98px) {
+    .table-cards thead {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+    }
+
+    .table-cards tr {
+        display: block;
+        margin-bottom: 0.75rem;
+        padding: 0.5rem 0.75rem;
+        background: var(--sh-surface);
+        border: 1px solid var(--sh-border);
+        border-radius: var(--sh-radius);
+    }
+
+    .table-cards td {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 0.25rem 0;
+        border: 0;
+    }
+
+        .table-cards td::before {
+            content: attr(data-label);
+            color: var(--sh-muted);
+            font-size: 0.85rem;
+        }
+
+        .table-cards td:first-child {
+            font-weight: 600;
+        }
+
+            .table-cards td:first-child::before {
+                content: none;
+            }
+
+    .quick-tab,
+    .more-menu > summary,
+    .filter-chip-remove {
+        min-height: 2.75rem;
+        min-width: 2.75rem;
+    }
+}

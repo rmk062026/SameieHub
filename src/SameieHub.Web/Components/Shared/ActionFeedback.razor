@@ -1,0 +1,35 @@
+@* The answer to an action, shown next to where it was done. A success is a polite status and can offer an undo action. An error is an alert
+   and is never removed by itself. *@
+@if (!string.IsNullOrEmpty(Message))
+{
+    <div class="action-feedback @(Kind == FeedbackKind.Error ? "is-error" : "is-success")" data-testid="action-feedback"
+         role="@(Kind == FeedbackKind.Error ? "alert" : "status")">
+        <span class="action-feedback-text">@Message</span>
+        @if (!string.IsNullOrEmpty(ActionText))
+        {
+            <button type="button" class="btn btn-link btn-sm" data-testid="feedback-action" @onclick="OnAction">@ActionText</button>
+        }
+        @if (OnDismiss.HasDelegate)
+        {
+            <button type="button" class="btn btn-link btn-sm" data-testid="feedback-dismiss" aria-label="Lukk meldingen" @onclick="OnDismiss">Lukk</button>
+        }
+    </div>
+}
+
+@code {
+    [Parameter]
+    public string? Message { get; set; }
+
+    [Parameter]
+    public FeedbackKind Kind { get; set; }
+
+    /// <summary>The text of an optional action, for example "Angre".</summary>
+    [Parameter]
+    public string? ActionText { get; set; }
+
+    [Parameter]
+    public EventCallback OnAction { get; set; }
+
+    [Parameter]
+    public EventCallback OnDismiss { get; set; }
+}

@@ -75,3 +75,9 @@ Se [ARCHITECTURE.md](ARCHITECTURE.md), «Sikkerhetskontroll av gjenopprettingen 
 - **Manuell nettlesertest (isolert kopi av data):** sikkerhetskopi leveres som en nedlasting (98 304 byte, riktig navn) og den midlertidige mappen er tom; ekte filvalg (filen settes i filfeltet via nettleserens `DataTransfer`, siden operativsystemets filvelger ikke kan styres); kontroll viser 9 mot 8 boenheter; bekreftelse og ventende gjenoppretting; omstart gjennomførte den (8 boenheter igjen, den gamle databasen med sin `-wal` tatt vare på); beskjeden på forsiden og skjuling; tekstfil og feil filtype avvist; mobil (375 px uten sideveis rulling).
 - `UiTestBase` registrerer en `FakeDatabaseRestore`, siden forsiden nå viser resultatet av en gjenoppretting.
 - **Observert én gang:** en eldre M5A-test (`FindProblems_BrokenReference_IsReported`) feilet en enkelt gang under høy last uten at årsaken ble funnet; den bestod i alle senere kjøringer. Sidetestene bruker nå en lengre ventetid (15 s) fordi motorene kopierer ekte filer.
+
+## M5D-R0: byggeklosser og testhjelpere
+
+- `Web/UiBuildingBlocksTests` tester de nye delte komponentene (`PageHeader`, `MoreMenu`, `Disclosure`, `ActiveFilters`, `QuickTabs`, `ActionFeedback`) og hjelperne i `Web/UiTestHelpers.cs` (`FindByTestId`, `FindRowContaining`, `FindFieldByLabel`, `FindButton`, `ClickButton`).
+- Nye UI-tester bør velge elementer med `data-testid`, etikett eller rolle i stedet for CSS-klasser og eksakt ordlyd. Eksisterende tester er uendret og flyttes over side for side i R2–R7; ingen tester fjernes.
+- Manuelt kontrollert i nettleser (PC og 375 px): `Disclosure` forblir åpen etter ny tegning, «Flere handlinger» holder seg innenfor skjermen på mobil, og `.table-cards` viser rader som kort.
