@@ -33,7 +33,7 @@ Eieren har godkjent planen med disse valgene (svarer på spørsmålene i avsnitt
 
 **Justert plan:** «Neste styremøte» (avsnitt 3, 5.2 og R1) leses som **«Kommende saker med møtedato»**: åpne saker med møtedato, sortert på dato, uten å påstå at et møte er bekreftet.
 
-**Status:** R0 og R2 er ferdige (se avsnitt 9b og 9c). R1 er neste og er ikke startet.
+**Status:** R0, R2 og R1 er ferdige (se avsnitt 9b, 9c og 9d). R3 er neste og er ikke startet.
 
 ## 1. Kort oppsummering
 
@@ -426,7 +426,7 @@ Hver milepæl er avgrenset, kan godkjennes og rulles tilbake for seg, og avslutt
 | Milepæl | Innhold | Hovedfiler | Type | Dekker |
 |---|---|---|---|---|
 | **R0 Grunnlag** (ferdig) | Felles komponenter og stil: sidehode med én hovedhandling og «Flere handlinger»-meny, «Flere valg»-visning (`<details>` med tastaturstøtte), merker for aktive filtre, hurtigfaner, tilbakemelding med «Angre», kortliste på mobil, `data-testid` og UI-hjelpere i testene. Ingen synlig endring på sidene. | `Components/Shared`, `app.css`, `Tests/Web/UiTestHelpers.cs` | UI | Reduserer skjørhet før resten |
-| **R1 Oversikt** | Ny forside: «Må gjøres nå», «Kommende saker med møtedato», tre tall, elbillinglinje, «+ Ny». | `Pages/Dashboard.razor`, `DashboardChargingSection` | UI | F-09, F-17, F-22 |
+| **R1 Oversikt** (ferdig) | Ny forside: «Må gjøres nå», «Kommende saker med møtedato», tre tall, elbillinglinje, «+ Ny». | `Pages/Dashboard.razor`, `DashboardChargingSection` | UI | F-09, F-17, F-22 |
 | **R2 Oppgaver** (ferdig) | Hurtigfaner, søk, «Flere filtre», radene som lenker, direkte fullføring, kortliste på mobil. Oppgavedetalj: hovedknapp i overskrift, bekreftelse ved knappen, «Detaljer». | `TaskItems/*` | UI | F-05, F-06, F-07 |
 | **R3 Styresaker** | Liste (møtedato, faner), detalj (overskriftslinje, vedtak, oppgaver, «Detaljer», adskilt slett, «x av y»). | `BoardCases/*` | UI | F-03, F-04 |
 | **R4 Skjemaer og veiledning** | «Gjelder», «Flere valg», veiledning om styresak/oppgave, forhåndsutfylling fra sak/boenhet. Boenhetsskjema og detalj (F-12, F-13, F-14, F-15). | `*Form.razor`, `HousingUnits/*` | UI | Hovedproblemet om styresak/oppgave |
@@ -476,6 +476,31 @@ Byggeklossene ligger i `src/SameieHub.Web/Components/Shared`. De er små, bruker
 | Handlinger per rad | 3 (Åpne, Rediger, tittel) | 2 (tittel, Fullfør) |
 | Ansvarlig og frist synlig | bare fra 992 px (ansvarlig skjult under) | alltid, også på 375 px |
 | Vannrett rulling ved 375 px | ingen | ingen |
+
+## 9d. R1 Oversikt: hva som ble gjort og målt
+
+**Ny forside:** tittel «Oversikt», «+ Ny», tre tall, «Må følges opp» (maks 5), «Kommende saker med møtedato» (maks 5, med forklaring), en kort elbilstatuslinje, og «Kom i gang» ved helt tom database. Se `UI_DESIGN.md` for detaljene.
+
+**Avgjørelser:**
+
+- **Ingen «Neste styremøte».** En møtedato på en styresak er ikke et bekreftet møte (valg 7). Seksjonen heter «Kommende saker med møtedato» og har en forklaring.
+- **Domenet er ikke endret.** Oppfølgingslisten bruker `DashboardOverview.FollowUpTasks` (forfalt først, så frist innen 7 dager) og viser de fem første. «Andre åpne oppgaver ved behov» er ikke fylt inn: da ville lista blande det som haster med vanlige oppgaver, og antallet som haster står i stedet («Viser 5 av n»). De kommende sakene velges i siden med en enkel løkke (åpen sak, møtedato i dag eller senere, nærmeste først, maks 5) fordi domenets `UpcomingDates` blander saker og oppgavefrister og har en 60-dagers grense.
+- **Fjernet:** tallkortet «Aktive boenheter», «Aktuelle styresaker», «Kommende datoer», «Hurtighandlinger» og «Oppdater oversikten». Alt finnes fortsatt på sine egne sider, og siden hentes på nytt hver gang den åpnes.
+- **Førstegangsveiledning** vises bare når hverken boenheter, styresaker eller oppgaver finnes. Deretter tar tomtilstandene i hver seksjon over.
+- **Menyvalget** «Dashboard» heter nå «Oversikt» (valg 1). Ingen annen endring i navigasjonen; resten hører til R6.
+- **Ny `MoreMenu.ButtonClass`** lar «+ Ny» få hovedknappstil.
+
+**Målt i nettleser** (demodata, isolert kopi; samme database før og etter):
+
+| Mål | Før | Etter |
+|---|---|---|
+| Høyde, 1024 px | 2 465 px | 1 431 px |
+| Høyde, 375 px | 3 039 px | 1 909 px |
+| Seksjoner | 5 + 4 tallkort | 3 + 3 tall |
+| Synlige knapper (inkl. menyknapp) | 7 | 5 |
+| Synlige lenker | 29 | 20 |
+| Vannrett rulling ved 375 px | ingen | ingen |
+| Tom database, 375 px | 4 nuller og tre tomme lister | «Kom i gang» (819 px) |
 
 ## 10. Risiko for regresjoner og hvordan de reduseres
 

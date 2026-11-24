@@ -740,18 +740,44 @@ public class ChargingPagesTests : ChargingUiTestBase
     }
 
     [Fact]
-    public async Task Dashboard_ShowsChargingSectionWithReconciliation()
+    public async Task Dashboard_ShowsAShortChargingStatusWithTheLatestReconciliation()
     {
         await SeedFacilityAsync(8);
         await RegisterFullSetAsync(Jan1, 1000, 100);
         await RegisterFullSetAsync(Jan2, 1100, 110);
 
         var cut = Render<Dashboard>();
-        cut.WaitForElement("#dashboard-charging-title");
+        cut.WaitForElement("[data-testid=charging-status]");
 
-        var section = cut.Find("#dashboard-charging-title").ParentElement!.ParentElement!;
-        Assert.Contains("8", section.TextContent);
+        var section = cut.FindByTestId("charging-status");
         Assert.Contains("+20 kWh", section.TextContent);
+        Assert.DoesNotContain("ladere registrert", section.TextContent);
+    }
+
+    [Fact]
+    public async Task Dashboard_ChargingStatusLinksToChargingAndToRegisteringAReading()
+    {
+        await SeedFacilityAsync(8);
+
+        var cut = Render<Dashboard>();
+        cut.WaitForElement("[data-testid=charging-status]");
+
+        var links = cut.FindByTestId("charging-status").QuerySelectorAll("a").ToDictionary(link => link.TextContent, link => link.GetAttribute("href"));
+        Assert.Equal("/elbillading", links["Elbillading"]);
+        Assert.Equal("/elbillading/avlesning", links["Registrer avlesning"]);
+    }
+
+    [Fact]
+    public async Task Dashboard_WithoutAFacility_SaysSoAndOnlyLinksToCharging()
+    {
+        await Service.RegisterAsync("Storgata 1A");
+
+        var cut = Render<Dashboard>();
+        cut.WaitForElement("[data-testid=charging-status]");
+
+        var section = cut.FindByTestId("charging-status");
+        Assert.Contains("Ladeanlegget er ikke satt opp", section.TextContent);
+        Assert.DoesNotContain("Registrer avlesning", section.TextContent);
     }
 
     [Fact]
@@ -762,8 +788,8 @@ public class ChargingPagesTests : ChargingUiTestBase
         await RegisterFullSetAsync(Jan2, 1100, 110);
 
         var cut = Render<Dashboard>();
-        cut.WaitForElement("#dashboard-charging-title");
+        cut.WaitForElement("[data-testid=charging-status]");
 
-        Assert.Contains("ufullstendig", cut.Find("#dashboard-charging-title").ParentElement!.ParentElement!.TextContent);
+        Assert.Contains("ufullstendig", cut.FindByTestId("charging-status").TextContent);
     }
 }

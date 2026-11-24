@@ -2,51 +2,46 @@
 @inject HousingUnitService HousingUnitService
 @inject ILogger<DashboardChargingSection> Logger
 
-<section class="surface-card detail-wide" aria-labelledby="dashboard-charging-title">
-    <div class="section-heading">
-        <h2 id="dashboard-charging-title">Elbillading</h2>
-        <a class="btn btn-outline-primary btn-sm" href="/elbillading">Se elbillading</a>
-    </div>
+<section class="surface-card" aria-labelledby="dashboard-charging-title" data-testid="charging-status">
+    <h2 id="dashboard-charging-title">Elbillading</h2>
 
     @if (_failed)
     {
-        <p class="text-muted mb-0">Kunne ikke hente elbillading.</p>
+        <p class="text-muted mb-2">Kunne ikke hente elbillading.</p>
     }
     else if (_overview == null)
     {
-        <p class="text-muted mb-0">Ladeanlegget er ikke satt opp.</p>
+        <p class="text-muted mb-2">Ladeanlegget er ikke satt opp.</p>
+    }
+    else if (_reconciliation == null)
+    {
+        <p class="mb-2">
+            @if (_overview.MainMeterLastReading != null)
+            {
+                <span>Hovedmåler: @ChargingText.Kwh(_overview.MainMeterLastReading.Kwh), avlest @ChargingText.Time(_overview.MainMeterLastReading.ReadAt). </span>
+            }
+            <span class="text-muted">Ingen avstemming ennå. Den krever to avlesninger av hovedmåleren.</span>
+        </p>
+    }
+    else if (_reconciliation.IsComplete)
+    {
+        <p class="mb-2">
+            Siste avstemming (@ChargingText.Period(_reconciliation.From, _reconciliation.To)):
+            differanse <strong>@ChargingText.SignedKwh(_reconciliation.Difference!.Value)</strong>@(_reconciliation.DifferencePercent is { } percent ? $" ({ChargingText.Percent(percent)})" : "")@(_reconciliation.HasApproximateReadings ? ", tilnærmet" : "").
+        </p>
     }
     else
     {
-        <p class="mb-2">
-            <strong>@_overview.RegisteredChargers</strong> ladere registrert,
-            <strong>@_overview.InUse</strong> i bruk.
-        </p>
-        @if (_overview.MainMeterLastReading != null)
-        {
-            <p class="mb-2">Hovedmåler: @ChargingText.Kwh(_overview.MainMeterLastReading.Kwh), avlest @ChargingText.Time(_overview.MainMeterLastReading.ReadAt).</p>
-        }
-        else
-        {
-            <p class="text-muted mb-2">Ingen avlesninger av hovedmåleren er registrert.</p>
-        }
-
-        @if (_reconciliation == null)
-        {
-            <p class="text-muted mb-0">Ingen avstemming ennå. Den krever to avlesninger av hovedmåleren.</p>
-        }
-        else if (_reconciliation.IsComplete)
-        {
-            <p class="mb-0">
-                Siste avstemming (@ChargingText.Period(_reconciliation.From, _reconciliation.To)):
-                differanse <strong>@ChargingText.SignedKwh(_reconciliation.Difference!.Value)</strong>@(_reconciliation.DifferencePercent is { } percent ? $" ({ChargingText.Percent(percent)})" : "")@(_reconciliation.HasApproximateReadings ? ", tilnærmet" : "").
-            </p>
-        }
-        else
-        {
-            <p class="mb-0">Siste avstemming er <strong>ufullstendig</strong>. Differansen er ikke beregnet. <a href="/elbillading/avstemming">Se hva som mangler</a>.</p>
-        }
+        <p class="mb-2">Siste avstemming er <strong>ufullstendig</strong>. Differansen er ikke beregnet. <a href="/elbillading/avstemming">Se hva som mangler</a>.</p>
     }
+
+    <div class="form-actions">
+        <a class="btn btn-outline-primary btn-sm" href="/elbillading">Elbillading</a>
+        @if (_overview != null)
+        {
+            <a class="btn btn-outline-primary btn-sm" href="/elbillading/avlesning">Registrer avlesning</a>
+        }
+    </div>
 </section>
 
 @code {

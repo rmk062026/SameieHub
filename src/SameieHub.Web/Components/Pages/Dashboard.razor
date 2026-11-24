@@ -8,12 +8,18 @@
 @inject TaskItemService TaskService
 @inject ILogger<Dashboard> Logger
 
-<PageTitle>Dashboard – SameieHub</PageTitle>
+<PageTitle>Oversikt – SameieHub</PageTitle>
 
 <RestoreResultNotice Compact="true" />
 
-<PageHeader Title="Dashboard" Description="@(_overview == null ? "Status for sameiet." : $"Status for sameiet per {NorwegianDateFormat.Date(_today)}.")">
-    <button type="button" class="btn btn-outline-secondary" disabled="@_isLoading" @onclick="LoadAsync">Oppdater oversikten</button>
+<PageHeader Title="Oversikt" Description="@(_overview == null ? "Det styret må følge opp nå." : $"Det styret må følge opp nå. Status per {NorwegianDateFormat.Date(_today)}.")">
+    <PrimaryAction>
+        <MoreMenu Label="+ Ny" ButtonClass="btn-primary">
+            <a href="/oppgaver/ny">Ny oppgave</a>
+            <a href="/styresaker/ny">Ny styresak</a>
+            <a href="/boenheter/ny">Ny boenhet</a>
+        </MoreMenu>
+    </PrimaryAction>
 </PageHeader>
 
 @if (_isLoading)
@@ -29,158 +35,126 @@ else if (_loadError != null)
         <button type="button" class="btn btn-outline-danger btn-sm" @onclick="LoadAsync">Prøv igjen</button>
     </div>
 }
+else if (_isEmpty)
+{
+    <section class="surface-card" aria-labelledby="getting-started-title" data-testid="getting-started">
+        <h2 id="getting-started-title">Kom i gang</h2>
+        <p>
+            Ingenting er registrert ennå. Registrer først det sameiet består av, og bruk deretter oversikten til å følge opp det som haster.
+        </p>
+        <ol class="getting-started-steps">
+            <li>
+                <strong>Boenhetene.</strong> Legg inn hver bolig med adresse. Eiere og kontaktopplysninger er valgfritt.
+                <a href="/boenheter/ny">Ny boenhet</a>
+            </li>
+            <li>
+                <strong>Styresaker.</strong> En styresak er noe styret skal behandle og eventuelt vedta. Registrer en møtedato hvis du vet når saken skal opp.
+                <a href="/styresaker/ny">Ny styresak</a>
+            </li>
+            <li>
+                <strong>Oppgaver.</strong> En oppgave er noe noen skal gjøre, gjerne med ansvarlig og frist.
+                <a href="/oppgaver/ny">Ny oppgave</a>
+            </li>
+        </ol>
+        <p class="text-muted mb-0">
+            Alt lagres bare på denne maskinen. Ta jevnlig en <a href="/innstillinger/sikkerhetskopi">sikkerhetskopi</a>.
+        </p>
+    </section>
+}
 else if (_overview != null)
 {
-    <div class="stat-row stat-row-wide">
-        <a class="stat-card stat-link" href="/boenheter">
-            <span class="stat-value">@_overview.ActiveHousingUnits</span>
-            <span class="stat-label">Aktive boenheter</span>
-        </a>
-        <a class="stat-card stat-link" href="/styresaker">
-            <span class="stat-value">@_overview.OpenBoardCases</span>
-            <span class="stat-label">Åpne styresaker</span>
+    <div class="stat-row" data-testid="status-summary">
+        <a class="stat-card stat-link @(_overview.OverdueTasks > 0 ? "stat-alert" : "")" href="/oppgaver?forfalt=1">
+            <span class="stat-value">@_overview.OverdueTasks</span>
+            <span class="stat-label">Forfalte oppgaver</span>
         </a>
         <a class="stat-card stat-link" href="/oppgaver">
             <span class="stat-value">@_overview.OpenTasks</span>
             <span class="stat-label">Åpne oppgaver</span>
         </a>
-        <a class="stat-card stat-link @(_overview.OverdueTasks > 0 ? "stat-alert" : "")" href="/oppgaver?forfalt=1">
-            <span class="stat-value">@_overview.OverdueTasks</span>
-            <span class="stat-label">Forfalte oppgaver</span>
+        <a class="stat-card stat-link" href="/styresaker">
+            <span class="stat-value">@_overview.OpenBoardCases</span>
+            <span class="stat-label">Åpne styresaker</span>
         </a>
     </div>
 
-    <div class="detail-grid">
-        <section class="surface-card detail-wide" aria-labelledby="follow-up-title">
+    <div class="overview-grid">
+        <section class="surface-card" aria-labelledby="follow-up-title" data-testid="follow-up">
             <div class="section-heading">
-                <h2 id="follow-up-title">Oppgaver som krever oppfølging</h2>
+                <h2 id="follow-up-title">Må følges opp</h2>
                 <a class="btn btn-outline-primary btn-sm" href="/oppgaver">Se alle oppgaver</a>
             </div>
-            @if (_overview.FollowUpTasks.Count == 0)
+            @if (_followUpTasks.Count == 0)
             {
                 <p class="text-muted mb-0">
                     @(_overview.OpenTasks == 0
-                        ? "Ingen åpne oppgaver. Registrer en oppgave for å følge opp arbeid i sameiet."
+                        ? "Ingen åpne oppgaver."
                         : $"Ingen oppgaver er forfalt eller har frist de neste {DashboardOverview.FollowUpDays} dagene.")
                 </p>
             }
             else
             {
-                <div class="table-responsive">
-                    <table class="table data-table">
-                        <caption class="visually-hidden">Oppgaver som er forfalt eller har nær frist</caption>
-                        <thead>
-                            <tr>
-                                <th scope="col" class="col-id d-none d-md-table-cell">Nr.</th>
-                                <th scope="col">Oppgave</th>
-                                <th scope="col" class="d-none d-lg-table-cell">Prioritet</th>
-                                <th scope="col" class="d-none d-md-table-cell">Status</th>
-                                <th scope="col">Frist</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var task in _overview.FollowUpTasks)
-                            {
-                                <tr>
-                                    <td class="col-id d-none d-md-table-cell">#@task.Id</td>
-                                    <td><a class="unit-link" href="/oppgaver/@task.Id">@task.Title</a></td>
-                                    <td class="d-none d-lg-table-cell"><TaskPriorityBadge Priority="task.Priority" /></td>
-                                    <td class="d-none d-md-table-cell"><TaskStatusBadge Status="task.Status" /></td>
-                                    <td><TaskDueDate Task="task" Today="_today" /></td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
+                <ul class="follow-up-list">
+                    @foreach (var task in _followUpTasks)
+                    {
+                        <li data-testid="follow-up-item">
+                            <a class="unit-link" href="/oppgaver/@task.Id">@task.Title</a>
+                            <span class="follow-up-meta">
+                                <span data-testid="follow-up-assignee">@(string.IsNullOrWhiteSpace(task.AssignedTo) ? "Ikke tildelt" : task.AssignedTo)</span>
+                                <span class="follow-up-due"><TaskDueDate Task="task" Today="_today" /></span>
+                            </span>
+                        </li>
+                    }
+                </ul>
+                @if (_overview.FollowUpTasks.Count > _followUpTasks.Count)
+                {
+                    <p class="text-muted small mb-0" data-testid="follow-up-more">
+                        Viser @_followUpTasks.Count av @_overview.FollowUpTasks.Count oppgaver som haster.
+                    </p>
+                }
             }
         </section>
 
-        <section class="surface-card detail-wide" aria-labelledby="board-cases-title">
+        <section class="surface-card" aria-labelledby="upcoming-title" data-testid="upcoming-cases">
             <div class="section-heading">
-                <h2 id="board-cases-title">Aktuelle styresaker</h2>
+                <h2 id="upcoming-title">Kommende saker med møtedato</h2>
                 <a class="btn btn-outline-primary btn-sm" href="/styresaker">Se alle styresaker</a>
             </div>
-            @if (_overview.CurrentBoardCases.Count == 0)
+            <p class="text-muted small" data-testid="meeting-date-note">
+                Datoen er møtedatoen som er registrert på saken. SameieHub holder ikke styr på selve møtene, så en dato betyr ikke at et møte er bekreftet eller innkalt.
+            </p>
+            @if (_upcomingCases.Count == 0)
             {
-                <p class="text-muted mb-0">Ingen åpne styresaker.</p>
-            }
-            else
-            {
-                <div class="table-responsive">
-                    <table class="table data-table">
-                        <caption class="visually-hidden">Åpne styresaker, sist oppdaterte først</caption>
-                        <thead>
-                            <tr>
-                                <th scope="col" class="col-id d-none d-md-table-cell">Sak</th>
-                                <th scope="col">Tittel</th>
-                                <th scope="col">Status</th>
-                                <th scope="col" class="d-none d-lg-table-cell">Prioritet</th>
-                                <th scope="col">Møtedato</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var boardCase in _overview.CurrentBoardCases)
-                            {
-                                <tr>
-                                    <td class="col-id d-none d-md-table-cell">#@boardCase.Id</td>
-                                    <td><a class="unit-link" href="/styresaker/@boardCase.Id">@boardCase.Title</a></td>
-                                    <td><BoardCaseStatusBadge Status="boardCase.Status" /></td>
-                                    <td class="d-none d-lg-table-cell"><BoardCasePriorityBadge Priority="boardCase.Priority" /></td>
-                                    <td>
-                                        @if (boardCase.MeetingDate is { } meetingDate)
-                                        {
-                                            @NorwegianDateFormat.Date(meetingDate)
-                                        }
-                                        else
-                                        {
-                                            <span class="text-muted">Ingen møtedato</span>
-                                        }
-                                    </td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
-            }
-        </section>
-
-        <DashboardChargingSection />
-
-        <section class="surface-card" aria-labelledby="upcoming-title">
-            <h2 id="upcoming-title">Kommende datoer</h2>
-            @if (_overview.UpcomingDates.Count == 0)
-            {
-                <p class="text-muted mb-0">Ingen kommende møter eller frister de neste @DashboardOverview.UpcomingDays dagene.</p>
+                <p class="text-muted mb-0">Ingen åpne styresaker har en registrert møtedato fram i tid.</p>
             }
             else
             {
                 <ul class="date-list">
-                    @foreach (var upcoming in _overview.UpcomingDates)
+                    @foreach (var boardCase in _upcomingCases)
                     {
-                        <li>
-                            <span class="date-list-date">@NorwegianDateFormat.Date(upcoming.Date)</span>
-                            <span class="date-list-kind">@(upcoming.Kind == UpcomingDateKind.BoardMeeting ? "Styremøte" : "Frist")</span>
-                            <a href="@UpcomingHref(upcoming)">@upcoming.Title</a>
+                        <li data-testid="upcoming-case">
+                            <span class="date-list-date">@NorwegianDateFormat.Date(boardCase.MeetingDate!.Value)</span>
+                            <a href="/styresaker/@boardCase.Id">@boardCase.Title</a>
+                            <BoardCaseStatusBadge Status="boardCase.Status" />
                         </li>
                     }
                 </ul>
             }
         </section>
 
-        <section class="surface-card" aria-labelledby="quick-title">
-            <h2 id="quick-title">Hurtighandlinger</h2>
-            <div class="quick-actions">
-                <a class="btn btn-outline-primary" href="/boenheter/ny">Registrer boenhet</a>
-                <a class="btn btn-outline-primary" href="/styresaker/ny">Registrer styresak</a>
-                <a class="btn btn-outline-primary" href="/oppgaver/ny">Registrer oppgave</a>
-            </div>
-        </section>
+        <DashboardChargingSection />
     </div>
 }
 
 @code {
+    private const int MaxFollowUpShown = 5;
+    private const int MaxUpcomingCasesShown = 5;
+
     private DashboardOverview? _overview;
+    private List<TaskItem> _followUpTasks = [];
+    private List<BoardCase> _upcomingCases = [];
     private DateOnly _today;
+    private bool _isEmpty;
     private bool _isLoading = true;
     private string? _loadError;
 
@@ -202,6 +176,9 @@ else if (_overview != null)
 
             _today = TaskService.GetToday();
             _overview = DashboardOverview.Create(units, boardCases, tasks, _today);
+            _isEmpty = units.Count == 0 && boardCases.Count == 0 && tasks.Count == 0;
+            _followUpTasks = _overview.FollowUpTasks.Take(MaxFollowUpShown).ToList();
+            _upcomingCases = FindUpcomingCases(boardCases);
         }
         catch (Exception exception)
         {
@@ -215,8 +192,23 @@ else if (_overview != null)
         }
     }
 
-    private static string UpcomingHref(UpcomingDate upcoming)
+    /// <summary>Open board cases with a registered meeting date today or later, the nearest date first.</summary>
+    private List<BoardCase> FindUpcomingCases(IEnumerable<BoardCase> boardCases)
     {
-        return upcoming.Kind == UpcomingDateKind.BoardMeeting ? $"/styresaker/{upcoming.Id}" : $"/oppgaver/{upcoming.Id}";
+        var result = new List<BoardCase>();
+
+        foreach (var boardCase in boardCases)
+        {
+            if (boardCase.Status != BoardCaseStatus.Closed && boardCase.MeetingDate is { } meetingDate && meetingDate >= _today)
+            {
+                result.Add(boardCase);
+            }
+        }
+
+        return result
+            .OrderBy(boardCase => boardCase.MeetingDate)
+            .ThenBy(boardCase => boardCase.Id)
+            .Take(MaxUpcomingCasesShown)
+            .ToList();
     }
 }

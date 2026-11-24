@@ -28,7 +28,7 @@ wwwroot/app.css  designvariabler og felles stiler
 ## Navigasjon og ruter
 | Rute | Side | Status |
 |---|---|---|
-| `/` | Dashboard | Funksjonell |
+| `/` | Oversikt | Funksjonell (R1) |
 | `/boenheter` | Oversikt | Funksjonell |
 | `/boenheter/ny` | Registrer | Funksjonell |
 | `/boenheter/{id}` | Detaljvisning | Funksjonell |
@@ -92,15 +92,17 @@ Sidemeny på bred skjerm (≥ 768 px); på smal skjerm en toppstripe med menykna
 - **Sletting:** som for boenheter og styresaker (eget kort nederst, bekreftelse med tittel og «Dette kan ikke angres», Avbryt endrer ingenting, melding «Oppgaven er slettet permanent.» på oversikten). Teksten sier at styresaken og boenheten ikke slettes.
 - **Snarveier:** styresakens og boenhetens detaljside har en seksjon «Oppgaver» (nummer, tittel, status, frist) med knappen «Registrer oppgave» som åpner registreringen med styresaken (`?styresak=`) eller boenheten (`?boenhet=`) forhåndsvalgt. Boenhetens knapp vises bare for aktive boenheter, men eksisterende oppgaver på en inaktiv boenhet vises fortsatt. Verdiene i URL-en kontrolleres mot de faktiske dataene (ugyldig, ukjent eller inaktiv verdi gir en melding og ingen forhåndsvalg).
 
-## Dashboard (M4)
-- **Statistikkkort (lenker):** aktive boenheter (`/boenheter`), åpne styresaker (`/styresaker`), åpne oppgaver (`/oppgaver`) og forfalte oppgaver (`/oppgaver?forfalt=1`, som åpner oppgavelisten med hurtigvalget «Forfalte»). Forfalt-kortet får rød kant og rødt tall når det finnes forfalte oppgaver; tallet står alltid også som tekst.
-- **Oppgaver som krever oppfølging:** forfalte oppgaver først, så frist i dag, så frister de neste 7 dagene, maks 8. Nr., tittel (lenke), prioritet (fra bred skjerm), status og frist med «Forfalt»/«Frist i dag». Knappen «Se alle oppgaver» åpner hele listen.
-- **Aktuelle styresaker:** åpne saker (ikke avsluttet), sist oppdaterte først, maks 5, med saksnummer, tittel (lenke), status, prioritet (fra bred skjerm) og møtedato eller «Ingen møtedato». Knappen «Se alle styresaker» åpner hele listen.
-- **Kommende datoer:** styremøter (møtedato på åpne saker) og oppgavefrister de neste 60 dagene, sortert på dato, maks 8, med dato, type («Styremøte»/«Frist») og lenke. Oppgaver som allerede står i oppfølgingslisten (frist innen 7 dager) gjentas ikke.
-- **Hurtighandlinger:** vanlige lenker til `/boenheter/ny`, `/styresaker/ny` og `/oppgaver/ny`.
-- **Oppdatering og feil:** «Oppdater oversikten» henter tallene på nytt. Kan data ikke leses, vises en feilmelding med «Prøv igjen», og ingen tall (ikke 0). Ingen timere eller sanntid.
-- **Tom database:** alle kort viser 0 (reelle tall), og hver seksjon har en tomtilstand: «Ingen åpne oppgaver. Registrer en oppgave …», «Ingen åpne styresaker.» og «Ingen kommende møter eller frister de neste 60 dagene.».
-- **Smal skjerm:** kortene ligger to og to. Nr.-kolonnen skjules i tabellene (prioritet skjules under bred skjerm), så fristen alltid er synlig uten at siden får vannrett rulling.
+## Oversikt (M4, redesignet i M5D-R1)
+Forsiden (`/`) heter «Oversikt» og svarer på ett spørsmål: hva må styret følge opp nå? Rekkefølgen er bevisst:
+- **Beskjeder:** resultatet av en gjenoppretting (`RestoreResultNotice`) og feil står øverst og er aldri skjult i en meny. Kan data ikke leses, vises en feilmelding med «Prøv igjen» og ingen tall.
+- **«+ Ny»:** hovedhandlingen øverst til høyre (`MoreMenu` med knappestil), med lenker til «Ny oppgave», «Ny styresak» og «Ny boenhet».
+- **Tre tall (lenker):** «Forfalte oppgaver» (`/oppgaver?forfalt=1`, rød kant bare når tallet er over 0), «Åpne oppgaver» (`/oppgaver`) og «Åpne styresaker» (`/styresaker`). Definisjonene er de samme som i oppgavelisten og styresaklisten (`DashboardOverview`). Antall boenheter vises ikke lenger her.
+- **Må følges opp:** inntil 5 oppgaver fra `DashboardOverview.FollowUpTasks` (forfalte først, så frist i dag, så frister de neste 7 dagene). Hver rad viser tittel (lenke), ansvarlig («Ikke tildelt» hvis ingen), frist og «Forfalt»/«Frist i dag». Er det flere enn 5, står «Viser 5 av n oppgaver som haster». Andre åpne oppgaver fylles ikke inn, slik at lista bare viser det som haster. «Se alle oppgaver» åpner hele listen.
+- **Kommende saker med møtedato:** inntil 5 åpne (ikke avsluttede) styresaker med møtedato i dag eller senere, nærmeste dato først, med dato, tittel (lenke) og status. En kort forklaring sier at datoen er møtedatoen som er registrert på saken, og at den ikke betyr at et møte er bekreftet eller innkalt. Seksjonen heter bevisst ikke «Neste styremøte»: SameieHub har ingen møtemodell. Den kan senere erstattes av eller bygges sammen med egen møteadministrasjon.
+- **Elbillading:** en kort statuslinje (siste avstemming med differanse, eller siste avlesning av hovedmåleren hvis det ikke finnes avstemming) og lenkene «Elbillading» og «Registrer avlesning». Beregningene er uendret.
+- **Førstegangsbruk:** er det ikke registrert noen boenheter, styresaker eller oppgaver, vises «Kom i gang» i stedet for nuller: boenhetene, styresaker (med forklaring) og oppgaver, med lenker, og en lenke til sikkerhetskopi. Så snart noe er registrert, forsvinner veiledningen, og tomme seksjoner forklarer hva man gjør.
+- **Fjernet fra forsiden:** tallkortet «Aktive boenheter», «Aktuelle styresaker» (erstattet av «Kommende saker med møtedato»), «Kommende datoer», «Hurtighandlinger» (erstattet av «+ Ny») og knappen «Oppdater oversikten» (siden hentes på nytt hver gang den åpnes).
+- **Smal skjerm:** alt ligger i én kolonne; oppgaver vises som lister (tittel, så ansvarlig, frist og forfallsmerke), uten vannrett rulling. Menyvalget i sidemenyen heter også «Oversikt».
 
 ## Elbillading (M4E-C)
 - **Oversikt:** tall per status, hovedmåler med siste avlesning, siste avstemming og en tabell over ladere (boenhet, skap, status, siste avlesning). Boenheter uten lader vises med lenke til registrering. Uten anlegg vises et oppsettskjema.
@@ -108,7 +110,7 @@ Sidemeny på bred skjerm (≥ 768 px); på smal skjerm en toppstripe med menykna
 - **Norsk tid:** brukeren skriver norsk lokal tid (`datetime-local`). Tiden lagres som UTC. Klokkeslettet som ikke fantes (vår) avvises med forklaring, og klokkeslettet som forekommer to ganger (høst) krever at brukeren velger sommer- eller vintertid.
 - **Avstemming:** perioden velges blant eksisterende avlesninger av hovedmåleren (ingen fri datovelger). Siden viser start og slutt, hovedmålerens forbruk, summen av undermålerne, differanse i kWh og prosent og en tabell per måler med de faktiske avlesningstidene. Fullstendig krever hovedmåler og åtte undermålere med dokumentert forbruk. Ellers står det hva som mangler, og differansen vises ikke. Toleransen på 24 timer er forklart, og tilnærmede avlesninger er merket.
 - **Historikk, korrigering og sletting:** per måler, nyeste først, med forbruk siden forrige. Korrigering må passe mellom nabo-avlesningene. Sletting krever bekreftelse (`role="alertdialog"`).
-- **Boenhet og dashboard:** boenhetssiden har en kompakt seksjon «Elbillader», og dashboardet en liten seksjon med tall og siste avstemming.
+- **Boenhet og dashboard:** boenhetssiden har en kompakt seksjon «Elbillader», og oversikten en kort statuslinje med siste avstemming og lenker til «Elbillading» og «Registrer avlesning».
 - **Smal skjerm:** verifisert i nettleser på 375 px: ingen vannrett rulling på noen elbillingside.
 
 ## Sikkerhetskopi (M5C)

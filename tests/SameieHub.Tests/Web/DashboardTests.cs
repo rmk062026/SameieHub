@@ -15,7 +15,7 @@ public class DashboardTests : UiTestBase
     private IRenderedComponent<Dashboard> RenderDashboard()
     {
         var cut = Render<Dashboard>();
-        cut.WaitForElement(".stat-row, [role=alert]");
+        cut.WaitForElement("[data-testid=status-summary], [data-testid=getting-started], [role=alert]");
 
         return cut;
     }
@@ -32,39 +32,70 @@ public class DashboardTests : UiTestBase
         return cut.FindAll(".stat-card").First(element => element.QuerySelector(".stat-label")!.TextContent == label).GetAttribute("href")!;
     }
 
-    private static AngleSharp.Dom.IElement Section(IRenderedComponent<Dashboard> cut, string heading)
+    private static IReadOnlyList<string> FollowUpTitles(IRenderedComponent<Dashboard> cut)
     {
-        return cut.FindAll("section").First(section => section.QuerySelector("h2")!.TextContent == heading);
+        return cut.FindAll("[data-testid=follow-up-item] a").Select(link => link.TextContent).ToList();
     }
 
-    private Task<TaskItem> RegisterTaskAsync(string title, DateOnly? dueDate = null, TaskItemPriority priority = TaskItemPriority.Normal)
+    private Task<TaskItem> RegisterTaskAsync(string title, DateOnly? dueDate = null, string? assignedTo = null)
     {
-        return Tasks.RegisterAsync(new TaskItemDetails { Title = title, DueDate = dueDate, Priority = priority });
+        return Tasks.RegisterAsync(new TaskItemDetails { Title = title, DueDate = dueDate, AssignedTo = assignedTo });
     }
 
-    // Empty database
+    private Task<BoardCase> RegisterCaseAsync(string title, DateOnly? meetingDate)
+    {
+        return BoardCases.RegisterAsync(new BoardCaseDetails { Title = title, MeetingDate = meetingDate });
+    }
+
+    // Empty database and first use
 
     [Fact]
-    public void Render_EmptyDatabase_ShowsRealZerosAndFriendlyEmptyStates()
+    public void Render_EmptyDatabase_ShowsAGettingStartedGuideInsteadOfZeros()
     {
         var cut = RenderDashboard();
 
-        Assert.Equal("0", StatValue(cut, "Aktive boenheter"));
-        Assert.Equal("0", StatValue(cut, "Åpne styresaker"));
+        var guide = cut.FindByTestId("getting-started");
+        Assert.Contains("Kom i gang", guide.TextContent);
+        var hrefs = guide.QuerySelectorAll("a").Select(link => link.GetAttribute("href")).ToList();
+        Assert.Contains("/boenheter/ny", hrefs);
+        Assert.Contains("/styresaker/ny", hrefs);
+        Assert.Contains("/oppgaver/ny", hrefs);
+        Assert.Contains("/innstillinger/sikkerhetskopi", hrefs);
+        Assert.Empty(cut.FindAll(".stat-card"));
+        Assert.False(cut.HasTestId("follow-up"));
+    }
+
+    [Fact]
+    public void Render_EmptyDatabase_ExplainsTheDifferenceBetweenABoardCaseAndATask()
+    {
+        var cut = RenderDashboard();
+
+        var text = cut.FindByTestId("getting-started").TextContent;
+        Assert.Contains("noe styret skal behandle og eventuelt vedta", text);
+        Assert.Contains("noe noen skal gjøre", text);
+    }
+
+    [Fact]
+    public async Task Render_AfterTheFirstRegistration_TheGuideIsGoneAndTheOverviewIsShown()
+    {
+        await Service.RegisterAsync("Storgata 1A");
+
+        var cut = RenderDashboard();
+
+        Assert.False(cut.HasTestId("getting-started"));
         Assert.Equal("0", StatValue(cut, "Åpne oppgaver"));
-        Assert.Equal("0", StatValue(cut, "Forfalte oppgaver"));
-        Assert.Contains("Ingen åpne oppgaver", Section(cut, "Oppgaver som krever oppfølging").TextContent);
-        Assert.Contains("Ingen åpne styresaker", Section(cut, "Aktuelle styresaker").TextContent);
-        Assert.Contains("Ingen kommende møter eller frister", Section(cut, "Kommende datoer").TextContent);
-        Assert.Empty(cut.FindAll("table"));
-        Assert.Empty(cut.FindAll(".stat-alert"));
+        Assert.Contains("Ingen åpne oppgaver", cut.FindByTestId("follow-up").TextContent);
+        Assert.Contains("Ingen åpne styresaker har en registrert møtedato", cut.FindByTestId("upcoming-cases").TextContent);
     }
 
+    // Header
+
     [Fact]
-    public void Render_ShowsTodaysNorwegianDateInTheHeader()
+    public void Render_ShowsTheTitleOversiktAndTodaysNorwegianDate()
     {
         var cut = RenderDashboard();
 
+        Assert.Equal("Oversikt", cut.FindByTestId("page-title").TextContent);
         Assert.Contains("per 18.11.2026", cut.Find(".page-header p").TextContent);
     }
 
@@ -79,26 +110,24 @@ public class DashboardTests : UiTestBase
 
         Assert.Contains("per 19.11.2026", cut.Find(".page-header p").TextContent);
         Assert.Equal("1", StatValue(cut, "Forfalte oppgaver"));
-        Assert.Contains("Forfalt", Section(cut, "Oppgaver som krever oppfølging").TextContent);
+        Assert.Contains("Forfalt", cut.FindByTestId("follow-up").TextContent);
     }
 
-    // Counts
+    // Status numbers
 
     [Fact]
-    public async Task Render_CountsOnlyActiveHousingUnits()
+    public async Task Status_ShowsExactlyThreeNumbers_InThePrioritisedOrder()
     {
         await Service.RegisterAsync("Storgata 1A");
-        await Service.RegisterAsync("Storgata 1B");
-        var inactive = await Service.RegisterAsync("Storgata 1C");
-        await Service.DeactivateAsync(inactive.Id);
 
         var cut = RenderDashboard();
 
-        Assert.Equal("2", StatValue(cut, "Aktive boenheter"));
+        var labels = cut.FindAll(".stat-card .stat-label").Select(label => label.TextContent).ToList();
+        Assert.Equal(["Forfalte oppgaver", "Åpne oppgaver", "Åpne styresaker"], labels);
     }
 
     [Fact]
-    public async Task Render_CountsBoardCasesThatAreNotClosedAsOpen()
+    public async Task Status_CountsBoardCasesThatAreNotClosedAsOpen()
     {
         await BoardCases.RegisterAsync(new BoardCaseDetails { Title = "Ny" });
         var inProgress = await BoardCases.RegisterAsync(new BoardCaseDetails { Title = "Under behandling" });
@@ -112,9 +141,11 @@ public class DashboardTests : UiTestBase
     }
 
     [Fact]
-    public async Task Render_CountsOpenAndOverdueTasksAndIgnoresCompletedOnes()
+    public async Task Status_CountsOpenAndOverdueTasksLikeTheTaskList_AndIgnoresCompletedOnes()
     {
         await RegisterTaskAsync("Forfalt", Today.AddDays(-1));
+        var inProgress = await RegisterTaskAsync("Pågår og forfalt", Today.AddDays(-3));
+        await Tasks.ChangeStatusAsync(inProgress.Id, TaskItemStatus.InProgress);
         await RegisterTaskAsync("Frist i dag", Today);
         await RegisterTaskAsync("Uten frist");
         var completed = await RegisterTaskAsync("Fullført gammel", Today.AddDays(-30));
@@ -122,77 +153,84 @@ public class DashboardTests : UiTestBase
 
         var cut = RenderDashboard();
 
-        Assert.Equal("3", StatValue(cut, "Åpne oppgaver"));
-        Assert.Equal("1", StatValue(cut, "Forfalte oppgaver"));
+        Assert.Equal("4", StatValue(cut, "Åpne oppgaver"));
+        Assert.Equal("2", StatValue(cut, "Forfalte oppgaver"));
         Assert.Single(cut.FindAll(".stat-alert"));
+        var list = Render<SameieHub.Web.Components.Pages.TaskItems.TaskList>();
+        list.WaitForElement("[data-testid=quick-tab-open]");
+        Assert.Equal("Åpne 4", list.FindByTestId("quick-tab-open").TextContent.Trim());
+        Assert.Equal("Forfalte 2", list.FindByTestId("quick-tab-overdue").TextContent.Trim());
     }
 
     [Fact]
-    public async Task Render_TaskDueTodayIsNotOverdueButShowsDueTodayInFollowUp()
+    public async Task Status_NoOverdueTasks_HasNoAlertStyle()
     {
         await RegisterTaskAsync("Frist i dag", Today);
 
         var cut = RenderDashboard();
 
         Assert.Equal("0", StatValue(cut, "Forfalte oppgaver"));
-        var section = Section(cut, "Oppgaver som krever oppfølging");
-        Assert.Contains("Frist i dag", section.QuerySelector(".is-due-today")!.TextContent);
-        Assert.Empty(section.QuerySelectorAll(".is-overdue"));
+        Assert.Empty(cut.FindAll(".stat-alert"));
     }
 
-    // Navigation
-
     [Fact]
-    public void Render_StatisticsCardsLinkToTheModules()
+    public async Task Status_NumbersLinkToTheMatchingPages()
     {
+        await Service.RegisterAsync("Storgata 1A");
+
         var cut = RenderDashboard();
 
-        Assert.Equal("/boenheter", StatHref(cut, "Aktive boenheter"));
-        Assert.Equal("/styresaker", StatHref(cut, "Åpne styresaker"));
-        Assert.Equal("/oppgaver", StatHref(cut, "Åpne oppgaver"));
         Assert.Equal("/oppgaver?forfalt=1", StatHref(cut, "Forfalte oppgaver"));
+        Assert.Equal("/oppgaver", StatHref(cut, "Åpne oppgaver"));
+        Assert.Equal("/styresaker", StatHref(cut, "Åpne styresaker"));
     }
 
+    // New
+
     [Fact]
-    public void Render_QuickActionsAreOrdinaryLinksToTheRegisterPages()
+    public void Render_HasOneNewActionWithLinksToTheThreeRegisterPages()
     {
         var cut = RenderDashboard();
 
-        var links = Section(cut, "Hurtighandlinger").QuerySelectorAll("a").ToDictionary(link => link.TextContent, link => link.GetAttribute("href"));
-        Assert.Equal("/boenheter/ny", links["Registrer boenhet"]);
-        Assert.Equal("/styresaker/ny", links["Registrer styresak"]);
-        Assert.Equal("/oppgaver/ny", links["Registrer oppgave"]);
+        var primary = cut.FindByTestId("primary-action");
+        Assert.Equal("+ Ny", primary.QuerySelector("summary")!.TextContent.Trim());
+        var links = primary.QuerySelectorAll("a").ToDictionary(link => link.TextContent, link => link.GetAttribute("href"));
+        Assert.Equal("/oppgaver/ny", links["Ny oppgave"]);
+        Assert.Equal("/styresaker/ny", links["Ny styresak"]);
+        Assert.Equal("/boenheter/ny", links["Ny boenhet"]);
+        Assert.Equal(3, links.Count);
     }
 
-    [Fact]
-    public void Render_SectionsLinkToTheFullLists()
-    {
-        var cut = RenderDashboard();
-
-        Assert.Equal("/oppgaver", Section(cut, "Oppgaver som krever oppfølging").QuerySelector("a.btn")!.GetAttribute("href"));
-        Assert.Equal("/styresaker", Section(cut, "Aktuelle styresaker").QuerySelector("a.btn")!.GetAttribute("href"));
-    }
-
-    // Follow-up tasks
+    // Must be followed up
 
     [Fact]
-    public async Task FollowUp_ShowsOverdueFirstThenTodayThenNearDeadlinesWithClickableTitles()
+    public async Task FollowUp_ShowsOverdueFirstThenTodayThenNearDeadlines_WithAssigneeDueDateAndLink()
     {
-        await RegisterTaskAsync("Om tre dager", Today.AddDays(3));
+        await RegisterTaskAsync("Om tre dager", Today.AddDays(3), "Ola Eksempel");
         await RegisterTaskAsync("I dag", Today);
-        var overdue = await RegisterTaskAsync("Forfalt", Today.AddDays(-2), TaskItemPriority.High);
+        var overdue = await RegisterTaskAsync("Forfalt", Today.AddDays(-2), "Lise Prøve");
 
         var cut = RenderDashboard();
 
-        var rows = Section(cut, "Oppgaver som krever oppfølging").QuerySelectorAll("tbody tr").ToList();
-        Assert.Equal(3, rows.Count);
-        Assert.Contains("Forfalt", rows[0].TextContent);
-        Assert.Contains("I dag", rows[1].TextContent);
-        Assert.Contains("Om tre dager", rows[2].TextContent);
+        Assert.Equal(["Forfalt", "I dag", "Om tre dager"], FollowUpTitles(cut));
+        var rows = cut.FindAll("[data-testid=follow-up-item]");
         Assert.Contains("16.11.2026", rows[0].TextContent);
-        Assert.Contains("Høy", rows[0].TextContent);
-        Assert.Contains("Ikke startet", rows[0].TextContent);
+        Assert.Equal("Forfalt", rows[0].QuerySelector(".is-overdue")!.TextContent);
+        Assert.Equal("Lise Prøve", rows[0].QuerySelector("[data-testid=follow-up-assignee]")!.TextContent);
+        Assert.Equal("Ikke tildelt", rows[1].QuerySelector("[data-testid=follow-up-assignee]")!.TextContent);
+        Assert.Contains("Frist i dag", rows[1].QuerySelector(".is-due-today")!.TextContent);
         Assert.Equal($"/oppgaver/{overdue.Id}", rows[0].QuerySelector("a")!.GetAttribute("href"));
+    }
+
+    [Fact]
+    public async Task FollowUp_IncludesOverdueTasksThatAreInProgress()
+    {
+        var task = await RegisterTaskAsync("Pågår og forfalt", Today.AddDays(-4));
+        await Tasks.ChangeStatusAsync(task.Id, TaskItemStatus.InProgress);
+
+        var cut = RenderDashboard();
+
+        Assert.Equal(["Pågår og forfalt"], FollowUpTitles(cut));
     }
 
     [Fact]
@@ -205,134 +243,172 @@ public class DashboardTests : UiTestBase
 
         var cut = RenderDashboard();
 
-        var section = Section(cut, "Oppgaver som krever oppfølging");
-        Assert.Empty(section.QuerySelectorAll("table"));
-        Assert.Contains("Ingen oppgaver er forfalt eller har frist de neste 7 dagene", section.TextContent);
+        Assert.Empty(FollowUpTitles(cut));
+        Assert.Contains("Ingen oppgaver er forfalt eller har frist de neste 7 dagene", cut.FindByTestId("follow-up").TextContent);
     }
 
     [Fact]
-    public async Task FollowUp_IsLimitedToTheMostRelevantTasks()
+    public async Task FollowUp_ShowsAtMostFiveTasks_AndSaysHowManyThereAre()
     {
-        for (var number = 1; number <= 12; number++)
+        for (var number = 1; number <= 7; number++)
+        {
+            await RegisterTaskAsync($"Oppgave {number}", Today.AddDays(number));
+        }
+
+        var cut = RenderDashboard();
+
+        Assert.Equal(5, FollowUpTitles(cut).Count);
+        Assert.Equal(["Oppgave 1", "Oppgave 2", "Oppgave 3", "Oppgave 4", "Oppgave 5"], FollowUpTitles(cut));
+        Assert.Contains("Viser 5 av 7 oppgaver som haster", cut.FindByTestId("follow-up-more").TextContent);
+        Assert.Equal("7", StatValue(cut, "Åpne oppgaver"));
+    }
+
+    [Fact]
+    public async Task FollowUp_ExactlyFiveTasks_HasNoMoreNote()
+    {
+        for (var number = 1; number <= 5; number++)
         {
             await RegisterTaskAsync($"Oppgave {number}", Today.AddDays(1));
         }
 
         var cut = RenderDashboard();
 
-        Assert.Equal(DashboardOverview.MaxFollowUpTasks, Section(cut, "Oppgaver som krever oppfølging").QuerySelectorAll("tbody tr").Length);
-        Assert.Equal("12", StatValue(cut, "Åpne oppgaver"));
-    }
-
-    // Board cases
-
-    [Fact]
-    public async Task BoardCases_ShowsOpenCasesWithNumberTitleStatusPriorityAndMeetingDate()
-    {
-        var unit = await Service.RegisterAsync("Storgata 1A");
-        var withMeeting = await BoardCases.RegisterAsync(new BoardCaseDetails
-        {
-            Title = "Maling av porter",
-            Priority = BoardCasePriority.High,
-            MeetingDate = new DateOnly(2026, 12, 3),
-            HousingUnitId = unit.Id
-        });
-        await BoardCases.RegisterAsync(new BoardCaseDetails { Title = "Uten møte" });
-        var closed = await BoardCases.RegisterAsync(new BoardCaseDetails { Title = "Avsluttet sak" });
-        await BoardCases.ChangeStatusAsync(closed.Id, BoardCaseStatus.Closed);
-
-        var cut = RenderDashboard();
-
-        var section = Section(cut, "Aktuelle styresaker");
-        var rows = section.QuerySelectorAll("tbody tr").ToList();
-        Assert.Equal(2, rows.Count);
-        Assert.DoesNotContain("Avsluttet sak", section.TextContent);
-        var meetingRow = rows.First(row => row.TextContent.Contains("Maling av porter"));
-        Assert.Contains($"#{withMeeting.Id}", meetingRow.TextContent);
-        Assert.Contains("Ny", meetingRow.TextContent);
-        Assert.Contains("Høy", meetingRow.TextContent);
-        Assert.Contains("03.12.2026", meetingRow.TextContent);
-        Assert.Equal($"/styresaker/{withMeeting.Id}", meetingRow.QuerySelector("a")!.GetAttribute("href"));
-        Assert.Contains("Ingen møtedato", rows.First(row => row.TextContent.Contains("Uten møte")).TextContent);
+        Assert.Equal(5, FollowUpTitles(cut).Count);
+        Assert.False(cut.HasTestId("follow-up-more"));
     }
 
     [Fact]
-    public async Task BoardCases_ShowsLatestUpdatedFirstAndIsLimited()
-    {
-        for (var number = 1; number <= 7; number++)
-        {
-            await BoardCases.RegisterAsync(new BoardCaseDetails { Title = $"Sak {(char)('A' + number)}" });
-            Clock.Advance(TimeSpan.FromMinutes(1));
-        }
-
-        var cut = RenderDashboard();
-
-        var titles = Section(cut, "Aktuelle styresaker").QuerySelectorAll("tbody a").Select(link => link.TextContent).ToList();
-        Assert.Equal(DashboardOverview.MaxBoardCases, titles.Count);
-        Assert.Equal("Sak H", titles[0]);
-        Assert.Equal("7", StatValue(cut, "Åpne styresaker"));
-    }
-
-    // Upcoming dates
-
-    [Fact]
-    public async Task Upcoming_ShowsMeetingsAndFarDeadlinesWithLinksAndNorwegianDates()
-    {
-        var boardCase = await BoardCases.RegisterAsync(new BoardCaseDetails { Title = "Årsmøte", MeetingDate = new DateOnly(2026, 12, 3) });
-        var task = await RegisterTaskAsync("Rense takrenner", new DateOnly(2026, 12, 20));
-
-        var cut = RenderDashboard();
-
-        var items = Section(cut, "Kommende datoer").QuerySelectorAll("li").ToList();
-        Assert.Equal(2, items.Count);
-        Assert.Contains("03.12.2026", items[0].TextContent);
-        Assert.Contains("Styremøte", items[0].TextContent);
-        Assert.Equal($"/styresaker/{boardCase.Id}", items[0].QuerySelector("a")!.GetAttribute("href"));
-        Assert.Contains("20.12.2026", items[1].TextContent);
-        Assert.Contains("Frist", items[1].TextContent);
-        Assert.Equal($"/oppgaver/{task.Id}", items[1].QuerySelector("a")!.GetAttribute("href"));
-    }
-
-    [Fact]
-    public async Task Upcoming_DoesNotRepeatTasksThatAreAlreadyInTheFollowUpList()
+    public async Task FollowUp_LinksToTheFullTaskList_AndDoesNotRepeatATaskElsewhere()
     {
         await RegisterTaskAsync("Nær frist", Today.AddDays(2));
 
         var cut = RenderDashboard();
 
-        Assert.Contains("Nær frist", Section(cut, "Oppgaver som krever oppfølging").TextContent);
-        Assert.DoesNotContain("Nær frist", Section(cut, "Kommende datoer").TextContent);
+        Assert.Equal("/oppgaver", cut.FindByTestId("follow-up").QuerySelector("a.btn")!.GetAttribute("href"));
+        Assert.Equal(1, cut.Markup.Split("Nær frist").Length - 1);
+    }
+
+    // Upcoming cases with a meeting date
+
+    [Fact]
+    public async Task Upcoming_ShowsOpenCasesWithAMeetingDate_NearestFirst_WithStatusAndLink()
+    {
+        var later = await RegisterCaseAsync("Maling av porter", new DateOnly(2026, 12, 3));
+        var sooner = await RegisterCaseAsync("Årsmøte", new DateOnly(2026, 11, 26));
+        await RegisterCaseAsync("Uten dato", null);
+
+        var cut = RenderDashboard();
+
+        var items = cut.FindAll("[data-testid=upcoming-case]");
+        Assert.Equal(2, items.Count);
+        Assert.Contains("26.11.2026", items[0].TextContent);
+        Assert.Contains("Årsmøte", items[0].TextContent);
+        Assert.Contains("Ny", items[0].QuerySelector(".status-badge")!.TextContent);
+        Assert.Equal($"/styresaker/{sooner.Id}", items[0].QuerySelector("a")!.GetAttribute("href"));
+        Assert.Equal($"/styresaker/{later.Id}", items[1].QuerySelector("a")!.GetAttribute("href"));
     }
 
     [Fact]
-    public async Task Upcoming_PastMeetingsAndClosedCasesAreNotShown()
+    public async Task Upcoming_TodayIsIncluded_PastDatesAndClosedCasesAreNot()
     {
-        await BoardCases.RegisterAsync(new BoardCaseDetails { Title = "Møte i går", MeetingDate = Today.AddDays(-1) });
-        var closed = await BoardCases.RegisterAsync(new BoardCaseDetails { Title = "Avsluttet møte", MeetingDate = Today.AddDays(5) });
+        await RegisterCaseAsync("I dag", Today);
+        await RegisterCaseAsync("Møte i går", Today.AddDays(-1));
+        var closed = await RegisterCaseAsync("Avsluttet møte", Today.AddDays(5));
         await BoardCases.ChangeStatusAsync(closed.Id, BoardCaseStatus.Closed);
 
         var cut = RenderDashboard();
 
-        Assert.Empty(Section(cut, "Kommende datoer").QuerySelectorAll("li"));
+        var titles = cut.FindAll("[data-testid=upcoming-case] a").Select(link => link.TextContent).ToList();
+        Assert.Equal(["I dag"], titles);
     }
 
-    // Errors and refresh
+    [Fact]
+    public async Task Upcoming_ShowsAtMostFiveCases()
+    {
+        for (var number = 1; number <= 8; number++)
+        {
+            await RegisterCaseAsync($"Sak {number}", Today.AddDays(number));
+        }
+
+        var cut = RenderDashboard();
+
+        Assert.Equal(5, cut.FindAll("[data-testid=upcoming-case]").Count);
+        Assert.Equal("8", StatValue(cut, "Åpne styresaker"));
+    }
+
+    [Fact]
+    public async Task Upcoming_ExplainsThatADateIsNotAConfirmedMeeting_AndNeverCallsItTheNextBoardMeeting()
+    {
+        await RegisterCaseAsync("Årsmøte", new DateOnly(2026, 11, 26));
+
+        var cut = RenderDashboard();
+
+        Assert.Equal("Kommende saker med møtedato", cut.FindByTestId("upcoming-cases").QuerySelector("h2")!.TextContent);
+        var note = cut.FindByTestId("meeting-date-note").TextContent;
+        Assert.Contains("registrert på saken", note);
+        Assert.Contains("ikke at et møte er bekreftet", note);
+        Assert.DoesNotContain("Neste styremøte", cut.Markup);
+        Assert.DoesNotContain("Styremøte", cut.FindByTestId("upcoming-cases").QuerySelector("ul")!.TextContent);
+    }
+
+    [Fact]
+    public async Task Upcoming_LinksToTheBoardCaseList()
+    {
+        await RegisterCaseAsync("Årsmøte", new DateOnly(2026, 11, 26));
+
+        var cut = RenderDashboard();
+
+        Assert.Equal("/styresaker", cut.FindByTestId("upcoming-cases").QuerySelector("a.btn")!.GetAttribute("href"));
+    }
+
+    // Structure and accessibility
+
+    [Fact]
+    public async Task Structure_HasOneH1_AndEverySectionIsLabelledByItsHeading()
+    {
+        await Service.RegisterAsync("Storgata 1A");
+
+        var cut = RenderDashboard();
+
+        Assert.Single(cut.FindAll("h1"));
+        foreach (var section in cut.FindAll("section[aria-labelledby]"))
+        {
+            var heading = cut.Find($"#{section.GetAttribute("aria-labelledby")}");
+            Assert.Equal("H2", heading.TagName);
+        }
+
+        Assert.Equal(["Må følges opp", "Kommende saker med møtedato", "Elbillading"], cut.FindAll("section h2").Select(h => h.TextContent).ToList());
+    }
+
+    [Fact]
+    public async Task Structure_ImportantInformationIsNeverInsideAClosedPanel()
+    {
+        await RegisterTaskAsync("Forfalt", Today.AddDays(-1));
+
+        var cut = RenderDashboard();
+
+        Assert.Empty(cut.FindAll("details details, [data-testid=follow-up] details, [data-testid=status-summary] details, [data-testid=upcoming-cases] details"));
+        Assert.Single(cut.FindAll("details"));
+    }
+
+    // Errors and data
 
     [Theory]
     [InlineData("housing")]
     [InlineData("boardcase")]
     [InlineData("task")]
-    public void Render_AnyDataSourceUnavailable_ShowsErrorWithoutNumbersAndRetryShowsTheDashboard(string failing)
+    public void Render_AnyDataSourceUnavailable_ShowsErrorWithoutNumbersAndRetryShowsTheOverview(string failing)
     {
         SetFailing(failing, true);
         var cut = Render<Dashboard>();
         cut.WaitForAssertion(() => Assert.Contains("Kunne ikke hente oversikten", cut.Find("[role=alert]").TextContent));
         Assert.Empty(cut.FindAll(".stat-card"));
+        Assert.False(cut.HasTestId("getting-started"));
 
         SetFailing(failing, false);
         cut.Find("[role=alert] button").Click();
 
-        cut.WaitForAssertion(() => Assert.Equal("0", StatValue(cut, "Aktive boenheter")));
+        cut.WaitForAssertion(() => Assert.True(cut.HasTestId("getting-started")));
     }
 
     private void SetFailing(string source, bool value)
@@ -349,29 +425,6 @@ public class DashboardTests : UiTestBase
         {
             TaskRepository.IsFailing = value;
         }
-    }
-
-    [Fact]
-    public async Task Refresh_ShowsNewNumbersAfterChangesInTheOtherModules()
-    {
-        var cut = RenderDashboard();
-        Assert.Equal("0", StatValue(cut, "Åpne oppgaver"));
-
-        await Service.RegisterAsync("Storgata 1A");
-        await BoardCases.RegisterAsync(new BoardCaseDetails { Title = "Maling" });
-        var task = await RegisterTaskAsync("Forfalt", Today.AddDays(-1));
-        cut.FindAll("button").First(button => button.TextContent == "Oppdater oversikten").Click();
-
-        cut.WaitForAssertion(() => Assert.Equal("1", StatValue(cut, "Åpne oppgaver")));
-        Assert.Equal("1", StatValue(cut, "Aktive boenheter"));
-        Assert.Equal("1", StatValue(cut, "Åpne styresaker"));
-        Assert.Equal("1", StatValue(cut, "Forfalte oppgaver"));
-
-        await Tasks.ChangeStatusAsync(task.Id, TaskItemStatus.Completed);
-        cut.FindAll("button").First(button => button.TextContent == "Oppdater oversikten").Click();
-
-        cut.WaitForAssertion(() => Assert.Equal("0", StatValue(cut, "Åpne oppgaver")));
-        Assert.Equal("0", StatValue(cut, "Forfalte oppgaver"));
     }
 
     [Fact]
