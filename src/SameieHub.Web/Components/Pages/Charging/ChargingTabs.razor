@@ -1,0 +1,16 @@
+@* The three pages that belong together under Elbillading. The history of a meter, a charger and the forms for chargers are reached from
+   these pages and have their own back link. *@
+<QuickTabs AriaLabel="Elbillading" Tabs="Tabs" Selected="@Selected" />
+
+@code {
+    private static readonly List<QuickTab> Tabs =
+    [
+        new QuickTab("overview", "Oversikt", Href: "/elbillading"),
+        new QuickTab("reading", "Registrer avlesning", Href: "/elbillading/avlesning"),
+        new QuickTab("reconciliation", "Avstemming", Href: "/elbillading/avstemming")
+    ];
+
+    /// <summary>"overview", "reading" or "reconciliation".</summary>
+    [Parameter, EditorRequired]
+    public string Selected { get; set; } = "overview";
+}

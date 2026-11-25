@@ -1,4 +1,4 @@
-<div class="reconciliation" data-testid="reconciliation">
+<div class="reconciliation @(Compact ? "reconciliation-compact" : "")" data-testid="reconciliation">
     <div class="reconciliation-status">
         @if (Reconciliation.IsComplete)
         {
@@ -15,26 +15,70 @@
         <span class="reconciliation-period">Periode: @ChargingText.Period(Reconciliation.From, Reconciliation.To)</span>
     </div>
 
-    <div class="stat-row stat-row-wide">
-        <div class="stat-card">
-            <span class="stat-value">@(Reconciliation.MainKwh is { } main ? ChargingText.Kwh(main) : "–")</span>
-            <span class="stat-label">Hovedmåler (forbruk)</span>
-        </div>
-        <div class="stat-card">
-            <span class="stat-value">@ChargingText.Kwh(Reconciliation.SubMeterKwh)</span>
-            <span class="stat-label">Undermålere (sum@(Reconciliation.IsComplete ? "" : ", bare dokumenterte"))</span>
-        </div>
-        <div class="stat-card @(Reconciliation.Difference == null ? "" : "stat-link")">
-            <span class="stat-value" data-testid="difference">@(Reconciliation.Difference is { } difference ? ChargingText.SignedKwh(difference) : "Ikke beregnet")</span>
-            <span class="stat-label">Differanse (hovedmåler − undermålere)</span>
-        </div>
-        <div class="stat-card">
-            <span class="stat-value" data-testid="difference-percent">@(Reconciliation.DifferencePercent is { } percent ? ChargingText.Percent(percent) : "–")</span>
-            <span class="stat-label">Differanse i prosent@(PercentNote)</span>
-        </div>
-    </div>
+    @if (Compact)
+    {
+        <p class="mb-1" data-testid="reconciliation-summary">
+            @if (Reconciliation.Difference is { } compactDifference)
+            {
+                <span>Differanse mellom hovedmåler og undermålere: <strong data-testid="difference">@ChargingText.SignedKwh(compactDifference)</strong>@if (Reconciliation.DifferencePercent is { } compactPercent) { <span> (<span data-testid="difference-percent">@ChargingText.Percent(compactPercent)</span>)</span> }.</span>
+            }
+            else
+            {
+                <span>Differansen er <strong data-testid="difference">ikke beregnet</strong> fordi grunnlaget er ufullstendig.</span>
+            }
+        </p>
+    }
+    else
+    {
+        <dl class="detail-list reconciliation-summary">
+            <div class="detail-item">
+                <dt>Forbruk i perioden målt av hovedmåleren</dt>
+                <dd>@(Reconciliation.MainKwh is { } main ? ChargingText.Kwh(main) : "Mangler")</dd>
+            </div>
+            <div class="detail-item">
+                <dt>Sum av forbruk i perioden på undermålerne@(Reconciliation.IsComplete ? "" : " (bare dokumenterte)")</dt>
+                <dd>@ChargingText.Kwh(Reconciliation.SubMeterKwh)</dd>
+            </div>
+            <div class="detail-item">
+                <dt>Differanse (hovedmåler − undermålere)</dt>
+                <dd>
+                    <strong data-testid="difference">@(Reconciliation.Difference is { } difference ? ChargingText.SignedKwh(difference) : "Ikke beregnet")</strong>
+                    @if (Reconciliation.DifferencePercent is { } percent)
+                    {
+                        <span>&nbsp;(<span data-testid="difference-percent">@ChargingText.Percent(percent)</span> av hovedmålerens forbruk)</span>
+                    }
+                </dd>
+            </div>
+        </dl>
 
-    @if (!Reconciliation.IsComplete)
+        <div class="reconciliation-explanation" data-testid="difference-explanation">
+            <p class="mb-1">
+                Hovedmåleren viser forbruket for hele ladeanlegget i perioden, og undermålerne viser forbruket til hver enkelt lader.
+                Forbruket er forskjellen mellom to målerstander. Differansen er forskjellen mellom hovedmålerens forbruk og summen av undermålernes forbruk.
+            </p>
+            @if (Reconciliation.Difference is { } explained)
+            {
+                <p class="mb-1">@DirectionText(explained)</p>
+                <p class="mb-0">
+                    En differanse er ikke i seg selv et tap eller bevis på feil i anlegget. Små avvik er vanlige, blant annet fordi målerne ikke leses av på nøyaktig samme tidspunkt.
+                    @if (Reconciliation.DifferencePercent == null)
+                    {
+                        <span> Prosent kan ikke beregnes fordi hovedmåleren viste 0 kWh.</span>
+                    }
+                </p>
+            }
+            else
+            {
+                <p class="mb-0">Differansen vises ikke, fordi den ville gitt et misvisende resultat når avlesninger mangler.</p>
+            }
+        </div>
+    }
+
+    @if (!Reconciliation.IsComplete && Compact)
+    {
+        <p class="mb-1 text-muted" data-testid="missing-summary">Det mangler avlesninger eller målere. Se avstemmingen for hva som mangler.</p>
+    }
+    else if (!Reconciliation.IsComplete)
     {
         <div class="alert alert-warning" role="status">
             <strong>Avstemmingen er ufullstendig, så differansen er ikke beregnet.</strong> Manglende verdier estimeres ikke og regnes aldri som 0.
@@ -59,7 +103,7 @@
         </div>
     }
 
-    @if (Reconciliation.HasApproximateReadings)
+    @if (Reconciliation.HasApproximateReadings && !Compact)
     {
         <div class="alert alert-info" role="status">
             <strong>Tilnærmet:</strong> noen målere er ikke avlest nøyaktig ved periodens start eller slutt, men innenfor
@@ -71,12 +115,12 @@
     {
         <div class="table-responsive">
             <table class="table data-table">
-                <caption class="visually-hidden">Forbruk per måler i perioden</caption>
+                <caption class="visually-hidden">Forbruk i perioden per måler</caption>
                 <thead>
                     <tr>
                         <th scope="col">Måler</th>
                         <th scope="col" class="d-none d-md-table-cell">Skap</th>
-                        <th scope="col">Forbruk</th>
+                        <th scope="col">Forbruk i perioden</th>
                         <th scope="col">Status</th>
                     </tr>
                 </thead>
@@ -130,7 +174,21 @@
     [Parameter]
     public bool ShowDetails { get; set; }
 
-    private string PercentNote => Reconciliation.IsComplete && Reconciliation.DifferencePercent == null ? " (hovedmåler 0 kWh)" : string.Empty;
+    /// <summary>One short line for the overview. The full view explains the numbers.</summary>
+    [Parameter]
+    public bool Compact { get; set; }
+
+    private static string DirectionText(decimal difference)
+    {
+        if (difference > 0)
+        {
+            return "En positiv differanse betyr at hovedmåleren viser mer forbruk enn summen av undermålerne.";
+        }
+
+        return difference < 0
+            ? "En negativ differanse betyr at undermålerne til sammen viser mer forbruk enn hovedmåleren."
+            : "Hovedmåleren og summen av undermålerne viser like mye forbruk.";
+    }
 
     private IEnumerable<ReconciliationLine> AllLines()
     {

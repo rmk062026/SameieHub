@@ -33,7 +33,7 @@ Eieren har godkjent planen med disse valgene (svarer på spørsmålene i avsnitt
 
 **Justert plan:** «Neste styremøte» (avsnitt 3, 5.2 og R1) leses som **«Kommende saker med møtedato»**: åpne saker med møtedato, sortert på dato, uten å påstå at et møte er bekreftet.
 
-**Status:** R0–R4 er ferdige (se avsnitt 9b–9f). R5 er neste og er ikke startet.
+**Status:** R0–R5 er ferdige (se avsnitt 9b–9g). R6 er neste og er ikke startet.
 
 ## 1. Kort oppsummering
 
@@ -430,7 +430,7 @@ Hver milepæl er avgrenset, kan godkjennes og rulles tilbake for seg, og avslutt
 | **R2 Oppgaver** (ferdig) | Hurtigfaner, søk, «Flere filtre», radene som lenker, direkte fullføring, kortliste på mobil. Oppgavedetalj: hovedknapp i overskrift, bekreftelse ved knappen, «Detaljer». | `TaskItems/*` | UI | F-05, F-06, F-07 |
 | **R3 Styresaker** (ferdig) | Liste (møtedato, faner), detalj (overskriftslinje, vedtak, oppgaver, «Detaljer», adskilt slett, «x av y»). | `BoardCases/*` | UI | F-03, F-04 |
 | **R4 Skjemaer og veiledning** (ferdig) | «Gjelder», «Flere valg», veiledning om styresak/oppgave, forhåndsutfylling fra sak/boenhet. Boenhetsskjema og detalj (F-12, F-13, F-14, F-15). | `*Form.razor`, `HousingUnits/*` | UI | Hovedproblemet om styresak/oppgave |
-| **R5 Elbillading** | Faner, statuslinje i stedet for tallkort, forklaring av differanse, nye etiketter, «Feil? Rett her». | `Charging/*` | UI | F-10, F-26, F-27, F-29 |
+| **R5 Elbillading** (ferdig) | Faner, statuslinje i stedet for tallkort, forklaring av differanse, nye etiketter, «Feil? Rett her». | `Charging/*` | UI | F-10, F-26, F-27, F-29 |
 | **R6 Navigasjon og mobil** | Menyrekkefølge og navn, «+ Ny»-valg, hopp-lenke, trykkflater, kontroll av alle sider på 375 px. (Fast nedre tabellinje bare hvis eieren velger det.) | `Layout/*`, `app.css` | UI | F-31 |
 | **R7 Innstillinger og sluttkontroll** | «Gjenopprett» lukket som standard, helhetlig kontroll mot tilgjengelighet, språk og konsistens, oppdatering av `UI_DESIGN.md`. | `Pages/Settings/*`, docs | UI | – |
 
@@ -552,6 +552,35 @@ Byggeklossene ligger i `src/SameieHub.Web/Components/Shared`. De er små, bruker
 | Ny boenhet | 9 | 4 | 1 231 px | 850 px |
 
 Styresakskjemaet vinner lite i høyde fordi beskrivelsen nå er synlig.
+
+## 9g. R5 Elbillading: hva som ble gjort og målt
+
+**Organisering:** de tre sidene Oversikt, Registrer avlesning og Avstemming har felles faner (`ChargingTabs`, bygget på `QuickTabs` med lenker og de eksisterende rutene). Oversikten har statuslinjer i stedet for åtte tallkort, og laderne er gruppert etter sikringsskap. Historikk, retting og laderdetaljer nås fra oversikten, så ingen funksjon er fjernet eller flyttet bort.
+
+**Avgjørelser:**
+
+- **Målerstand og forbruk** er skilt konsekvent: *målerstand* er tallet på måleren, *forbruk* er forskjellen mellom to målerstander («Forbruk siden forrige avlesning», «Forbruk i perioden»). Forklaring står på registrerings- og historikksiden.
+- **Avstemmingen** forklarer hovedmålerens forbruk, summen av undermålerne og differansen, nøytralt: en differanse er ikke i seg selv tap eller bevis på feil. Retningen (positiv/negativ/null) forklares bare når differansen er beregnet. Ved ufullstendig grunnlag står det hva som mangler, og differansen vises som «Ikke beregnet».
+- **Gruppering etter skap** bruker `Meter.CabinetNumber`, som allerede finnes. Ingen nye fysiske koblinger er antatt.
+- **«Feil avlesning? Se historikk og rett»** er en lenke til hovedmålerens historikk (og undermålerne har «Avlesningshistorikk» i tabellen). Ingen automatisk retting er innført, og eksisterende bekreftelser og kontroller er uendret.
+- **Beregninger, avrunding og validering er uendret.** Domene, database, migreringer og repositories er urørt. Ingen kostnadsfordeling.
+
+**Målt i nettleser** (demodata, isolert kopi):
+
+| Mål | Før | Etter |
+|---|---|---|
+| Oversikt: store tallkort | 8 | 0 |
+| Oversikt: knapper i sidetoppen | 2 (+ 2 i kortene) | 1 (roligere, «Registrer lader») + 3 faner |
+| Oversikt: høyde, 1024 px | 1 573 px | 1 548 px |
+| Oversikt: høyde, 375 px | 2 106 px | 1 995 px |
+| Registrer avlesning: høyde 1024 / 375 px | 1 977 / 2 094 px | 2 087 / 2 632 px (forklaringer og lengre feltnavn) |
+| Avstemming: tallkort | 4 | 0 (tre linjer og forklaring) |
+| Avstemming: høyde 1024 / 375 px | 1 575 / 2 343 px | 1 909 / 2 944 px (forklaring) |
+| Alle åtte ladere tilgjengelige | ja | ja, gruppert i to skap |
+| Steg til registrering | 1 klikk | 1 klikk (fane) |
+| Steg til retting av en avlesning | 2 klikk (historikk, «Korriger») | 2 klikk (lenke, «Korriger») |
+
+Registrering og avstemming er altså lengre enn før, bevisst: forklaringene er viktigere enn kort side.
 
 ## 10. Risiko for regresjoner og hvordan de reduseres
 

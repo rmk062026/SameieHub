@@ -1046,3 +1046,21 @@ a:focus-visible,
     margin-bottom: 1rem;
     color: var(--sh-muted);
 }
+
+/* Elbillading (R5) */
+.cabinet-title {
+    margin: 1rem 0 0.25rem;
+    font-size: 1rem;
+}
+
+.reconciliation-explanation {
+    margin-top: 0.75rem;
+    padding: 0.75rem 1rem;
+    background: var(--sh-bg);
+    border-radius: var(--sh-radius);
+    font-size: 0.95rem;
+}
+
+.reconciliation-compact .reconciliation-status {
+    margin-bottom: 0.25rem;
+}

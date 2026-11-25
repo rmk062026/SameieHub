@@ -33,7 +33,7 @@
     }
     else
     {
-        <p class="text-muted">Målerstanden er akkumulert. Forbruket er differansen mellom to avlesninger.</p>
+        <p class="text-muted" data-testid="reading-explanation">Målerstand er tallet måleren viste (totalt kWh). Forbruk siden forrige avlesning er forskjellen mellom to målerstander.</p>
         <div class="table-responsive">
             <table class="table data-table">
                 <caption class="visually-hidden">Avlesninger, nyeste først</caption>
@@ -41,7 +41,7 @@
                     <tr>
                         <th scope="col">Avlest</th>
                         <th scope="col">Målerstand</th>
-                        <th scope="col">Forbruk siden forrige</th>
+                        <th scope="col">Forbruk siden forrige avlesning</th>
                         <th scope="col"><span class="visually-hidden">Handlinger</span></th>
                     </tr>
                 </thead>

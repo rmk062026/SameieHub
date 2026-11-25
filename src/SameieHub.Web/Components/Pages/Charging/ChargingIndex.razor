@@ -5,13 +5,17 @@
 
 <PageTitle>Elbillading – SameieHub</PageTitle>
 
-<PageHeader Title="Elbillading" Description="Ladere, målere og manuelle avlesninger. Strømforbruket regnes ut fra avlesningene.">
+<PageHeader Title="Elbillading" Description="Status for ladeanlegget, målerstander og avstemming. Forbruket regnes ut fra avlesningene.">
     @if (_facility != null)
     {
-        <a class="btn btn-primary" href="/elbillading/avlesning">Registrer avlesning</a>
-        <a class="btn btn-outline-primary" href="/elbillading/ny">Registrer lader</a>
+        <a class="btn btn-outline-secondary" href="/elbillading/ny">Registrer lader</a>
     }
 </PageHeader>
+
+@if (_facility != null)
+{
+    <ChargingTabs Selected="overview" />
+}
 
 @if (_isLoading)
 {
@@ -52,91 +56,98 @@ else if (_facility == null)
 }
 else if (_overview != null)
 {
-    <div class="stat-row stat-row-wide">
-        <div class="stat-card">
-            <span class="stat-value">@_overview.RegisteredChargers</span>
-            <span class="stat-label">Registrerte ladere</span>
-        </div>
-        <div class="stat-card">
-            <span class="stat-value">@_overview.InUse</span>
-            <span class="stat-label">I bruk</span>
-        </div>
-        <div class="stat-card">
-            <span class="stat-value">@_overview.NotInUse</span>
-            <span class="stat-label">Ikke i bruk</span>
-        </div>
-        <div class="stat-card">
-            <span class="stat-value">@_overview.TemporarilyDisabled</span>
-            <span class="stat-label">Midlertidig deaktivert</span>
-        </div>
-    </div>
-
-    <div class="detail-grid">
-        <section class="surface-card" aria-labelledby="main-meter-title">
-            <h2 id="main-meter-title">Hovedmåler</h2>
-            @if (_overview.MainMeter == null)
-            {
-                <p class="text-muted mb-0">Hovedmåleren er ikke satt opp.</p>
-            }
-            else if (_overview.MainMeterLastReading == null)
-            {
-                <p class="text-muted">Ingen avlesninger er registrert.</p>
-                <a class="btn btn-outline-primary btn-sm" href="/elbillading/avlesning">Registrer første avlesning</a>
-            }
-            else
-            {
-                <p class="mb-1"><strong>@ChargingText.Kwh(_overview.MainMeterLastReading.Kwh)</strong></p>
-                <p class="text-muted">Avlest @ChargingText.Time(_overview.MainMeterLastReading.ReadAt)</p>
-                <a class="btn btn-outline-primary btn-sm" href="/elbillading/maler/@_overview.MainMeter.Id">Avlesningshistorikk</a>
-            }
-        </section>
-
-        <section class="surface-card" aria-labelledby="reconciliation-title">
-            <div class="section-heading">
-                <h2 id="reconciliation-title">Siste avstemming</h2>
-                <a class="btn btn-outline-primary btn-sm" href="/elbillading/avstemming">Se avstemming</a>
+    <section class="surface-card" aria-labelledby="status-title" data-testid="charging-status">
+        <h2 id="status-title">Status for ladeanlegget</h2>
+        <dl class="detail-list">
+            <div class="detail-item">
+                <dt>Hovedmåler</dt>
+                <dd data-testid="main-meter-status">
+                    @if (_overview.MainMeter == null)
+                    {
+                        <span class="text-muted">Hovedmåleren er ikke satt opp.</span>
+                    }
+                    else if (_overview.MainMeterLastReading == null)
+                    {
+                        <span class="text-muted">Ingen avlesninger er registrert.</span>
+                        <a href="/elbillading/avlesning">Registrer første avlesning</a>
+                    }
+                    else
+                    {
+                        <span>Målerstand <strong>@ChargingText.Kwh(_overview.MainMeterLastReading.Kwh)</strong>, avlest @ChargingText.Time(_overview.MainMeterLastReading.ReadAt)</span>
+                        <a href="/elbillading/maler/@_overview.MainMeter.Id">Avlesningshistorikk</a>
+                    }
+                </dd>
             </div>
-            @if (_reconciliation == null)
-            {
-                <p class="text-muted mb-0">Avstemming krever minst to avlesninger av hovedmåleren.</p>
-            }
-            else
-            {
-                <ReconciliationView Reconciliation="_reconciliation" Units="_units" />
-            }
-        </section>
+            <div class="detail-item">
+                <dt>Siste avstemming</dt>
+                <dd data-testid="reconciliation-status">
+                    @if (_reconciliation == null)
+                    {
+                        <span class="text-muted">Avstemming krever minst to avlesninger av hovedmåleren.</span>
+                    }
+                    else
+                    {
+                        <ReconciliationView Reconciliation="_reconciliation" Units="_units" Compact="true" />
+                        <a href="/elbillading/avstemming">Se avstemmingen</a>
+                    }
+                </dd>
+            </div>
+            <div class="detail-item">
+                <dt>Ladere</dt>
+                <dd data-testid="charger-counts">
+                    @_overview.RegisteredChargers registrert:
+                    @_overview.InUse i bruk · @_overview.NotInUse ikke i bruk · @_overview.TemporarilyDisabled midlertidig deaktivert
+                </dd>
+            </div>
+        </dl>
+        @if (_overview.MainMeter != null)
+        {
+            <p class="mb-0"><a data-testid="correct-reading-link" href="/elbillading/maler/@_overview.MainMeter.Id">Feil avlesning? Se historikk og rett</a></p>
+        }
+    </section>
 
-        <section class="surface-card detail-wide" aria-labelledby="chargers-title">
-            <h2 id="chargers-title">Ladere</h2>
-            @if (_overview.Rows.Count == 0)
+    <section class="surface-card" aria-labelledby="chargers-title">
+        <h2 id="chargers-title">Ladere og undermålere</h2>
+        @if (_overview.Rows.Count == 0)
+        {
+            <p class="text-muted mb-0">Ingen ladere er registrert ennå.</p>
+        }
+        else
+        {
+            @foreach (var group in CabinetGroups())
             {
-                <p class="text-muted mb-0">Ingen ladere er registrert ennå.</p>
-            }
-            else
-            {
+                <h3 class="cabinet-title" data-testid="cabinet-group">@(group.Key == null ? "Uten undermåler" : $"Sikringsskap {group.Key}")</h3>
                 <div class="table-responsive">
                     <table class="table data-table">
-                        <caption class="visually-hidden">Ladere med undermåler og siste avlesning</caption>
+                        <caption class="visually-hidden">@(group.Key == null ? "Ladere uten undermåler" : $"Ladere og undermålere i sikringsskap {group.Key}")</caption>
                         <thead>
                             <tr>
-                                <th scope="col">Boenhet</th>
-                                <th scope="col" class="d-none d-md-table-cell">Skap</th>
+                                <th scope="col">Lader</th>
                                 <th scope="col">Status</th>
-                                <th scope="col">Siste avlesning</th>
+                                <th scope="col">Siste målerstand (undermåler)</th>
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach (var row in _overview.Rows)
+                            @foreach (var row in group)
                             {
-                                <tr>
+                                <tr data-testid="charger-row">
                                     <td>
                                         <a class="unit-link" href="/elbillading/@row.Charger.Id">@row.Unit.Address</a>
-                                        @if (row.Charger.ChargerNumber != null)
-                                        {
-                                            <div class="unit-sub">Lader @row.Charger.ChargerNumber</div>
-                                        }
+                                        <div class="unit-sub">
+                                            @if (row.Charger.ChargerNumber != null)
+                                            {
+                                                <span>Lader @row.Charger.ChargerNumber</span>
+                                            }
+                                            @if (row.SubMeter != null)
+                                            {
+                                                @if (row.Charger.ChargerNumber != null)
+                                                {
+                                                    <span> · </span>
+                                                }
+                                                <a href="/elbillading/maler/@row.SubMeter.Id">Avlesningshistorikk</a>
+                                            }
+                                        </div>
                                     </td>
-                                    <td class="d-none d-md-table-cell">@(row.SubMeter?.CabinetNumber?.ToString() ?? "–")</td>
                                     <td><ChargerStatusBadge Status="row.Charger.Status" /></td>
                                     <td>
                                         @if (row.LastReading == null)
@@ -155,24 +166,24 @@ else if (_overview != null)
                     </table>
                 </div>
             }
-        </section>
-
-        @if (_overview.UnitsWithoutCharger.Count > 0)
-        {
-            <section class="surface-card detail-wide" aria-labelledby="without-title">
-                <h2 id="without-title">Boenheter uten lader</h2>
-                <ul class="plain-list mb-0">
-                    @foreach (var unit in _overview.UnitsWithoutCharger)
-                    {
-                        <li>
-                            <a class="unit-link" href="/boenheter/@unit.Id">@unit.Address</a>
-                            – <a href="/elbillading/ny?boenhet=@unit.Id">registrer lader</a>
-                        </li>
-                    }
-                </ul>
-            </section>
         }
-    </div>
+    </section>
+
+    @if (_overview.UnitsWithoutCharger.Count > 0)
+    {
+        <section class="surface-card" aria-labelledby="without-title">
+            <h2 id="without-title">Boenheter uten lader</h2>
+            <ul class="plain-list mb-0">
+                @foreach (var unit in _overview.UnitsWithoutCharger)
+                {
+                    <li>
+                        <a class="unit-link" href="/boenheter/@unit.Id">@unit.Address</a>
+                        – <a href="/elbillading/ny?boenhet=@unit.Id">registrer lader</a>
+                    </li>
+                }
+            </ul>
+        </section>
+    }
 }
 
 @code {
@@ -219,6 +230,15 @@ else if (_overview != null)
         {
             _isLoading = false;
         }
+    }
+
+    /// <summary>The chargers grouped by the cabinet of their sub meter, as the data already says. Chargers without a sub meter come last.</summary>
+    private List<IGrouping<int?, ChargingOverviewRow>> CabinetGroups()
+    {
+        return _overview!.Rows
+            .GroupBy(row => row.SubMeter?.CabinetNumber)
+            .OrderBy(group => group.Key ?? int.MaxValue)
+            .ToList();
     }
 
     private async Task SetUpFacilityAsync()

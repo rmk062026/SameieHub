@@ -55,7 +55,7 @@ public class ChargingPagesTests : ChargingUiTestBase
         cut.Find("#facilityName").Input("Ladeanlegg");
         cut.Find("form").Submit();
 
-        cut.WaitForElement(".stat-row");
+        cut.WaitForElement("[data-testid=charging-status]");
         Assert.NotNull(await Charging.GetFacilityAsync());
         Assert.NotNull(await Charging.GetMainMeterAsync());
     }
@@ -80,7 +80,7 @@ public class ChargingPagesTests : ChargingUiTestBase
         await Charging.ChangeChargerStatusAsync(Chargers[1].Id, ChargerStatus.TemporarilyDisabled);
 
         var cut = Render<ChargingIndex>();
-        cut.WaitForElement(".stat-row");
+        cut.WaitForElement("[data-testid=charging-status]");
 
         Assert.Contains("Testveien 1", cut.Markup);
         Assert.Contains("Testveien 2", cut.Markup);
@@ -96,7 +96,7 @@ public class ChargingPagesTests : ChargingUiTestBase
         await Charging.RegisterReadingAsync(MainMeter.Id, new MeterReadingDetails { ReadAt = Jan1, Kwh = 1000 });
 
         var cut = Render<ChargingIndex>();
-        cut.WaitForElement(".stat-row");
+        cut.WaitForElement("[data-testid=charging-status]");
 
         Assert.Contains("minst to avlesninger", cut.Markup);
         Assert.Contains("1000 kWh", cut.Markup);
@@ -256,7 +256,7 @@ public class ChargingPagesTests : ChargingUiTestBase
         cut.WaitForElement("#readAt");
         cut.Find($"#kwh-{MainMeter.Id}").Input("1050,5");
 
-        Assert.Contains("Forrige: 1000 kWh", cut.Find($"#kwh-{MainMeter.Id}").ParentElement!.TextContent);
+        Assert.Contains("Forrige målerstand: 1000 kWh", cut.Find($"#kwh-{MainMeter.Id}").ParentElement!.TextContent);
         Assert.Contains("+50,5 kWh", cut.Find($"#kwh-{MainMeter.Id}").ParentElement!.TextContent);
     }
 
