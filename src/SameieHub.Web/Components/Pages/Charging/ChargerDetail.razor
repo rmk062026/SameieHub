@@ -32,7 +32,7 @@ else if (_charger == null)
 else
 {
     <PageHeader Title="@(_unit?.Address ?? "Elbillader")" BackHref="/elbillading" BackText="Elbillading">
-        <a class="btn btn-primary" href="/elbillading/@_charger.Id/rediger">Rediger</a>
+        <a class="btn btn-outline-secondary" href="/elbillading/@_charger.Id/rediger">Rediger</a>
     </PageHeader>
 
     @if (_message != null)

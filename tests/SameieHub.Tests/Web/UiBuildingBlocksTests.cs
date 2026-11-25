@@ -10,6 +10,11 @@ namespace SameieHub.Tests.Web;
 /// </summary>
 public class UiBuildingBlocksTests : BunitContext
 {
+    public UiBuildingBlocksTests()
+    {
+        JSInterop.Mode = JSRuntimeMode.Loose;
+    }
+
     // PageHeader
 
     [Fact]

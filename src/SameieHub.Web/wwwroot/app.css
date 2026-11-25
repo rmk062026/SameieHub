@@ -676,12 +676,16 @@ a:focus-visible,
             box-shadow: var(--sh-focus);
         }
 
+/* On a narrow screen the open menu is part of the page flow, so it pushes the buttons below it down instead of covering them. */
 @media (max-width: 575.98px) {
+    .more-menu[open] {
+        flex-basis: 100%;
+    }
+
     .more-menu .more-menu-items {
-        right: auto;
-        left: 0;
-        min-width: 12rem;
-        max-width: calc(100vw - 2rem);
+        position: static;
+        min-width: 0;
+        box-shadow: none;
     }
 }
 
@@ -856,7 +860,7 @@ a:focus-visible,
    Lists that become cards on a narrow screen without sideways scrolling. Put the class table-cards on the table and a data-label on every
    cell (the label is shown in front of the value on small screens). The first cell is the title of the card.
 */
-@media (max-width: 575.98px) {
+@media (max-width: 991.98px) {
     .table-cards thead {
         position: absolute;
         width: 1px;
@@ -896,6 +900,9 @@ a:focus-visible,
                 content: none;
             }
 
+}
+
+@media (max-width: 991.98px) {
     .quick-tab,
     .more-menu > summary,
     .filter-chip-remove {
@@ -1063,4 +1070,54 @@ a:focus-visible,
 
 .reconciliation-compact .reconciliation-status {
     margin-bottom: 0.25rem;
+}
+
+.more-menu-items > a:focus-visible,
+.more-menu-items > button:focus-visible {
+    box-shadow: var(--sh-focus);
+    outline: none;
+}
+
+/* Skip link: the first thing a keyboard user reaches, so the menu does not have to be tabbed through on every page. */
+.skip-link {
+    position: absolute;
+    left: 0.5rem;
+    top: -4rem;
+    z-index: 2000;
+    padding: 0.6rem 1rem;
+    color: #fff;
+    background: var(--sh-primary);
+    border-radius: var(--sh-radius);
+}
+
+    .skip-link:focus {
+        top: 0.5rem;
+    }
+
+#main-content:focus {
+    outline: none;
+}
+
+/* A table that scrolls sideways inside its card shows a soft shadow on the side where more columns are hidden. */
+.table-responsive {
+    background:
+        linear-gradient(to right, var(--sh-surface) 30%, rgba(255, 255, 255, 0)) 0 0 / 2.5rem 100% no-repeat local,
+        linear-gradient(to left, var(--sh-surface) 30%, rgba(255, 255, 255, 0)) 100% 0 / 2.5rem 100% no-repeat local,
+        radial-gradient(farthest-side at 0 50%, rgba(23, 35, 47, 0.25), rgba(23, 35, 47, 0)) 0 0 / 0.8rem 100% no-repeat scroll,
+        radial-gradient(farthest-side at 100% 50%, rgba(23, 35, 47, 0.25), rgba(23, 35, 47, 0)) 100% 0 / 0.8rem 100% no-repeat scroll;
+}
+
+/* Touch screens: every button and button-like link is at least 44 px high. */
+@media (max-width: 991.98px) {
+    .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 2.75rem;
+    }
+}
+
+/* A list in a card may never clip a button: if the columns do not fit, the card scrolls sideways. */
+.data-table-card {
+    overflow-x: auto;
 }

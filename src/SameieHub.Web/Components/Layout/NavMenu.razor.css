@@ -1,4 +1,6 @@
 .sidebar {
+    display: flex;
+    flex-direction: column;
     background: var(--sh-sidebar);
     color: var(--sh-sidebar-text);
 }
@@ -32,6 +34,10 @@ svg {
 }
 
 .menu-toggle {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+    align-items: center;
+    justify-content: center;
     display: inline-flex;
     padding: 0.5rem;
     color: #fff;
@@ -41,6 +47,7 @@ svg {
 }
 
 .main-nav {
+    flex: 1;
     display: none;
     flex-direction: column;
     gap: 0.25rem;
@@ -60,6 +67,12 @@ svg {
         border-radius: var(--sh-radius);
         text-decoration: none;
     }
+
+        .main-nav ::deep a.nav-separated {
+            margin-top: auto;
+            border-top: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 0 0 var(--sh-radius) var(--sh-radius);
+        }
 
         .main-nav ::deep a:hover {
             background: rgba(255, 255, 255, 0.08);
@@ -85,6 +98,7 @@ svg {
         height: 100vh;
         position: sticky;
         top: 0;
+        overflow-y: auto;
     }
 
     .sidebar-header {

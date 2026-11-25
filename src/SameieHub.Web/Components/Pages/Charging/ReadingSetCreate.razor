@@ -4,9 +4,9 @@
 @inject TimeProvider TimeProvider
 @inject ILogger<ReadingSetCreate> Logger
 
-<PageTitle>Registrer avlesning – SameieHub</PageTitle>
+<PageTitle>Ny avlesning – SameieHub</PageTitle>
 
-<PageHeader Title="Registrer avlesning" Description="Les av hovedmåleren og undermålerne samme dag og registrer alt på én gang." />
+<PageHeader Title="Ny avlesning" Description="Les av hovedmåleren og undermålerne samme dag og registrer alt på én gang." />
 
 <ChargingTabs Selected="reading" />
 
@@ -103,7 +103,7 @@ else
         Skriv inn målerstanden du leser av. Forbruket siden forrige avlesning vises ved hvert felt.
     </p>
 
-    <form @onsubmit="SaveAsync" novalidate aria-label="Registrer avlesning">
+    <form @onsubmit="SaveAsync" novalidate aria-label="Ny avlesning">
         @if (_summaryError != null)
         {
             <div class="alert alert-danger" role="alert">@_summaryError</div>
@@ -155,7 +155,7 @@ else
                 }
                 else
                 {
-                    @:Registrer avlesning
+                    @:Lagre avlesning
                 }
             </button>
             <a class="btn btn-outline-secondary" href="/elbillading">Avbryt</a>

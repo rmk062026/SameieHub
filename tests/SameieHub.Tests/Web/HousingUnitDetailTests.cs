@@ -266,7 +266,7 @@ public class HousingUnitDetailTests : UiTestBase
 
         cut.WaitForElement(".section-heading");
         var link = cut.Find(".section-heading a");
-        Assert.Equal("Registrer styresak", link.TextContent);
+        Assert.Equal("Ny styresak", link.TextContent);
         Assert.Equal($"/styresaker/ny?boenhet={unit.Id}", link.GetAttribute("href"));
     }
 

@@ -1,6 +1,9 @@
-@* Rarely used actions behind one summary. It is the browser's own details element, so Enter and Space open it and nothing needs scripts.
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+@* Rarely used actions behind one summary. It is the browser's own details element, so Enter and Space open it and Tab moves into the items.
+   A small script (MoreMenu.razor.js) closes it with Escape, when the focus leaves it, on a click outside it, and after an item has been used.
    Irreversible actions (for example delete) may be placed inside, but must still ask for confirmation. *@
-<details class="more-menu" data-testid="more-menu">
+<details @ref="_details" class="more-menu" data-testid="more-menu">
     <summary class="btn @ButtonClass">@Label</summary>
     <div class="more-menu-items" role="group" aria-label="@Label">
         @ChildContent
@@ -8,6 +11,11 @@
 </details>
 
 @code {
+    private const string ModulePath = "./Components/Shared/MoreMenu.razor.js";
+
+    private ElementReference _details;
+    private IJSObjectReference? _module;
+
     [Parameter]
     public string Label { get; set; } = "Flere handlinger";
 
@@ -17,4 +25,31 @@
 
     [Parameter]
     public RenderFragment? ChildContent { get; set; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _module = await JS.InvokeAsync<IJSObjectReference>("import", ModulePath);
+            await _module.InvokeVoidAsync("attach", _details);
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_module == null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _module.InvokeVoidAsync("detach", _details);
+            await _module.DisposeAsync();
+        }
+        catch (JSDisconnectedException)
+        {
+            // The browser tab is already gone, so there is nothing left to clean up.
+        }
+    }
 }

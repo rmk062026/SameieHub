@@ -33,7 +33,7 @@ Eieren har godkjent planen med disse valgene (svarer på spørsmålene i avsnitt
 
 **Justert plan:** «Neste styremøte» (avsnitt 3, 5.2 og R1) leses som **«Kommende saker med møtedato»**: åpne saker med møtedato, sortert på dato, uten å påstå at et møte er bekreftet.
 
-**Status:** R0–R5 er ferdige (se avsnitt 9b–9g). R6 er neste og er ikke startet.
+**Status:** R0–R6 er ferdige (se avsnitt 9b–9h). R7 er neste og er ikke startet.
 
 ## 1. Kort oppsummering
 
@@ -431,7 +431,7 @@ Hver milepæl er avgrenset, kan godkjennes og rulles tilbake for seg, og avslutt
 | **R3 Styresaker** (ferdig) | Liste (møtedato, faner), detalj (overskriftslinje, vedtak, oppgaver, «Detaljer», adskilt slett, «x av y»). | `BoardCases/*` | UI | F-03, F-04 |
 | **R4 Skjemaer og veiledning** (ferdig) | «Gjelder», «Flere valg», veiledning om styresak/oppgave, forhåndsutfylling fra sak/boenhet. Boenhetsskjema og detalj (F-12, F-13, F-14, F-15). | `*Form.razor`, `HousingUnits/*` | UI | Hovedproblemet om styresak/oppgave |
 | **R5 Elbillading** (ferdig) | Faner, statuslinje i stedet for tallkort, forklaring av differanse, nye etiketter, «Feil? Rett her». | `Charging/*` | UI | F-10, F-26, F-27, F-29 |
-| **R6 Navigasjon og mobil** | Menyrekkefølge og navn, «+ Ny»-valg, hopp-lenke, trykkflater, kontroll av alle sider på 375 px. (Fast nedre tabellinje bare hvis eieren velger det.) | `Layout/*`, `app.css` | UI | F-31 |
+| **R6 Navigasjon og mobil** (ferdig) | Menyrekkefølge og navn, «+ Ny»-valg, hopp-lenke, trykkflater, kontroll av alle sider på 375 px. (Fast nedre tabellinje bare hvis eieren velger det.) | `Layout/*`, `app.css` | UI | F-31 |
 | **R7 Innstillinger og sluttkontroll** | «Gjenopprett» lukket som standard, helhetlig kontroll mot tilgjengelighet, språk og konsistens, oppdatering av `UI_DESIGN.md`. | `Pages/Settings/*`, docs | UI | – |
 
 **Godkjent rekkefølge:** R0 → R2 → R1 → R3 → R4 → R5 → R6 → R7. Oppgaver først fordi det er den mest brukte og den med flest funn (F-05/06/07). R1 etter R2 slik at Oversikt kan lenke til de nye listene.
@@ -581,6 +581,25 @@ Styresakskjemaet vinner lite i høyde fordi beskrivelsen nå er synlig.
 | Steg til retting av en avlesning | 2 klikk (historikk, «Korriger») | 2 klikk (lenke, «Korriger») |
 
 Registrering og avstemming er altså lengre enn før, bevisst: forklaringene er viktigere enn kort side.
+
+## 9h. R6 Navigasjon, mobil og konsistens: hva som ble gjort og funnet
+
+**Rettet:**
+
+- **Menyrekkefølge** er nå Oversikt, Styresaker, Oppgaver, Boenheter, Elbillading, og Sikkerhetskopi adskilt nederst (boenheter sto tidligere som nummer to). Aktiv markering er kontrollert på alle 17 rutene.
+- **`MoreMenu`:** Escape lukker (fokus tilbake til knappen), klikk utenfor og Tab ut lukker, et brukt punkt lukker og beholder fokus, og på mobil skyver den åpne menyen knappene ned i stedet for å dekke hovedknappen. Løsningen er et lite skript for denne komponenten. Den tidligere løsningen (`MoreActionsKey`, som gjenskapte menyen) er fjernet fordi den mistet fokus.
+- **Hopp til innhold** er lagt til (lenken måtte flytte fokus selv: en vanlig `#main-content`-lenke sendte først brukeren til forsiden på grunn av base-adressen).
+- **Ordlyd:** «Ny boenhet/oppgave/styresak/lader/avlesning» overalt, «Lagre» ved oppretting, «Rediger lader», «Til oversikten» på feilsidene. «Rediger» er omrisset på alle detaljsider.
+- **Klipping på nettbrett (regresjon fra R2):** ved 768 px var oppgavelisten bredere enn kortet og «Fullfør»-knappen ble klippet. Kortlistene gjelder nå under 992 px, og lister i kort kan rulle sideveis i stedet for å klippe.
+- **Trykkflater:** alle knapper er minst 44 px høye under 992 px (før 31–38 px). Sidemenyen kan rulle på lave skjermer.
+- **Tabeller med målerdata** beholdes som tabeller og har en skygge på kanten som viser at flere kolonner finnes.
+
+**Faktisk testet i nettleseren (demodata, isolert kopi):**
+
+- Tastatur på PC: Tab/Shift+Tab, Enter og mellomrom på «Flere handlinger» og «Flere valg», Escape, klikk utenfor, Tab ut, å bruke et menypunkt med Enter (status endret, melding vist, fokus på knappen), Elbillading-fanene (Tab og Enter), fokusramme (synlig skygge på fanene, menypunktene og sammendraget), hopp-lenken og tabulatorrekkefølgen på fire sider (ingen avvik fra visuell rekkefølge, ingen positiv `tabindex`).
+- Måling ved 375, 768 og 1024 px på 18 sider (oversikt, lister, detaljer, skjemaer, elbillading, sikkerhetskopi): ingen sideveis rulling på hele siden, ingen elementer utenfor skjermen, ingen overlappende knapper, og ved 375 og 768 px ingen knapper under 43 px.
+
+**Gjenstår:** feilmeldinger ved felt leses ikke opp automatisk av skjermlesere; mobilmenyen lukkes ikke med Escape; boenhetslisten har fortsatt «Åpne» og «Rediger» per rad; fokusramme og skjermleser er ikke testet med et ekte hjelpemiddel.
 
 ## 10. Risiko for regresjoner og hvordan de reduseres
 

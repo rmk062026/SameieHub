@@ -764,7 +764,7 @@ public class ChargingPagesTests : ChargingUiTestBase
 
         var links = cut.FindByTestId("charging-status").QuerySelectorAll("a").ToDictionary(link => link.TextContent, link => link.GetAttribute("href"));
         Assert.Equal("/elbillading", links["Elbillading"]);
-        Assert.Equal("/elbillading/avlesning", links["Registrer avlesning"]);
+        Assert.Equal("/elbillading/avlesning", links["Ny avlesning"]);
     }
 
     [Fact]
@@ -777,7 +777,7 @@ public class ChargingPagesTests : ChargingUiTestBase
 
         var section = cut.FindByTestId("charging-status");
         Assert.Contains("Ladeanlegget er ikke satt opp", section.TextContent);
-        Assert.DoesNotContain("Registrer avlesning", section.TextContent);
+        Assert.DoesNotContain("Ny avlesning", section.TextContent);
     }
 
     [Fact]

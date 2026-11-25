@@ -30,27 +30,38 @@ wwwroot/app.css  designvariabler og felles stiler
 |---|---|---|
 | `/` | Oversikt | Funksjonell (R1) |
 | `/boenheter` | Oversikt | Funksjonell |
-| `/boenheter/ny` | Registrer | Funksjonell |
+| `/boenheter/ny` | Ny boenhet | Funksjonell |
 | `/boenheter/{id}` | Detaljvisning | Funksjonell |
 | `/boenheter/{id}/rediger` | Rediger alle opplysninger | Funksjonell |
 | `/styresaker` | Oversikt | Funksjonell |
-| `/styresaker/ny` | Registrer | Funksjonell |
+| `/styresaker/ny` | Ny styresak | Funksjonell |
 | `/styresaker/{id}` | Detaljvisning med status og vedtak | Funksjonell |
 | `/styresaker/{id}/rediger` | Rediger | Funksjonell |
 | `/oppgaver` | Oversikt | Funksjonell |
-| `/oppgaver/ny` | Registrer (`?boenhet=` og `?styresak=` forhåndsvelger) | Funksjonell |
+| `/oppgaver/ny` | Ny oppgave (`?boenhet=` og `?styresak=` forhåndsvelger) | Funksjonell |
 | `/oppgaver/{id}` | Detaljvisning med hovedhandling, status og sletting | Funksjonell (R2) |
 | `/oppgaver/{id}/rediger` | Rediger | Funksjonell |
 | `/elbillading` | Oversikt (oppsett av anlegg, tall, hovedmåler, siste avstemming, ladere) | Funksjonell |
-| `/elbillading/ny` | Registrer lader (`?boenhet=` forhåndsvelger) | Funksjonell |
+| `/elbillading/ny` | Ny lader (`?boenhet=` forhåndsvelger) | Funksjonell |
 | `/elbillading/{id}` | Lader med undermåler og avlesninger | Funksjonell |
 | `/elbillading/{id}/rediger` | Rediger lader og sikringsskap | Funksjonell |
-| `/elbillading/avlesning` | Samlet avlesning: hovedmåler og undermålere | Funksjonell |
+| `/elbillading/avlesning` | Ny avlesning: hovedmåler og undermålere | Funksjonell |
 | `/elbillading/avstemming` | Avstemming for valgt periode | Funksjonell |
 | `/elbillading/maler/{id}` | Historikk for en måler | Funksjonell |
 | `/innstillinger/sikkerhetskopi` | Lag og last ned sikkerhetskopi; kontroller, bekreft og forbered gjenoppretting; resultat etter omstart | Funksjonell |
 
 Sidemeny på bred skjerm (≥ 768 px); på smal skjerm en toppstripe med menyknapp.
+
+### Navigasjonsregler (M5D-R6)
+- **Hovedmeny, i denne rekkefølgen:** Oversikt, Styresaker, Oppgaver, Boenheter, Elbillading, og «Sikkerhetskopi» adskilt nederst (egen strek; på bred skjerm nederst i sidemenyen). Det finnes ikke noe menypunkt for møteadministrasjon. Ingen fast bunnmeny.
+- **Aktiv side** markeres med `NavLink` (prefikssamsvar), så riktig punkt er markert også på detalj-, registrerings- og redigeringssider. Dette er kontrollert for alle rutene i tabellen over.
+- **Hopp til innhold:** den første lenken på hver side (synlig bare ved fokus) flytter fokus til innholdet, så tastaturbrukere slipper å tabbe gjennom menyen.
+- **Faner** (`QuickTabs`) er vanlige lenker eller knapper med `aria-current` eller `aria-pressed`. De er ikke ARIA-faner (`role=tab`), fordi de bare navigerer mellom sider eller bytter visning i en liste.
+- **Ordlyd:** oppretting heter «Ny oppgave», «Ny styresak», «Ny boenhet», «Ny lader» og «Ny avlesning» (knapper, sidetitler og faner). Skjemaer lagrer med «Lagre» (oppretting) eller «Lagre endringer» (redigering) og har «Avbryt». «Gjelder» brukes for boenhetstilknytning, og «Oversikt» for forsiden (ikke «Dashboard»). Setninger kan fortsatt si «registrert» om noe som er lagret. «Registrer vedtak» er en handling i en styresak, ikke oppretting av en ny post.
+- **Knapper:** hovedhandlingen står til høyre i sidetoppen og er den eneste fylte knappen. «Rediger» er en omrisset knapp til venstre for den på alle detaljsider, «Flere handlinger» står mellom dem, og «Slett» ligger alltid adskilt nederst på siden med bekreftelse. «Tilbake» er lenken øverst til venstre («Tilbake til saken», «Oppgaver» …). I skjemaer står «Lagre» først og «Avbryt» ved siden av.
+- **«Flere handlinger» (`MoreMenu`):** åpnes og lukkes med Enter eller mellomrom, og punktene nås med Tab. Escape lukker og setter fokus tilbake på knappen. Et klikk utenfor, eller å tabbe ut av menyen, lukker den. Når et punkt er brukt, lukkes menyen og fokus står på knappen. På smal skjerm (under 576 px) ligger den åpne menyen i sidens flyt og skyver knappene under seg ned i stedet for å dekke dem. Dette er løst med et lite skript (`MoreMenu.razor.js`) som bare brukes av denne komponenten; selve menyen er et `details`-element.
+- **Smal skjerm og berøring:** under 992 px er alle knapper minst 44 px høye. Lister med `table-cards` blir kort under 992 px (tidligere 576 px, fordi «Fullfør» ble klippet på nettbrett). Kortlistene bruker aldri vannrett rulling. Tabeller med målerdata beholdes som tabeller og ruller sideveis i sitt eget kort, med en myk skygge på kanten der flere kolonner finnes. Ingen side ruller sideveis.
+- **Kjente begrensninger (tilgjengelighet):** feilmeldinger ved felt (`ValidationMessage`) leses ikke opp automatisk av skjermlesere; skjemaets øvre feilmelding og handlingsmeldinger (`ActionFeedback`) er `role=alert` eller `role=status`. Hamburger-menyen på mobil lukkes ikke med Escape. Boenhetslisten har fortsatt «Åpne» og «Rediger» på hver rad og er ikke gjort om til kort.
 
 ## Stil
 - Farger og radius er CSS-variabler i `:root` i `app.css` (`--sh-primary`, `--sh-sidebar`, …). Endre der for å endre hele designet.

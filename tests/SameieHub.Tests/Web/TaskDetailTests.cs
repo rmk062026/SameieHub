@@ -241,7 +241,7 @@ public class TaskDetailTests : UiTestBase
     }
 
     [Fact]
-    public async Task MoreActions_StartsClosedAndClosesAgainAfterAnActionHasBeenUsed()
+    public async Task MoreActions_StartClosedAndAreAvailableForEveryOtherStatus()
     {
         var task = await RegisterAsync();
         var cut = RenderDetail(task.Id);

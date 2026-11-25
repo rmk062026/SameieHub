@@ -4,9 +4,9 @@
 @inject NavigationManager Navigation
 @inject ILogger<ChargerCreate> Logger
 
-<PageTitle>Registrer lader – SameieHub</PageTitle>
+<PageTitle>Ny lader – SameieHub</PageTitle>
 
-<PageHeader Title="Registrer elbillader" Description="Hver boenhet kan ha én lader. Undermåleren opprettes samtidig i sikringsskapet du velger."
+<PageHeader Title="Ny lader" Description="Hver boenhet kan ha én lader. Undermåleren opprettes samtidig i sikringsskapet du velger."
             BackHref="/elbillading" BackText="Elbillading" />
 
 @if (_isLoading)
@@ -46,7 +46,7 @@ else
     }
 
     <ChargerForm AvailableHousingUnits="_availableUnits" InitialHousingUnitId="_preselectedUnitId"
-                 SubmitText="Registrer lader" OnSave="RegisterAsync" />
+                 SubmitText="Lagre" OnSave="RegisterAsync" />
 }
 
 @code {

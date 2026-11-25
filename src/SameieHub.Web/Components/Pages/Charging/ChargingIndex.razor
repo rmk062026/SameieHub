@@ -8,7 +8,7 @@
 <PageHeader Title="Elbillading" Description="Status for ladeanlegget, målerstander og avstemming. Forbruket regnes ut fra avlesningene.">
     @if (_facility != null)
     {
-        <a class="btn btn-outline-secondary" href="/elbillading/ny">Registrer lader</a>
+        <a class="btn btn-outline-secondary" href="/elbillading/ny">Ny lader</a>
     }
 </PageHeader>
 
@@ -178,7 +178,7 @@ else if (_overview != null)
                 {
                     <li>
                         <a class="unit-link" href="/boenheter/@unit.Id">@unit.Address</a>
-                        – <a href="/elbillading/ny?boenhet=@unit.Id">registrer lader</a>
+                        – <a href="/elbillading/ny?boenhet=@unit.Id">ny lader</a>
                     </li>
                 }
             </ul>

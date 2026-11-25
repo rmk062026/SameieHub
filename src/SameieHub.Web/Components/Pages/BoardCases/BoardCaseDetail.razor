@@ -37,7 +37,7 @@ else
     var today = TaskService.GetToday();
     var completedTasks = _linkedTasks.Count(task => task.Status == TaskItemStatus.Completed);
 
-    <PageHeader Title="@_boardCase.Title" BackHref="/styresaker" BackText="Styresaker" MoreActionsKey="_menuVersion">
+    <PageHeader Title="@_boardCase.Title" BackHref="/styresaker" BackText="Styresaker">
         <ChildContent><a class="btn btn-outline-secondary" href="/styresaker/@_boardCase.Id/rediger">Rediger</a></ChildContent>
         <PrimaryAction>
             @switch (NextStep)
@@ -289,7 +289,6 @@ else
     private bool _isBusy;
     private bool _confirmingDelete;
     private bool _isDeleting;
-    private int _menuVersion;
     private FeedbackArea _feedbackArea = FeedbackArea.Header;
     private string? _loadError;
     private string? _message;
@@ -477,7 +476,6 @@ else
             await action();
             await ReadCaseAsync();
             _message = successMessage;
-            _menuVersion++;
 
             if (area == FeedbackArea.Decision)
             {

@@ -37,7 +37,7 @@ else if (_unit == null)
 else
 {
     <PageHeader Title="@_unit.Address" BackHref="/boenheter" BackText="Boenheter">
-        <a class="btn btn-primary" href="/boenheter/@_unit.Id/rediger">Rediger</a>
+        <a class="btn btn-outline-secondary" href="/boenheter/@_unit.Id/rediger">Rediger</a>
         @if (_unit.IsActive)
         {
             <button type="button" class="btn btn-outline-secondary" disabled="@_isChangingStatus" @onclick="DeactivateAsync">Deaktiver</button>
@@ -117,7 +117,7 @@ else
                 <h2>Styresaker</h2>
                 @if (_unit.IsActive)
                 {
-                    <a class="btn btn-outline-primary btn-sm" href="/styresaker/ny?boenhet=@_unit.Id">Registrer styresak</a>
+                    <a class="btn btn-outline-primary btn-sm" href="/styresaker/ny?boenhet=@_unit.Id">Ny styresak</a>
                 }
             </div>
             @if (_linkedCases.Count == 0)
@@ -155,7 +155,7 @@ else
                 <h2>Oppgaver</h2>
                 @if (_unit.IsActive)
                 {
-                    <a class="btn btn-outline-primary btn-sm" href="/oppgaver/ny?boenhet=@_unit.Id">Registrer oppgave</a>
+                    <a class="btn btn-outline-primary btn-sm" href="/oppgaver/ny?boenhet=@_unit.Id">Ny oppgave</a>
                 }
             </div>
             @if (_linkedTasks.Count == 0)

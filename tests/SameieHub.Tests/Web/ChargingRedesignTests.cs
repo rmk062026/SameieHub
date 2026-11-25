@@ -125,7 +125,7 @@ public class ChargingRedesignTests : ChargingUiTestBase
         var cut = await RenderIndexAsync();
 
         var tabs = cut.FindAll("nav[aria-label=Elbillading] a");
-        Assert.Equal(["Oversikt", "Registrer avlesning", "Avstemming"], tabs.Select(tab => tab.TextContent.Trim()).ToList());
+        Assert.Equal(["Oversikt", "Ny avlesning", "Avstemming"], tabs.Select(tab => tab.TextContent.Trim()).ToList());
         Assert.Equal(["/elbillading", "/elbillading/avlesning", "/elbillading/avstemming"], tabs.Select(tab => tab.GetAttribute("href")).ToList());
         Assert.Equal("page", tabs[0].GetAttribute("aria-current"));
         Assert.Null(tabs[1].GetAttribute("aria-current"));
@@ -141,7 +141,7 @@ public class ChargingRedesignTests : ChargingUiTestBase
 
         var cut = await RenderIndexAsync();
 
-        Assert.Equal(["Registrer lader"], cut.FindByTestId("page-actions").QuerySelectorAll("a").Select(link => link.TextContent).ToList());
+        Assert.Equal(["Ny lader"], cut.FindByTestId("page-actions").QuerySelectorAll("a").Select(link => link.TextContent).ToList());
         Assert.Contains("Ingen avlesninger er registrert", cut.FindByTestId("main-meter-status").TextContent);
         Assert.Equal("/elbillading/avlesning", cut.FindByTestId("main-meter-status").QuerySelector("a")!.GetAttribute("href"));
     }

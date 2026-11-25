@@ -35,7 +35,7 @@ else
 {
     var today = TaskService.GetToday();
 
-    <PageHeader Title="@_task.Title" BackHref="/oppgaver" BackText="Oppgaver" MoreActionsKey="_menuVersion">
+    <PageHeader Title="@_task.Title" BackHref="/oppgaver" BackText="Oppgaver">
         <ChildContent><a class="btn btn-outline-secondary" href="/oppgaver/@_task.Id/rediger">Rediger</a></ChildContent>
         <PrimaryAction>
             @if (_task.Status == TaskItemStatus.Completed)
@@ -199,7 +199,6 @@ else
     private bool _isBusy;
     private bool _confirmingDelete;
     private bool _isDeleting;
-    private int _menuVersion;
     private string? _loadError;
     private string? _message;
     private TaskItemStatus? _undoTo;
@@ -317,7 +316,6 @@ else
             await ReadTaskAsync();
             _message = successMessage;
             _undoTo = undoTo;
-            _menuVersion++;
         }
         catch (KeyNotFoundException)
         {

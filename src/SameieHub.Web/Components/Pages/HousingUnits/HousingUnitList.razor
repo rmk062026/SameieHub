@@ -5,7 +5,7 @@
 <PageTitle>Boenheter – SameieHub</PageTitle>
 
 <PageHeader Title="Boenheter" Description="Oversikt over boligene i sameiet.">
-    <a class="btn btn-primary" href="/boenheter/ny">Registrer boenhet</a>
+    <a class="btn btn-primary" href="/boenheter/ny">Ny boenhet</a>
 </PageHeader>
 
 @if (StatusMessage != null)
@@ -31,7 +31,7 @@ else if (_allUnits.Count == 0)
     <section class="surface-card empty-state">
         <h2>Ingen boenheter registrert ennå</h2>
         <p>Registrer den første boenheten for å komme i gang.</p>
-        <a class="btn btn-primary" href="/boenheter/ny">Registrer boenhet</a>
+        <a class="btn btn-primary" href="/boenheter/ny">Ny boenhet</a>
     </section>
 }
 else
