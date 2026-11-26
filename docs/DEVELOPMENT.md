@@ -44,3 +44,16 @@ Gjelder `BoardCase` (M2C, gjort) og `TaskItem` (M3C, gjort).
 1. Konfigurer fremmednøkkelen med `HasOne<HousingUnit>().WithMany().HasForeignKey(...).OnDelete(DeleteBehavior.Restrict)`. Ikke bruk cascade.
 2. Sjekk at den genererte migreringen har `onDelete: ReferentialAction.Restrict`.
 3. Skriv tester mot den ekte tabellen etter mønsteret i `BoardCaseRelationTests`: sletting av en boenhet med en tilknyttet post skal gi `HousingUnitInUseException`, og boenheten skal bestå. For en ny tabell som refererer til `BoardCases` (`TaskItem`, M3C, gjort i `TaskItemRelationTests`): tilsvarende test mot `BoardCaseInUseException`.
+
+## Windows-modus (M8-1)
+Den vanlige utviklingsstarten er uendret. Windows-modus brukes bare når du ber om den, og er til for å prøve det som skal bli den distribuerte programmen.
+
+```powershell
+dotnet run --project src/SameieHub.Web --no-launch-profile -- --windows-host "--Database:Path=$env:TEMP\sameiehub-windows-test.db"
+```
+
+- Lytter på `127.0.0.1` med en tilfeldig port (adressen vises i vinduet), åpner nettleseren, og avslutter med Ctrl+C eller lukking av vinduet.
+- `--unattended` hindrer at nettleseren åpnes og at meldingsboks vises. Bruk det i skript.
+- Loggfiler ligger i `logs` ved siden av databasefilen, og en sikkerhetskopi før oppgradering i `pre-migration`.
+- Bruk alltid en egen testdatabase med `--Database:Path`. Demodatabasen avvises i Windows-modus (bruk `Start-demo.cmd`).
+- Før M8-3 (engangskode og cookie) er modusen bare for kontrollert testing med fiktive data. Se [WINDOWS_DISTRIBUTION_PLAN.md](WINDOWS_DISTRIBUTION_PLAN.md), vedlegg A.

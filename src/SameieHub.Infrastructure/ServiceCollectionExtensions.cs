@@ -41,6 +41,12 @@ public static class ServiceCollectionExtensions
             provider.GetRequiredService<TimeProvider>(),
             provider.GetRequiredService<ILogger<SqliteDatabaseRestore>>()));
 
+        services.AddSingleton(provider => new DatabaseUpgrader(
+            databasePath,
+            provider.GetRequiredService<IDbContextFactory<SameieHubDbContext>>(),
+            provider.GetRequiredService<TimeProvider>(),
+            provider.GetRequiredService<ILogger<DatabaseUpgrader>>()));
+
         return services;
     }
 

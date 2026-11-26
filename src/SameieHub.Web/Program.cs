@@ -4,8 +4,15 @@ using SameieHub.Infrastructure.Demo;
 using SameieHub.Infrastructure.Persistence;
 using SameieHub.Infrastructure.Restore;
 using SameieHub.Web.Components;
+using SameieHub.Web.Hosting;
 
-var builder = WebApplication.CreateBuilder(args);
+// The Windows mode (--windows-host) is the way the program is started as a Windows program. Without it, the program starts
+// exactly as it always has, so dotnet run, the demo scripts and the tests are not affected.
+var windowsHost = WindowsHost.IsRequested(args);
+var unattended = WindowsHost.IsUnattended(args);
+var builder = windowsHost
+    ? WindowsHost.CreateBuilder(args, AppContext.BaseDirectory)
+    : WebApplication.CreateBuilder(args);
 
 // The demo command (scripts/demo.ps1) is the only way demo data is created. It only runs against the dedicated
 // demo database, so it can never fill the ordinary database or any other file by accident.
@@ -31,27 +38,53 @@ builder.Services.AddSingleton(TimeProvider.System);
 
 var app = builder.Build();
 
-// A restore that was prepared while the program was running is carried out here, before any connection to the
-// database is opened. This is also where an interrupted restore is finished or undone.
-var restoreOutcome = app.Services.GetRequiredService<IDatabaseRestore>().ApplyPendingRestore();
-if (restoreOutcome.Kind != RestoreOutcomeKind.NothingPending)
+InstanceLock? instanceLock = null;
+if (windowsHost)
 {
-    app.Logger.LogWarning("Database restore at startup: {Result}.", restoreOutcome.Kind);
-}
+    var isDemo = WindowsHost.UsesDemoDatabase(databasePath) || seedDemo || checkDemo;
+    var failure = isDemo ? StartupMessages.For(StartupFailureReason.DemoDatabaseNotAllowed) : null;
+    if (failure == null)
+    {
+        var result = await WindowsStartup.PrepareAsync(
+            databasePath,
+            app.Services.GetRequiredService<IDatabaseRestore>(),
+            app.Services.GetRequiredService<DatabaseUpgrader>(),
+            app.Logger);
+        failure = result.Failure;
+        instanceLock = result.Lock;
+    }
 
-// If the state of the database cannot be guaranteed, the program stops here: it must not migrate, which would create a new, empty
-// database, and it must not start on an uncertain file. Every file is kept in the restore folder for manual recovery.
-if (restoreOutcome.Kind == RestoreOutcomeKind.Unresolved)
+    if (failure != null)
+    {
+        WindowsConsole.ShowFailure(failure, unattended);
+
+        return 1;
+    }
+}
+else
 {
-    Console.Error.WriteLine(
-        "SameieHub stopped: an interrupted database restore could not be resolved safely. No database was created and no files were deleted. "
-        + "The old database and the prepared one are kept in the folder 'restore' next to the database file. "
-        + "See the documentation ('Hvis gjenopprettingen står uavklart') before you start the program again.");
+    // A restore that was prepared while the program was running is carried out here, before any connection to the
+    // database is opened. This is also where an interrupted restore is finished or undone.
+    var restoreOutcome = app.Services.GetRequiredService<IDatabaseRestore>().ApplyPendingRestore();
+    if (restoreOutcome.Kind != RestoreOutcomeKind.NothingPending)
+    {
+        app.Logger.LogWarning("Database restore at startup: {Result}.", restoreOutcome.Kind);
+    }
 
-    return 1;
+    // If the state of the database cannot be guaranteed, the program stops here: it must not migrate, which would create a new, empty
+    // database, and it must not start on an uncertain file. Every file is kept in the restore folder for manual recovery.
+    if (restoreOutcome.Kind == RestoreOutcomeKind.Unresolved)
+    {
+        Console.Error.WriteLine(
+            "SameieHub stopped: an interrupted database restore could not be resolved safely. No database was created and no files were deleted. "
+            + "The old database and the prepared one are kept in the folder 'restore' next to the database file. "
+            + "See the documentation ('Hvis gjenopprettingen står uavklart') before you start the program again.");
+
+        return 1;
+    }
+
+    await app.Services.MigrateSameieHubDatabaseAsync();
 }
-
-await app.Services.MigrateSameieHubDatabaseAsync();
 
 if (seedDemo)
 {
@@ -73,11 +106,18 @@ app.Logger.LogInformation(
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
-    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
-    app.UseHsts();
+    if (!windowsHost)
+    {
+        // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
+        app.UseHsts();
+    }
 }
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
-app.UseHttpsRedirection();
+if (!windowsHost)
+{
+    // The Windows mode only has a plain http address on this computer, so there is no https address to redirect to.
+    app.UseHttpsRedirection();
+}
 
 app.UseAntiforgery();
 
@@ -85,8 +125,57 @@ app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
-app.Run();
-return 0;
+if (!windowsHost)
+{
+    app.Run();
+
+    return 0;
+}
+
+return await RunWindowsHostAsync(app, instanceLock!, unattended);
+
+static async Task<int> RunWindowsHostAsync(WebApplication app, InstanceLock instanceLock, bool unattended)
+{
+    using (instanceLock)
+    {
+        WindowsHost.RegisterShutdown(app.Lifetime, app.Logger);
+        app.Lifetime.ApplicationStarted.Register(() => AnnounceStart(app, unattended));
+        WindowsConsole.SetTitle();
+        WindowsConsole.RegisterCloseHandler(app.Lifetime, app.Logger);
+
+        try
+        {
+            await app.RunAsync();
+        }
+        catch (Exception exception) when (exception is IOException or System.Net.Sockets.SocketException)
+        {
+            app.Logger.LogError("The server could not start ({ExceptionType}).", exception.GetType().Name);
+            WindowsConsole.ShowFailure(StartupMessages.For(StartupFailureReason.ServerCouldNotStart), unattended);
+
+            return 1;
+        }
+
+        app.Logger.LogInformation("SameieHub has stopped.");
+
+        return 0;
+    }
+}
+
+static void AnnounceStart(WebApplication app, bool unattended)
+{
+    var address = WindowsHost.GetAddress(app);
+    if (address == null)
+    {
+        return;
+    }
+
+    app.Logger.LogInformation("SameieHub is running on {Address}.", address);
+    WindowsConsole.ShowRunningBanner(address);
+    if (!unattended)
+    {
+        WindowsConsole.OpenBrowser(address, app.Logger);
+    }
+}
 
 static async Task<int> RunDemoSeedingAsync(IServiceProvider services)
 {

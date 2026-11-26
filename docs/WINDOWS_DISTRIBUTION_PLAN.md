@@ -1,6 +1,6 @@
 # Windows-distribusjon: analyse og plan (M8)
 
-**Status:** plan for godkjenning. Ingen produksjonskode, ingen installasjonsprogram og ingen endringer i domene, database, migreringer eller grensesnitt er laget. Dokumentet bygger på det koden gjør i dag (kontrollert 2026-11-26, commit `f373965`) og på en testpublisering som ble gjort i en midlertidig mappe utenfor repoet.
+**Status:** planen er godkjent (D1–D12, med presiseringer). **M8-1 er gjennomført** (se vedlegg A med faktiske funn). M8-2 til M8-6 er ikke startet. Ingen installasjonsprogram og ingen endringer i domene, migreringer eller grensesnitt er laget. Dokumentet bygger på det koden gjør i dag (kontrollert 2026-11-26, commit `f373965`) og på en testpublisering som ble gjort i en midlertidig mappe utenfor repoet.
 
 **Målet:** en vanlig Windows-bruker installerer SameieHub, starter det fra Start-menyen, får grensesnittet åpnet automatisk, beholder dataene sine ved oppdatering og kan avslutte programmet på en tydelig måte. Ingen Visual Studio, ingen PowerShell, ingen `dotnet`-kommandoer.
 
@@ -449,3 +449,107 @@ Rekkefølgen er satt slik at hver milepæl kan brukes og testes alene. M8-3 kan 
 ### Begrensninger i denne milepælen (M8, bare plan)
 
 Ikke gjort, i tråd med oppdraget: ingen Windows-launcher, ingen installasjonsprogram, ingen endring av domene, database, migreringer, grensesnitt eller `MY_CONTRIBUTIONS.md`, ingen nye pakker, og ingen møteadministrasjon. Testpubliseringen og testkjøringen ble gjort i en midlertidig mappe og påvirket ikke repoet eller noen reell database.
+
+---
+
+## Vedlegg A. M8-1: Windows-vertslag og sikker oppstart (gjennomført)
+
+M8-1 lager det en Windows-start trenger i selve programmet, uten å endre den vanlige utviklingsstarten. Dette vedlegget beskriver hva som faktisk ble gjort og funnet, og hva som ikke er prøvd. Kapitlene over er planen slik den ble godkjent og er ikke omskrevet.
+
+### A.1 To moduser
+
+| | **Vanlig start** (uendret) | **Windows-modus** (`--windows-host`, eller miljøvariabelen `SAMEIEHUB_WINDOWS_HOST=1`) |
+|---|---|---|
+| Brukes av | `dotnet run`, `Start-demo.cmd`, `demo.ps1`, testene | Den framtidige distribuerte programmappen (M8-2 gjør modusen til standard for den publiserte filen) |
+| Adresse | Som i dag (`launchSettings.json`, `ASPNETCORE_URLS`, demoen på port 5100) | `127.0.0.1`, port valgt av operativsystemet |
+| Innholdsrot | Som i dag | Programmappen (`AppContext.BaseDirectory`) |
+| Vertsnavn | `AllowedHosts: *` (som før) | Bare `127.0.0.1` og `localhost` |
+| HTTPS | Uendret | Ingen HTTPS-omdirigering og ingen HSTS (det finnes bare en vanlig http-adresse på denne maskinen) |
+| Instanssperre | Ingen | Ja |
+| Migrering | Direkte `Migrate()` som før | `DatabaseUpgrader`: nyere-sjekk, sikkerhetskopi, migrering |
+| Logg | Konsollen som før | Konsoll og loggfil, med strenge regler |
+| Demo | Som før | Avvises (demodatabasen og `--seed-demo`/`--check-demo` kan ikke brukes) |
+
+Valget gjøres med ett flagg fordi ingenting i utviklingsflyten skal endre seg. Standardverdien for den publiserte filen avgjøres i M8-2.
+
+`--unattended` hindrer at nettleseren åpnes og at meldingsboks eller tastetrykk-vent vises. Det brukes ved testing og av CI.
+
+### A.2 Nye filer
+
+| Fil | Ansvar |
+|---|---|
+| `Web/Hosting/WindowsHost.cs` | Bygger programmet i Windows-modus (innholdsrot, loopback, vertsnavn, logg), nedstenging, behandling av lukket konsollvindu, banner og feilvisning |
+| `Web/Hosting/WindowsStartup.cs` | Rekkefølgen før serveren starter, og de norske feilmeldingene (`StartupMessages`) |
+| `Web/Hosting/InstanceLock.cs` | Instanssperren |
+| `Web/Hosting/SafeLogging.cs` | `SafeLoggerProvider` og `FileLogSink` |
+| `Infrastructure/Persistence/DatabaseUpgrader.cs` | Versjonskontroll, sikkerhetskopi før migrering og migrering |
+
+`Program.cs` har fått en gren for Windows-modus. Ellers er den uendret. Det er ikke laget nye prosjekter eller pakker.
+
+### A.3 Rekkefølge i Windows-modus
+
+1. Ta **instanssperren** (ellers: «SameieHub kjører allerede»).
+2. `ApplyPendingRestore` (som før, før noen databaseforbindelse). Er utfallet `Unresolved`, slippes sperren og programmet stopper.
+3. **`DatabaseUpgrader`:** finnes ikke databasen (eller er filen tom), opprettes den. Ellers kontrolleres den med `BackupFileInspector` (samme regler som restore bruker for sikkerhetskopier): skadet, ikke SameieHub og nyere enn programmet avvises uten at noe endres. En eldre database kopieres, og så migreres den.
+4. Serveren starter på `127.0.0.1:0`, og adressen vises i vinduet og i loggen. Nettleseren åpnes (ikke med `--unattended`).
+
+Sperren tas **før** gjenopprettingen, så en annen forekomst aldri kan flytte databasefilene mens den første kjører. Dette er dekket av en test som viser at `ApplyPendingRestore` ikke kalles når sperren er opptatt.
+
+### A.4 Instanssperren
+
+En fil `sameiehub.lock` (navnet følger databasen: `sameiehub-demo.lock` for demoen) ved siden av databasen åpnes med `FileShare.None` så lenge programmet kjører. Windows frigjør den når prosessen slutter, også etter krasj, så en gammel fil blokkerer aldri. **Filen slettes aldri**: å slette en fil en annen forekomst holder åpen, kunne latt to forekomster hver få sin sperre. Bare delingsfeil (Windows-feil 32 og 33) betyr «opptatt». Andre feil (ingen tilgang, full disk) gir en egen melding.
+
+Testet automatisk: to samtidige starter, frigjøring etter vanlig avslutning, fil som er igjen etter en krasj, mappe som mangler, og dobbel `Dispose`. Testet manuelt: andre start mot et kjørende program ga meldingen og avslutningskode 1, og en ny start etter at det første programmet ble avsluttet med tvang (`Stop-Process -Force`) startet uten problemer.
+
+### A.5 Databaseoppgradering
+
+- **Nyere database:** avvises før noe skrives. Test: sjekksummen av filen er lik før og etter. Manuelt kontrollert med en kopi der en ukjent migrering var lagt inn.
+- **Sikkerhetskopi før migrering** (bare for en eldre database): `pre-migration\sameiehub-before-upgrade-<tid>.db`. De tre siste beholdes, og eldre slettes først etter en vellykket migrering.
+- **Funn: den vanlige backupmotoren kan ikke brukes til dette.** `SqliteDatabaseBackup` validerer kopien som en *komplett* SameieHub-database (alle tabeller og alle migreringer) og avviser derfor en eldre database. Motoren og backupformatet er uendret. `DatabaseUpgrader` bruker i stedet SQLites egen backup-API fra en skrivebeskyttet forbindelse (så kopien er konsistent selv med en aktiv `-wal`-fil), skriver til en midlertidig fil, kontrollerer at kopien er en lesbar, gyldig *eldre* SameieHub-database og gir den så sitt endelige navn uten overskriving. Test: en rad som bare finnes i `-wal`-filen er med i kopien.
+- **Migreringsfeil:** programmet stopper, kopien beholdes, og meldingen sier hvor den ligger. Etter feilen kontrolleres databasen: den må bestå SQLites kontroller og ha nøyaktig samme migreringshistorikk som før. Først da sier meldingen at den er kontrollert, og meldingen sier også at innholdet ikke er sammenlignet rad for rad. Er kontrollen negativ, står det at databasen ikke kunne bekreftes uendret. Det gjøres **ingen automatisk gjenoppretting**.
+- **Test av feilende migrering:** databasen settes på første migrering, og en kolonne som migrering nummer to ville legge til som sjette endring, opprettes på forhånd. Migreringen feiler da etter fem vellykkede endringer. Resultat: alle fem er rullet tilbake, og historikken er uendret. Dette er verifisert for **dette** tilfellet (SQLite og EF Core kjører en migrering i én transaksjon). Det er ikke bevist for alle tenkelige feil (for eksempel en full disk midt i en skriving).
+- **Sikkerhetskopi som ikke kan lages** (for eksempel at mappen `pre-migration` er en fil): migreringen starter ikke.
+
+### A.6 Nettverk og vertsnavn
+
+Kontrollert automatisk (en liten applikasjon med samme vertsinnstillinger) og manuelt mot den publiserte filen:
+
+- Bare `127.0.0.1` lytter på porten (`GetActiveTcpListeners` og `netstat`). Port valgt av operativsystemet.
+- Maskinens LAN-adresse og `::1` gir ingen forbindelse.
+- Riktig vertsnavn (`127.0.0.1` eller `localhost`) gir 200. `evil.example`, `127.0.0.1.evil.example`, en annen IP-adresse og `[::1]` gir 400.
+- Den vanlige utviklingsstarten har fortsatt `AllowedHosts: *` og slipper gjennom fremmede vertsnavn (målt). Det er med vilje uendret.
+
+**Begrensning:** vertsnavnkontrollen beskytter mot enkel DNS-rebinding, men ikke mot andre prosesser på samme maskin, og den erstatter ikke tilgangsbeskyttelsen i M8-3 (engangskode og sesjonscookie). Frem til M8-3 skal programmet bare brukes i kontrollert testmiljø med fiktive data.
+
+### A.7 Loggføring
+
+- **Sted:** `logs\sameiehub-<dato>.log` i datamappen (brukerens private mappe, ved siden av databasen).
+- **Grenser:** 1 MB per fil og 14 filer. Er en fil full, skrives én linje om det, og resten av dagen logges ikke. Eldre filer slettes.
+- **Innhold:** tid, nivå, kategori og melding på én linje (linjeskift fjernes). **Unntak skrives bare som typenavn** (og indre typenavn), aldri meldingen, fordi meldingen fra et bibliotek kan inneholde skjemainnhold eller data. Dette gjelder både loggfilen og konsollvinduet.
+- **Filtre:** `Microsoft` og `System` er begrenset til advarsler og feil, `SameieHub` til informasjon. Dermed logges ingen SQL (EF Core logger kommandoer på informasjonsnivå) og ikke rammeverkets oppstartslinjer, som inneholder full mappesti med Windows-brukernavn. `Microsoft.Hosting.Lifetime` er også begrenset, så SameieHub logger selv at den kjører, på hvilken adresse, og at den avslutter.
+- **Funn:** en publisert fil som ble startet fra en annen arbeidsmappe enn sin egen, leste ikke `appsettings.json` og logget da SQL. Innholdsroten settes derfor til programmappen, og filtrene settes i koden, så loggingen ikke avhenger av en fil.
+- **Ikke verifisert:** at *ingen* tredjepartskomponent noen gang skriver data i en melding (ikke i et unntak). Kontrollen gjelder de meldingene vi har sett og er en regel, ikke et bevis. Meldinger fra `Microsoft`-kategorier er likevel bare advarsler og feil.
+
+### A.8 Avslutning: testet på Windows
+
+Programmet ble startet fra en annen arbeidsmappe enn programmappen (self-contained publisering i en midlertidig mappe, med en isolert database). Begge konsollhendelsene ble sendt til et ekte konsollvindu (klassisk `conhost`).
+
+| Hendelse | Resultat |
+|---|---|
+| **Ctrl+C** (`GenerateConsoleCtrlEvent`) | Ordnet. Loggen har «shutting down» og «has stopped», avslutningskode 0, `-wal` og `-shm` er borte, sperren og databasen kan åpnes igjen med en gang. |
+| **Lukking med X, før rettingen** (`SC_CLOSE` sendt til konsollvinduet) | **Ikke ordnet.** Programmet ble avsluttet av Windows med en gang. Ingen nedstengningskode kjørte (ingen logglinjer), og `-wal` og `-shm` ble liggende. Sperren ble likevel frigjort av operativsystemet, og SQLite gjenoppretter fra `-wal`-filen ved neste åpning. |
+| **Lukking med X, etter rettingen** | Ordnet. Loggen har «The console window was closed…» og «shutting down», `-wal` og `-shm` er borte, og sperren og databasen er frie innen ca. et halvt sekund. Linjen «has stopped» ble ikke alltid skrevet, fordi Windows avslutter prosessen når kontrollhåndtereren returnerer. |
+| **Ny start etter at programmet ble avsluttet med tvang** | Starter normalt. Databasen åpnes, og sperren er fri. |
+
+**Retting:** `SetConsoleCtrlHandler` fanger lukking av vinduet, avlogging og avslutning av Windows. Håndtereren ber verten stoppe, og venter inntil fire sekunder (Windows gir ca. fem).
+
+**Hva som *ikke* er prøvd:**
+- Et ekte museklikk på X i et vindu en person ser. `SC_CLOSE` er det X-knappen sender, men det ble sendt programmatisk til konsollvinduet.
+- Windows Terminal som standard terminal (konsollvinduet i testen var klassisk `conhost`). Der kan lukking av fanen oppføre seg annerledes.
+- Avlogging og avslutning av Windows (håndtereren er registrert, men ikke prøvd).
+- Meldingsboksen ved oppstartsfeil og at nettleseren åpnes. Begge ble hoppet over med `--unattended`. Kode og meldingstekst finnes, men visningen er ikke sett.
+- Norske tegn i konsollen: tekstene ble sett bare gjennom en omdirigert utdata. I et ekte konsollvindu avhenger tegnene av kodesiden.
+
+### A.9 Gjenstår (ikke M8-1)
+
+Engangskode og sesjonscookie (M8-3), publisering som `SameieHub.exe` med Windows-modus som standard (M8-2), installasjon (M8-4), knapper for avslutning og omstart (M8-5), og test på en ren maskin eller virtuell maskin (D12, før distribusjon).

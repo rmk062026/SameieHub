@@ -915,3 +915,6 @@ Gjenopprettingen forberedes først når brukeren bekrefter, så en forlatt side 
 - **Ingen automatisk eller planlagt sikkerhetskopi**, og ingen skylagring.
 - **Omstart må gjøres for hånd.** Programmet kan ikke starte seg selv på nytt, og siden kan ikke vite hvordan det startes (i M5C-pakken kan teksten tilpasses).
 - Gamle databaser i `restore` slettes aldri automatisk.
+
+## Windows-vertsmodus (M8-1)
+Programmet har to startmåter. Den vanlige er uendret. Den andre (`--windows-host`) er forberedelsen til en selvstendig Windows-versjon: loopback med tilfeldig port, instanssperre, kontroll av databaseversjon, sikkerhetskopi før migrering, loggfil og vertsnavnkontroll. Valget, rekkefølgen, funn og det som ikke er prøvd, står i [WINDOWS_DISTRIBUTION_PLAN.md](WINDOWS_DISTRIBUTION_PLAN.md), vedlegg A. Backupmotoren og restoremotoren er ikke endret. `DatabaseUpgrader` lager en egen kopi fordi motoren bare godtar en komplett, ferdig migrert database.
