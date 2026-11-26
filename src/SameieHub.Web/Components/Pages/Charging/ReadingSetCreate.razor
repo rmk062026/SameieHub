@@ -87,9 +87,9 @@ else if (_result != null)
         }
 
         <div class="form-actions mt-3">
-            <button type="button" class="btn btn-primary" @onclick="StartNew">Registrer en ny avlesning</button>
+            <button type="button" class="btn btn-primary" @onclick="StartNew">Ny avlesning</button>
             <a class="btn btn-outline-secondary" href="/elbillading/avstemming">Se avstemming</a>
-            <a class="btn btn-outline-secondary" href="/elbillading">Til oversikten</a>
+            <a class="btn btn-outline-secondary" href="/elbillading">Til elbillading</a>
         </div>
         <p class="mt-3 mb-0">
             <a data-testid="correct-reading-link" href="/elbillading/maler/@_mainMeter.Id">Feil avlesning? Se historikk og rett</a>
@@ -317,6 +317,7 @@ else
         if (error != null)
         {
             builder.AddAttribute(13, "aria-invalid", "true");
+            builder.AddAttribute(24, "aria-describedby", $"{id}-error");
         }
 
         builder.CloseElement();
@@ -341,6 +342,7 @@ else
             builder.OpenElement(20, "div");
             builder.AddAttribute(21, "class", "validation-message");
             builder.AddAttribute(22, "role", "alert");
+            builder.AddAttribute(25, "id", $"{id}-error");
             builder.AddContent(23, error);
             builder.CloseElement();
         }

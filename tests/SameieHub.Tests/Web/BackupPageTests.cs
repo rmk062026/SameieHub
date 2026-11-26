@@ -231,6 +231,49 @@ public class BackupPageTests : UiTestBase, IAsyncLifetime
         Assert.Contains("gyldig.db", cut.Find("[data-testid=restore-pending]").TextContent);
     }
 
+    [Fact]
+    public async Task Restore_Section_IsClosedByDefault_ButTheSummaryTellsWhatIsInside_AndTheBackupWarningIsAlwaysVisible()
+    {
+        UseEngines();
+        var cut = RenderPage();
+
+        var details = cut.Find("[data-testid=restore-section] details");
+        Assert.False(details.HasAttribute("open"));
+        Assert.Contains("Gjenopprett fra sikkerhetskopi", details.QuerySelector("summary")!.TextContent);
+        Assert.Contains("Erstatter alle dataene", details.QuerySelector("summary")!.TextContent);
+        Assert.Contains("ikke kryptert", cut.Markup);
+        await Task.CompletedTask;
+    }
+
+    [Fact]
+    public async Task Restore_Section_OpensByItselfWhenThereIsAnErrorOrAFileToConfirm()
+    {
+        UseEngines();
+        var cut = RenderPage();
+
+        cut.FindComponent<InputFile>().UploadFiles(InputFileContent.CreateFromText("hei", "regneark.xlsx"));
+        cut.WaitForElement("[data-testid=restore-error]");
+        Assert.True(cut.Find("[data-testid=restore-section] details").HasAttribute("open"));
+
+        await UploadAsync(cut, _validBackup);
+        cut.WaitForElement("[data-testid=restore-check]");
+        Assert.True(cut.Find("[data-testid=restore-section] details").HasAttribute("open"));
+    }
+
+    [Fact]
+    public async Task Restore_ARestoreThatIsWaiting_IsShownAboveTheBackupSection_AndTheSectionForChoosingAFileIsGone()
+    {
+        UseEngines();
+        await Engine.PrepareAsync(_validBackup);
+
+        var cut = RenderPage();
+
+        var markup = cut.Markup;
+        Assert.True(markup.IndexOf("restore-pending", StringComparison.Ordinal) < markup.IndexOf("create-backup", StringComparison.Ordinal));
+        Assert.Empty(cut.FindAll("[data-testid=restore-section]"));
+        Assert.Contains("Lukk SameieHub", cut.Find("[data-testid=restore-pending]").TextContent);
+    }
+
     [Theory]
     [InlineData("text", "ikke en gyldig sikkerhetskopi")]
     [InlineData("other", "ikke fra SameieHub")]

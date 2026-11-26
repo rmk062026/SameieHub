@@ -31,9 +31,9 @@
     }
     @if (!string.IsNullOrEmpty(Error))
     {
-        <div class="validation-message" data-testid="scope-error">@Error</div>
+        <div class="validation-message" role="alert" data-testid="scope-error">@Error</div>
     }
-    <ValidationMessage For="For" />
+    <ValidationMessage For="For" role="alert" />
 </fieldset>
 
 @code {

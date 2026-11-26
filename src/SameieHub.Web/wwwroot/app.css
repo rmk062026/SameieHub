@@ -1121,3 +1121,21 @@ a:focus-visible,
 .data-table-card {
     overflow-x: auto;
 }
+
+/* R7: cells that only hold buttons have no label in a card, and the items in an open menu are as easy to hit as the buttons. */
+@media (max-width: 991.98px) {
+    .table-cards td.cell-actions {
+        justify-content: flex-end;
+    }
+
+        .table-cards td.cell-actions::before {
+            content: none;
+        }
+
+    .more-menu-items > a,
+    .more-menu-items > button {
+        display: flex;
+        align-items: center;
+        min-height: 2.75rem;
+    }
+}

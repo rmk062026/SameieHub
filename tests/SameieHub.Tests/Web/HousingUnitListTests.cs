@@ -16,7 +16,7 @@ public class HousingUnitListTests : UiTestBase
     }
 
     [Fact]
-    public async Task Render_StoredUnits_ShowsAddressOwnersSectionAndStatusSortedNumerically()
+    public async Task Render_StoredUnits_ShowsAddressOwnersAndStatusSortedNumerically()
     {
         await Service.RegisterAsync(new HousingUnitDetails
         {
@@ -34,7 +34,6 @@ public class HousingUnitListTests : UiTestBase
         Assert.Contains("Storgata 2A", rows[0].TextContent);
         Assert.Contains("Storgata 10B", rows[1].TextContent);
         Assert.Contains("Test Eier og Test Medeier", rows[1].TextContent);
-        Assert.Contains("12", rows[1].TextContent);
         Assert.Contains("Aktiv", rows[1].TextContent);
     }
 
@@ -134,16 +133,32 @@ public class HousingUnitListTests : UiTestBase
     }
 
     [Fact]
-    public async Task Render_StoredUnits_LinksToDetailAndEditPages()
+    public async Task Render_StoredUnits_TheAddressLinksToTheDetailPage_AndThereIsNoEditButtonPerRow()
     {
         var unit = await Service.RegisterAsync("Storgata 1A");
 
         var cut = Render<HousingUnitList>();
 
         cut.WaitForElement("tbody tr");
-        var hrefs = cut.FindAll("tbody a").Select(link => link.GetAttribute("href")).ToList();
-        Assert.Contains($"/boenheter/{unit.Id}", hrefs);
-        Assert.Contains($"/boenheter/{unit.Id}/rediger", hrefs);
+        var link = Assert.Single(cut.FindAll("tbody a"));
+        Assert.Equal($"/boenheter/{unit.Id}", link.GetAttribute("href"));
+        Assert.Equal("Storgata 1A", link.TextContent.Trim());
+        Assert.Empty(cut.FindAll("tbody .btn"));
+    }
+
+    [Fact]
+    public async Task Render_UnitWithoutOwner_SaysSo_AndTheUnitNumberIsShownOnlyWhenItIsNotInTheAddress()
+    {
+        await Service.RegisterAsync(new HousingUnitDetails { Address = "Storgata 1A", UnitNumber = "1A" });
+        await Service.RegisterAsync(new HousingUnitDetails { Address = "Storgata 2", UnitNumber = "H0201" });
+
+        var cut = Render<HousingUnitList>();
+
+        cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll("tbody tr").Count));
+        var rows = cut.FindAll("tbody tr");
+        Assert.Empty(rows[0].QuerySelectorAll(".unit-sub"));
+        Assert.Contains("H0201", rows[1].QuerySelector(".unit-sub")!.TextContent);
+        Assert.Contains("Ikke registrert", rows[0].QuerySelector(".owner-cell")!.TextContent);
     }
 
     [Fact]

@@ -78,6 +78,63 @@ public class NavigationConsistencyTests : ChargingUiTestBase
     }
 
     [Fact]
+    public void NavMenu_EscapeClosesTheOpenMenu_AndMovesTheFocusBackToTheMenuButton()
+    {
+        JSInterop.Mode = JSRuntimeMode.Loose;
+        var cut = Render<NavMenu>();
+        cut.Find("button.menu-toggle").Click();
+        Assert.Equal("true", cut.Find("button.menu-toggle").GetAttribute("aria-expanded"));
+
+        cut.Find("aside").KeyDown(new Microsoft.AspNetCore.Components.Web.KeyboardEventArgs { Key = "Escape" });
+
+        Assert.Equal("false", cut.Find("button.menu-toggle").GetAttribute("aria-expanded"));
+        Assert.DoesNotContain("open", cut.Find("#main-nav").ClassName);
+        JSInterop.VerifyInvoke("Blazor._internal.domWrapper.focus");
+    }
+
+    [Fact]
+    public void NavMenu_OtherKeysAndEscapeWithAClosedMenu_ChangeNothing()
+    {
+        JSInterop.Mode = JSRuntimeMode.Loose;
+        var cut = Render<NavMenu>();
+
+        cut.Find("aside").KeyDown(new Microsoft.AspNetCore.Components.Web.KeyboardEventArgs { Key = "Escape" });
+        Assert.Equal("false", cut.Find("button.menu-toggle").GetAttribute("aria-expanded"));
+        Assert.Empty(JSInterop.Invocations);
+
+        cut.Find("button.menu-toggle").Click();
+        cut.Find("aside").KeyDown(new Microsoft.AspNetCore.Components.Web.KeyboardEventArgs { Key = "ArrowDown" });
+        Assert.Equal("true", cut.Find("button.menu-toggle").GetAttribute("aria-expanded"));
+    }
+
+    [Fact]
+    public void NavMenu_TheMenuClosesWhenThePageChanges_AlsoWhenALinkOutsideTheMenuWasUsed()
+    {
+        var cut = Render<NavMenu>();
+        cut.Find("button.menu-toggle").Click();
+
+        Services.GetRequiredService<NavigationManager>().NavigateTo("/oppgaver");
+
+        cut.WaitForAssertion(() => Assert.Equal("false", cut.Find("button.menu-toggle").GetAttribute("aria-expanded")));
+    }
+
+    [Fact]
+    public void Css_TheClosedMenuIsNotShownOnASmallScreen_SoItsLinksCannotGetTheKeyboardFocus()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory != null && !File.Exists(Path.Combine(directory.FullName, "src", "SameieHub.Web", "Components", "Layout", "NavMenu.razor.css")))
+        {
+            directory = directory.Parent;
+        }
+
+        Assert.NotNull(directory);
+        var css = File.ReadAllText(Path.Combine(directory.FullName, "src", "SameieHub.Web", "Components", "Layout", "NavMenu.razor.css")).Replace("\r\n", "\n");
+
+        Assert.Contains(".main-nav {\n    flex: 1;\n    display: none;", css);
+        Assert.Contains(".main-nav.open {\n        display: flex;", css);
+    }
+
+    [Fact]
     public void MainLayout_StartsWithASkipLinkToTheContent_ThatMovesTheFocusThere()
     {
         JSInterop.Mode = JSRuntimeMode.Loose;
@@ -251,6 +308,28 @@ public class NavigationConsistencyTests : ChargingUiTestBase
         Assert.NotNull(directory);
 
         return File.ReadAllText(Path.Combine(directory.FullName, "src", "SameieHub.Web", "wwwroot", "app.css"));
+    }
+
+    [Fact]
+    public async Task TheReadingHistoryAndTheHousingUnitList_BecomeCardsOnASmallScreen_WithALabelOnEveryCell_AndButtonsInTheirOwnCell()
+    {
+        await SeedFacilityAsync(1);
+        await RegisterFullSetAsync(new DateTime(2026, 11, 1, 7, 0, 0, DateTimeKind.Utc), 1000, 100);
+        var history = Render<MeterHistoryPage>(p => p.Add(page => page.MeterId, MainMeter.Id));
+        history.WaitForElement("[data-testid=reading-table]");
+        var units = Render<HousingUnitList>();
+        units.WaitForElement("[data-testid=unit-table]");
+
+        foreach (var table in new[] { history.Find("[data-testid=reading-table]"), units.Find("[data-testid=unit-table]") })
+        {
+            Assert.Contains("table-cards", table.ClassName);
+            foreach (var cell in table.QuerySelectorAll("tbody td"))
+            {
+                Assert.True(cell.HasAttribute("data-label") || cell.ClassList.Contains("cell-actions"), $"A cell has no label: {cell.TextContent}");
+            }
+        }
+
+        Assert.Contains(history.FindAll("tbody td.cell-actions button"), button => button.TextContent.Trim() == "Korriger");
     }
 
     [Fact]

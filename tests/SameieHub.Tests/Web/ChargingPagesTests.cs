@@ -483,9 +483,9 @@ public class ChargingPagesTests : ChargingUiTestBase
 
         cut.WaitForElement("[role=status] h2");
         Assert.Contains("+100 kWh", cut.Markup);
-        Assert.Contains("Registrer en ny avlesning", cut.Markup);
+        Assert.Contains("Ny avlesning", cut.Markup);
 
-        cut.FindAll("button").First(button => button.TextContent.Contains("Registrer en ny avlesning")).Click();
+        cut.FindAll("button").First(button => button.TextContent.Contains("Ny avlesning")).Click();
         cut.WaitForElement("#readAt");
         Assert.Equal(string.Empty, cut.Find($"#kwh-{MainMeter.Id}").GetAttribute("value") ?? string.Empty);
     }

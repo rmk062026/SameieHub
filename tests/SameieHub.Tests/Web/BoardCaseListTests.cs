@@ -253,6 +253,32 @@ public class BoardCaseListTests : UiTestBase
     }
 
     [Fact]
+    public async Task Sort_OpenCasesByDefault_PassedMeetingDatesComeLast_ButNothingIsHidden()
+    {
+        await RegisterAsync("Gammel", new BoardCaseDetails { Title = "Gammel", MeetingDate = new DateOnly(2026, 9, 1) });
+        await RegisterAsync("Nylig passert", new BoardCaseDetails { Title = "Nylig passert", MeetingDate = new DateOnly(2026, 11, 10) });
+        await RegisterAsync("Uten dato");
+        await RegisterAsync("I dag", new BoardCaseDetails { Title = "I dag", MeetingDate = new DateOnly(2026, 11, 18) });
+        await RegisterAsync("Senere", new BoardCaseDetails { Title = "Senere", MeetingDate = new DateOnly(2026, 12, 20) });
+
+        var cut = RenderList();
+
+        Assert.Equal(["I dag", "Senere", "Uten dato", "Nylig passert", "Gammel"], Titles(cut));
+    }
+
+    [Fact]
+    public async Task Sort_ChoosingMeetingDateYourself_KeepsTheDomainOrderWithTheOldestFirst()
+    {
+        await RegisterAsync("Gammel", new BoardCaseDetails { Title = "Gammel", MeetingDate = new DateOnly(2026, 9, 1) });
+        await RegisterAsync("Senere", new BoardCaseDetails { Title = "Senere", MeetingDate = new DateOnly(2026, 12, 20) });
+        var cut = RenderList();
+
+        Select(cut, "Sortering", "MeetingDate");
+
+        Assert.Equal(["Gammel", "Senere"], Titles(cut));
+    }
+
+    [Fact]
     public async Task Sort_OtherViewsByDefault_MostRecentlyUpdatedFirst()
     {
         var first = await RegisterWithStatusAsync("Eldst oppdatert", BoardCaseStatus.Closed);

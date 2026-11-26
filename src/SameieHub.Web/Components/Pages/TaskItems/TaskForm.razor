@@ -15,19 +15,19 @@
                 <label for="title" class="form-label">Tittel <span class="required-mark" aria-hidden="true">*</span></label>
                 <InputText id="title" @ref="_titleInput" class="form-control" @bind-Value="_model.Title"
                            maxlength="@TaskItem.MaxTitleLength" aria-required="true" autocomplete="off" />
-                <ValidationMessage For="() => _model.Title" />
+                <ValidationMessage For="() => _model.Title" role="alert" />
             </div>
             <div class="col-md-6">
                 <label for="assignedTo" class="form-label">Ansvarlig</label>
                 <InputText id="assignedTo" class="form-control" @bind-Value="_model.AssignedTo"
                            maxlength="@TaskItem.MaxAssignedToLength" autocomplete="off" />
-                <ValidationMessage For="() => _model.AssignedTo" />
+                <ValidationMessage For="() => _model.AssignedTo" role="alert" />
             </div>
             <div class="col-md-6">
                 <label for="dueDate" class="form-label">Frist</label>
                 <InputDate id="dueDate" class="form-control" @bind-Value="_model.DueDate"
                            ParsingErrorMessage="Fristen må være en gyldig dato." />
-                <ValidationMessage For="() => _model.DueDate" />
+                <ValidationMessage For="() => _model.DueDate" role="alert" />
             </div>
             <div class="col-12">
                 <ScopeField UnitMode="_unitMode" UnitModeChanged="SetUnitMode"
@@ -46,7 +46,7 @@
                             <option value="@boardCase.Id">#@boardCase.Id @boardCase.Title</option>
                         }
                     </InputSelect>
-                    <ValidationMessage For="() => _model.BoardCaseId" />
+                    <ValidationMessage For="() => _model.BoardCaseId" role="alert" />
                 </div>
             }
         </div>
@@ -58,7 +58,7 @@
                 <label for="description" class="form-label">Beskrivelse</label>
                 <InputTextArea id="description" class="form-control" rows="4" @bind-Value="_model.Description"
                                maxlength="@TaskItem.MaxDescriptionLength" />
-                <ValidationMessage For="() => _model.Description" />
+                <ValidationMessage For="() => _model.Description" role="alert" />
             </div>
             <div class="col-md-6">
                 <label for="category" class="form-label">Kategori</label>
@@ -68,7 +68,7 @@
                         <option value="@category">@TaskText.CategoryText(category)</option>
                     }
                 </InputSelect>
-                <ValidationMessage For="() => _model.Category" />
+                <ValidationMessage For="() => _model.Category" role="alert" />
             </div>
             <div class="col-md-6">
                 <label for="priority" class="form-label">Prioritet</label>
@@ -78,13 +78,13 @@
                         <option value="@priority">@TaskText.PriorityText(priority)</option>
                     }
                 </InputSelect>
-                <ValidationMessage For="() => _model.Priority" />
+                <ValidationMessage For="() => _model.Priority" role="alert" />
             </div>
             <div class="col-12">
                 <label for="notes" class="form-label">Merknader</label>
                 <InputTextArea id="notes" class="form-control" rows="4" @bind-Value="_model.Notes"
                                maxlength="@TaskItem.MaxNotesLength" />
-                <ValidationMessage For="() => _model.Notes" />
+                <ValidationMessage For="() => _model.Notes" role="alert" />
             </div>
             @if (!_boardCaseVisible)
             {
@@ -98,7 +98,7 @@
                         }
                     </InputSelect>
                     <div id="boardCaseId-help" class="form-text">Bare hvis oppgaven følger av en styresak. Vanlige gjøremål trenger ingen.</div>
-                    <ValidationMessage For="() => _model.BoardCaseId" />
+                    <ValidationMessage For="() => _model.BoardCaseId" role="alert" />
                 </div>
             }
         </div>

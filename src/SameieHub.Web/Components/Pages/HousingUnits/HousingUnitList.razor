@@ -72,42 +72,40 @@ else
     {
         <p class="summary" role="status">Viser <strong>@visibleUnits.Count</strong> av @_allUnits.Count @(_allUnits.Count == 1 ? "boenhet" : "boenheter")</p>
 
-        <div class="data-table-card table-responsive">
-            <table class="table data-table">
+        <div class="data-table-card">
+            <table class="table data-table table-cards" data-testid="unit-table">
                 <caption class="visually-hidden">Registrerte boenheter, sortert etter adresse</caption>
                 <thead>
                     <tr>
                         <th scope="col">Adresse</th>
-                        <th scope="col" class="d-none d-md-table-cell">Eier</th>
-                        <th scope="col" class="d-none d-md-table-cell">Seksjon</th>
+                        <th scope="col">Eier</th>
                         <th scope="col">Status</th>
-                        <th scope="col" class="col-actions"><span class="visually-hidden">Handlinger</span></th>
                     </tr>
                 </thead>
                 <tbody>
                     @foreach (var unit in visibleUnits)
                     {
-                        <tr>
-                            <td>
-                                <a class="unit-link" href="/boenheter/@unit.Id">@unit.Address</a>
-                                @if (unit.UnitNumber != null)
+                        <tr data-testid="unit-row">
+                            <td data-label="Adresse">
+                                <div>
+                                    <a class="unit-link" href="/boenheter/@unit.Id">@unit.Address</a>
+                                    @if (ShowUnitNumber(unit))
+                                    {
+                                        <div class="unit-sub">@unit.UnitNumber</div>
+                                    }
+                                </div>
+                            </td>
+                            <td data-label="Eier" class="owner-cell">
+                                @if (HasOwner(unit))
                                 {
-                                    <div class="unit-sub">@unit.UnitNumber</div>
+                                    @OwnerText(unit)
                                 }
-                                @if (unit.OwnerName != null || unit.SecondOwnerName != null)
+                                else
                                 {
-                                    <div class="unit-sub d-md-none">@OwnerText(unit)</div>
+                                    <span class="text-muted">Ikke registrert</span>
                                 }
                             </td>
-                            <td class="d-none d-md-table-cell owner-cell">@OwnerText(unit)</td>
-                            <td class="d-none d-md-table-cell">@(unit.SectionNumber?.ToString() ?? "–")</td>
-                            <td><HousingUnitStatusBadge IsActive="unit.IsActive" /></td>
-                            <td class="col-actions">
-                                <a class="btn btn-outline-primary btn-sm" href="/boenheter/@unit.Id"
-                                   aria-label="Åpne @unit.Address">Åpne</a>
-                                <a class="btn btn-link btn-sm" href="/boenheter/@unit.Id/rediger"
-                                   aria-label="Rediger @unit.Address">Rediger</a>
-                            </td>
+                            <td data-label="Status"><HousingUnitStatusBadge IsActive="unit.IsActive" /></td>
                         </tr>
                     }
                 </tbody>
@@ -178,6 +176,13 @@ else
     {
         _searchText = string.Empty;
         _statusFilter = HousingUnitStatusFilter.All;
+    }
+
+    private static bool HasOwner(HousingUnit unit) => unit.OwnerName != null || unit.SecondOwnerName != null;
+
+    private static bool ShowUnitNumber(HousingUnit unit)
+    {
+        return unit.UnitNumber != null && !unit.Address.Contains(unit.UnitNumber, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string OwnerText(HousingUnit unit)

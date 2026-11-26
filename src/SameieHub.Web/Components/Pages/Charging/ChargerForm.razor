@@ -27,7 +27,7 @@
                             <option value="@unit.Id">@unit.Address@(unit.IsActive ? "" : " (inaktiv)")</option>
                         }
                     </InputSelect>
-                    <ValidationMessage For="() => _model.HousingUnitId" />
+                    <ValidationMessage For="() => _model.HousingUnitId" role="alert" />
                     <div class="form-text">Bare boenheter som ikke har en lader vises. Hver boenhet kan ha én lader.</div>
                 }
             </div>
@@ -38,13 +38,13 @@
                     <option value="1">Sikringsskap 1</option>
                     <option value="2">Sikringsskap 2</option>
                 </InputSelect>
-                <ValidationMessage For="() => _model.CabinetNumber" />
+                <ValidationMessage For="() => _model.CabinetNumber" role="alert" />
             </div>
             <div class="col-md-6">
                 <label for="chargerNumber" class="form-label">Ladernummer eller plassnummer</label>
                 <InputText id="chargerNumber" class="form-control" @bind-Value="_model.ChargerNumber"
                            maxlength="@EvCharger.MaxChargerNumberLength" autocomplete="off" />
-                <ValidationMessage For="() => _model.ChargerNumber" />
+                <ValidationMessage For="() => _model.ChargerNumber" role="alert" />
             </div>
             <div class="col-md-6">
                 <label for="status" class="form-label">Administrativ status</label>
@@ -55,19 +55,19 @@
                     }
                 </InputSelect>
                 <div id="status-help" class="form-text">Statusen er administrativ. Den styrer ikke laderen, og målerne kan leses uansett.</div>
-                <ValidationMessage For="() => _model.Status" />
+                <ValidationMessage For="() => _model.Status" role="alert" />
             </div>
             <div class="col-md-6">
                 <label for="manufacturer" class="form-label">Produsent</label>
                 <InputText id="manufacturer" class="form-control" @bind-Value="_model.Manufacturer"
                            maxlength="@EvCharger.MaxManufacturerLength" autocomplete="off" />
-                <ValidationMessage For="() => _model.Manufacturer" />
+                <ValidationMessage For="() => _model.Manufacturer" role="alert" />
             </div>
             <div class="col-md-6">
                 <label for="model" class="form-label">Modell</label>
                 <InputText id="model" class="form-control" @bind-Value="_model.Model"
                            maxlength="@EvCharger.MaxModelLength" autocomplete="off" />
-                <ValidationMessage For="() => _model.Model" />
+                <ValidationMessage For="() => _model.Model" role="alert" />
             </div>
             <div class="col-md-6">
                 <label for="hasElectricVehicle" class="form-label">Har husstanden elbil?</label>
@@ -84,7 +84,7 @@
         <h2>Merknader</h2>
         <label for="notes" class="form-label">Merknader</label>
         <InputTextArea id="notes" class="form-control" rows="3" @bind-Value="_model.Notes" maxlength="@EvCharger.MaxNotesLength" />
-        <ValidationMessage For="() => _model.Notes" />
+        <ValidationMessage For="() => _model.Notes" role="alert" />
     </section>
 
     <div class="form-actions">

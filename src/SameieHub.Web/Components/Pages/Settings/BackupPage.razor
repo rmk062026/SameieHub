@@ -17,6 +17,28 @@
 
 <RestoreResultNotice />
 
+@if (_pending != null)
+{
+    <div class="alert alert-warning" role="status" data-testid="restore-pending">
+        <h3 class="h6">Gjenopprettingen venter på omstart</h3>
+        <p>
+            Sikkerhetskopien «@_pending.BackupFileName» er kontrollert og klar (forberedt @NorwegianDateFormat.DateTime(_pending.PreparedAtUtc)).
+            @if (_pending.WasUpgraded)
+            {
+                <text> Den er fra en eldre versjon og er oppgradert automatisk. Filen du valgte er ikke endret.</text>
+            }
+        </p>
+        <p class="mb-2"><strong>Dette må du gjøre nå:</strong></p>
+        <ol>
+            <li>Lukk SameieHub. Det er ikke nok å lukke nettleseren: programmet (vinduet det kjører i) må stoppes.</li>
+            <li>Start SameieHub på nytt.</li>
+            <li>Gjenopprettingen gjennomføres da automatisk, og du ser resultatet på forsiden.</li>
+        </ol>
+        <p>Dataene du har nå tas vare på i en egen mappe, slik at de kan reddes hvis noe skulle gå galt. Frem til du starter på nytt er ingenting endret, og du kan avbryte.</p>
+        <button type="button" id="cancel-pending" class="btn btn-outline-secondary" disabled="@_isBusy" @onclick="CancelPending">Avbryt gjenopprettingen</button>
+    </div>
+}
+
 <section class="surface-card form-section" aria-labelledby="backup-title">
     <h2 id="backup-title">Lag sikkerhetskopi</h2>
     <p>
@@ -56,32 +78,10 @@
     </p>
 </section>
 
-<section class="surface-card form-section" aria-labelledby="restore-title">
-    <h2 id="restore-title">Gjenopprett fra sikkerhetskopi</h2>
-
-    @if (_pending != null)
-    {
-        <div class="alert alert-warning" role="status" data-testid="restore-pending">
-            <h3 class="h6">Gjenopprettingen venter på omstart</h3>
-            <p>
-                Sikkerhetskopien «@_pending.BackupFileName» er kontrollert og klar (forberedt @NorwegianDateFormat.DateTime(_pending.PreparedAtUtc)).
-                @if (_pending.WasUpgraded)
-                {
-                    <text> Den er fra en eldre versjon og er oppgradert automatisk. Filen du valgte er ikke endret.</text>
-                }
-            </p>
-            <p class="mb-2"><strong>Dette må du gjøre nå:</strong></p>
-            <ol>
-                <li>Lukk SameieHub. Det er ikke nok å lukke nettleseren: programmet (vinduet det kjører i) må stoppes.</li>
-                <li>Start SameieHub på nytt.</li>
-                <li>Gjenopprettingen gjennomføres da automatisk, og du ser resultatet på forsiden.</li>
-            </ol>
-            <p>Dataene du har nå tas vare på i en egen mappe, slik at de kan reddes hvis noe skulle gå galt. Frem til du starter på nytt er ingenting endret, og du kan avbryte.</p>
-            <button type="button" id="cancel-pending" class="btn btn-outline-secondary" disabled="@_isBusy" @onclick="CancelPending">Avbryt gjenopprettingen</button>
-        </div>
-    }
-    else
-    {
+@if (_pending == null)
+{
+<section class="surface-card form-section" data-testid="restore-section">
+    <Disclosure Label="Gjenopprett fra sikkerhetskopi" Hint="Erstatter alle dataene · krever omstart av programmet" ForceOpen="@(_restoreError != null || _upload != null || _isChecking)">
         <div class="alert alert-info" role="note">
             <strong>Dette erstatter alle dataene i SameieHub</strong> med innholdet i sikkerhetskopien. Lag gjerne en ny sikkerhetskopi av dagens data først (over).
         </div>
@@ -162,8 +162,9 @@
                 }
             </div>
         }
-    }
+    </Disclosure>
 </section>
+}
 
 @code {
     private const string ModulePath = "./Components/Pages/Settings/BackupPage.razor.js";

@@ -18,7 +18,7 @@
         <p class="mb-2">
             @if (_overview.MainMeterLastReading != null)
             {
-                <span>Hovedmåler: @ChargingText.Kwh(_overview.MainMeterLastReading.Kwh), avlest @ChargingText.Time(_overview.MainMeterLastReading.ReadAt). </span>
+                <span>Hovedmåler, målerstand @ChargingText.Kwh(_overview.MainMeterLastReading.Kwh), avlest @ChargingText.Time(_overview.MainMeterLastReading.ReadAt). </span>
             }
             <span class="text-muted">Ingen avstemming ennå. Den krever to avlesninger av hovedmåleren.</span>
         </p>

@@ -33,7 +33,7 @@ Eieren har godkjent planen med disse valgene (svarer på spørsmålene i avsnitt
 
 **Justert plan:** «Neste styremøte» (avsnitt 3, 5.2 og R1) leses som **«Kommende saker med møtedato»**: åpne saker med møtedato, sortert på dato, uten å påstå at et møte er bekreftet.
 
-**Status:** R0–R6 er ferdige (se avsnitt 9b–9h). R7 er neste og er ikke startet.
+**Status:** R0–R7 er ferdige (se avsnitt 9b–9i). M5D-redesignet venter på eierens egen testing og godkjenning.
 
 ## 1. Kort oppsummering
 
@@ -432,7 +432,7 @@ Hver milepæl er avgrenset, kan godkjennes og rulles tilbake for seg, og avslutt
 | **R4 Skjemaer og veiledning** (ferdig) | «Gjelder», «Flere valg», veiledning om styresak/oppgave, forhåndsutfylling fra sak/boenhet. Boenhetsskjema og detalj (F-12, F-13, F-14, F-15). | `*Form.razor`, `HousingUnits/*` | UI | Hovedproblemet om styresak/oppgave |
 | **R5 Elbillading** (ferdig) | Faner, statuslinje i stedet for tallkort, forklaring av differanse, nye etiketter, «Feil? Rett her». | `Charging/*` | UI | F-10, F-26, F-27, F-29 |
 | **R6 Navigasjon og mobil** (ferdig) | Menyrekkefølge og navn, «+ Ny»-valg, hopp-lenke, trykkflater, kontroll av alle sider på 375 px. (Fast nedre tabellinje bare hvis eieren velger det.) | `Layout/*`, `app.css` | UI | F-31 |
-| **R7 Innstillinger og sluttkontroll** | «Gjenopprett» lukket som standard, helhetlig kontroll mot tilgjengelighet, språk og konsistens, oppdatering av `UI_DESIGN.md`. | `Pages/Settings/*`, docs | UI | – |
+| **R7 Innstillinger og sluttkontroll** (ferdig) | «Gjenopprett» lukket som standard, helhetlig kontroll mot tilgjengelighet, språk og konsistens, oppdatering av `UI_DESIGN.md`. | `Pages/Settings/*`, docs | UI | – |
 
 **Godkjent rekkefølge:** R0 → R2 → R1 → R3 → R4 → R5 → R6 → R7. Oppgaver først fordi det er den mest brukte og den med flest funn (F-05/06/07). R1 etter R2 slik at Oversikt kan lenke til de nye listene.
 
@@ -600,6 +600,61 @@ Registrering og avstemming er altså lengre enn før, bevisst: forklaringene er 
 - Måling ved 375, 768 og 1024 px på 18 sider (oversikt, lister, detaljer, skjemaer, elbillading, sikkerhetskopi): ingen sideveis rulling på hele siden, ingen elementer utenfor skjermen, ingen overlappende knapper, og ved 375 og 768 px ingen knapper under 43 px.
 
 **Gjenstår:** feilmeldinger ved felt leses ikke opp automatisk av skjermlesere; mobilmenyen lukkes ikke med Escape; boenhetslisten har fortsatt «Åpne» og «Rediger» per rad; fokusramme og skjermleser er ikke testet med et ekte hjelpemiddel.
+
+## 9i. R7 Sluttkontroll: hva som ble gjort og funnet
+
+### Sjekkliste før arbeidet (R7 er en sluttkontroll, ikke en ny redesignfase)
+
+| Kategori | Punkt | Utfall |
+|---|---|---|
+| Rettes i R7 | «Gjenopprett» skal være lukket som standard uten å skjule ventende gjenoppretting, feil eller ukryptert-advarsel | Gjort |
+| Rettes i R7 | Hamburger-menyen lukkes ikke med Escape | Gjort |
+| Rettes i R7 | Feilmeldinger ved felt annonseres ikke | Gjort (`role="alert"`) |
+| Rettes i R7 | Boenhetslisten har «Åpne» og «Rediger» per rad | Gjort (kort, adressen er lenken) |
+| Rettes i R7 | Avlesningshistorikk: «Korriger»/«Slett» ligger utenfor skjermen ved 375 px | Gjort (kort) |
+| Rettes i R7 | Gamle møtedatoer fyller toppen av åpne styresaker | Gjort i UI-laget |
+| Små forbedringer | Ordlyd: «opprette en styresak/oppgave», «Ny avlesning», «Til elbillading», «bare avleste», «Hovedmåler, målerstand» | Gjort |
+| Små forbedringer | Menypunkter i «Flere handlinger» var 40 px høye på nettbrett | Gjort (44 px) |
+| Venter til etter brukertesting | Feltene i avlesningsskjemaet etter merking på måleren (F-28), flere filtre på listene, utskrift av saksliste, endringshistorikk (F-19), `aria-describedby` for alle felt | Ikke gjort |
+
+### Hva som ble gjort
+- **Sikkerhetskopi:** «Gjenopprett fra sikkerhetskopi» er en sammenleggbar seksjon, lukket som standard. Den åpner seg selv ved feil og når en fil venter på bekreftelse. En ventende gjenoppretting vises alltid øverst. Advarselen om ukryptert fil, bekreftelsesboksen og alle kontroller er uendret. Backup- og restoremotorene er ikke endret.
+- **Boenhetslisten:** samme mønster som oppgaver og styresaker (kort under 992 px, adressen er lenken, «Rediger» bare på detaljsiden). Filter, søk og sortering er uendret.
+- **Mobilmeny og tilgjengelighet:** Escape, fokus tilbake, lukking ved sidebytte, `aria-expanded`, `role="alert"` på feilmeldinger. Se `UI_DESIGN.md`.
+- **Styresaker:** standard sortering av åpne saker viser kommende møtedatoer først og passerte sist. Domenets regler er ikke endret, og alle sorteringsvalg finnes.
+- **Elbillading:** innholdet er kontrollert (hovedmåler og undermålere er egne seksjoner, alle åtte ladere finnes i avlesningsskjemaet, differansen forklares med retning og «ikke i seg selv et tap»). Forklaringene er ikke skjult. Historikken er kort på mobil.
+
+### Manuell brukertest (isolert kopi av demodata, Chrome-lignende nettleser i appen)
+
+| # | Scenario | Resultat |
+|---|---|---|
+| 1 | Finn en oppgave som haster | Enkel: «Må følges opp» står øverst på Oversikt (0 klikk). |
+| 2 | Fullfør en oppgave og angre | Enkel: to klikk i listen («Fullfør», så «Angre»), med melding ved raden. |
+| 3 | Opprett en styresak for en boenhet | Enkel: Ny styresak, tittel, «En boenhet», velg boenhet, «Lagre». Gjelder-valget krever ett ekstra klikk. |
+| 4 | Opprett en tilknyttet oppgave fra saken | Enkel: «Ny oppgave» på saken. Boenhet og styresak er forhåndsvalgt og forklart, tittelen har fokus, Enter lagrer. |
+| 5 | Kontroller koblingene | Riktig: oppgaven viser boenhet og styresak, saken viser oppgaven i «Oppgaver til saken». |
+| 6 | Finn vedtaket i en eksisterende styresak | Enkel: fanen «Vedtatt», åpne saken, «Vedtak» står som eget kort (to klikk). |
+| 7 | Registrer en måleravlesning | Enkel, men 9 felt: hovedmåler og alle åtte ladere i egne seksjoner, forbruk vises ved hvert felt. |
+| 8 | Åpne avstemmingen og forstå differansen | Forståelig: vises straks etter lagring med retningsforklaring. Mye tekst, men ingenting som må skjules. |
+| 9 | Finn en tidligere avlesning som kan korrigeres | Enkel: «Feil avlesning? Se historikk og rett» i bekreftelsen, så «Korriger». Ved 375 px lå knappene først utenfor skjermen; rettet. |
+| 10 | Opprett sikkerhetskopi og kontroller nedlastingen | Enkel: ett klikk. Nedlastingen ble kontrollert (filnavn med dato, SQLite-fil på 96 kB). Gjenoppretting ble ikke gjennomført. |
+
+**Overflødige klikk eller forklaringer som gjenstår:** å lage en styresak for en boenhet krever «En boenhet» før listen vises; avlesningsskjemaet er langt (9 felt) og avstemmingen etter lagring er tekstrik.
+
+### Målinger (375, 768 og 1024 px, 14 sider)
+Oversikt, Styresaker (liste, detalj, ny), Oppgaver (liste, detalj, ny), Boenheter (liste, detalj), Elbillading (oversikt, avlesning, avstemming, historikk) og Sikkerhetskopi. Etter retting: ingen side ruller sideveis, ingen kontroller utenfor skjermen, og ingen knapper under 43 px ved 375 og 768 px (inkludert punktene i åpne «Flere handlinger»-menyer).
+
+### Sluttstatus for M5D-redesignet
+
+**Funn fra `USABILITY_REVIEW.md` som er løst:** F-03 (møtedato i styresaklisten), F-04 og F-05 (skjult handlingskolonne og Ansvarlig), F-06 (færre filtre), F-07 (fullføre oppgave), F-09 (registrer avlesning fra Oversikt), F-10 og F-26 (differansen forklares, «målerstand» og «forbruk i perioden»), F-14 (bolignummer bare når det ikke står i adressen), F-17 (Kom i gang), F-20 (ordlyd), F-27, F-29 (retting fra bekreftelsen) og F-31 (mobil).
+
+**Funn som gjenstår:** F-12 (forklaring ved «Deaktiver»-knappen; teksten står bare i slette-avsnittet), F-13 («ID» vises fortsatt på detaljsiden), F-15 (hjelpetekst for seksjonsnummer og bolignummer), F-18 (bør stå i brukerveiledning), F-19 (endringshistorikk, bevisst utsatt), F-21, F-22, F-28 (måler-merking; avklar med eieren) og H-1 til H-5 (hardkoding for første sameie, bevisst uendret). F-01 og F-02 hører til M5/M5C (backup er laget; enkel oppstart/pakking er ikke gjort).
+
+**Kjente tilgjengelighetsbegrensninger:** ingen test med ekte skjermleser; feilmeldinger ved felt er `role="alert"` men ikke koblet med `aria-describedby`; kontrast og fokusmarkering er vurdert i nettleser, ikke revidert med verktøy; trykkflater er målt i emulert vindu og ikke på en fysisk telefon.
+
+**Anbefalinger videre:** la en til to personer fra sameiet gjøre de ti scenarioene uten hjelp; vurder `aria-describedby` for alle felt hvis skjermleserbrukere skal bruke programmet; avklar F-28 og utskrift av saksliste før noe bygges.
+
+**Arbeidsflyter eieren bør teste selv:** (1) hele månedsrutinen for elbillading (avlesning, avstemming, retting), (2) fra en styresak til vedtak og tilknyttede oppgaver, (3) finne og fullføre oppgaver fra Oversikt på mobil, (4) lage en sikkerhetskopi og, på en ikke-demo-kopi, åpne «Gjenopprett fra sikkerhetskopi» og lese forklaringen (uten å gjennomføre), (5) tastaturbruk gjennom «Flere handlinger» og mobilmenyen.
 
 ## 10. Risiko for regresjoner og hvordan de reduseres
 

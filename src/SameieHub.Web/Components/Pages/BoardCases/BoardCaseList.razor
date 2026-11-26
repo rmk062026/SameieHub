@@ -1,6 +1,7 @@
 @page "/styresaker"
 @inject BoardCaseService BoardCaseService
 @inject HousingUnitService HousingUnitService
+@inject TaskItemService TaskService
 @inject ILogger<BoardCaseList> Logger
 
 <PageTitle>Styresaker – SameieHub</PageTitle>
@@ -276,7 +277,41 @@ else
             cases = cases.Where(boardCase => boardCase.Status != BoardCaseStatus.Closed).ToList();
         }
 
-        return BoardCaseSorting.Sort(cases, SortOrder);
+        var sorted = BoardCaseSorting.Sort(cases, SortOrder);
+
+        return _chosenSortOrder == null && _tab == OpenTab ? PutUpcomingMeetingsFirst(sorted) : sorted;
+    }
+
+    /// <summary>
+    /// The default view of open cases: cases with a meeting date today or later first (nearest first), then cases without a date, then
+    /// cases whose registered date has passed (most recent first). Nothing is hidden. It only keeps old dates from filling the top.
+    /// </summary>
+    private List<BoardCase> PutUpcomingMeetingsFirst(List<BoardCase> casesByMeetingDate)
+    {
+        var today = TaskService.GetToday();
+        var upcoming = new List<BoardCase>();
+        var withoutDate = new List<BoardCase>();
+        var passed = new List<BoardCase>();
+
+        foreach (var boardCase in casesByMeetingDate)
+        {
+            if (boardCase.MeetingDate is not { } meetingDate)
+            {
+                withoutDate.Add(boardCase);
+            }
+            else if (meetingDate >= today)
+            {
+                upcoming.Add(boardCase);
+            }
+            else
+            {
+                passed.Add(boardCase);
+            }
+        }
+
+        passed.Reverse();
+
+        return [.. upcoming, .. withoutDate, .. passed];
     }
 
     private List<ActiveFilter> GetActiveFilters()

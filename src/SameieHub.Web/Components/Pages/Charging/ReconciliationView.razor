@@ -36,7 +36,7 @@
                 <dd>@(Reconciliation.MainKwh is { } main ? ChargingText.Kwh(main) : "Mangler")</dd>
             </div>
             <div class="detail-item">
-                <dt>Sum av forbruk i perioden på undermålerne@(Reconciliation.IsComplete ? "" : " (bare dokumenterte)")</dt>
+                <dt>Sum av forbruk i perioden på undermålerne@(Reconciliation.IsComplete ? "" : " (bare avleste)")</dt>
                 <dd>@ChargingText.Kwh(Reconciliation.SubMeterKwh)</dd>
             </div>
             <div class="detail-item">

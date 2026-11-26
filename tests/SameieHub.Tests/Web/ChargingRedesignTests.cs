@@ -335,6 +335,6 @@ public class ChargingRedesignTests : ChargingUiTestBase
         Assert.Contains("Differansen vises ikke", explanation);
         Assert.DoesNotContain("positiv", explanation);
         Assert.DoesNotContain("negativ", explanation);
-        Assert.Contains("bare dokumenterte", cut.Find(".reconciliation-summary").TextContent);
+        Assert.Contains("bare avleste", cut.Find(".reconciliation-summary").TextContent);
     }
 }

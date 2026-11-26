@@ -34,8 +34,8 @@
     else
     {
         <p class="text-muted" data-testid="reading-explanation">Målerstand er tallet måleren viste (totalt kWh). Forbruk siden forrige avlesning er forskjellen mellom to målerstander.</p>
-        <div class="table-responsive">
-            <table class="table data-table">
+        <div class="data-table-card">
+            <table class="table data-table table-cards" data-testid="reading-table">
                 <caption class="visually-hidden">Avlesninger, nyeste først</caption>
                 <thead>
                     <tr>
@@ -49,15 +49,15 @@
                     @foreach (var row in _rows)
                     {
                         <tr>
-                            <td>
+                            <td data-label="Avlest">
                                 @ChargingText.Time(row.Reading.ReadAt)
                                 @if (row.Reading.Notes != null)
                                 {
                                     <div class="unit-sub">@row.Reading.Notes</div>
                                 }
                             </td>
-                            <td>@ChargingText.Kwh(row.Reading.Kwh)</td>
-                            <td>
+                            <td data-label="Målerstand">@ChargingText.Kwh(row.Reading.Kwh)</td>
+                            <td data-label="Forbruk siden forrige avlesning">
                                 @if (row.Previous == null)
                                 {
                                     <span class="text-muted">Startverdi</span>
@@ -67,7 +67,7 @@
                                     @ChargingText.SignedKwh(row.Reading.Kwh - row.Previous.Kwh)
                                 }
                             </td>
-                            <td class="text-end">
+                            <td class="text-end cell-actions">
                                 <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="() => StartCorrection(row.Reading)">Korriger</button>
                                 <button type="button" class="btn btn-outline-danger btn-sm" @onclick="() => AskForDelete(row.Reading)">Slett</button>
                             </td>

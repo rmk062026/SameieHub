@@ -15,7 +15,7 @@
                 <label for="address" class="form-label">Adresse <span class="required-mark" aria-hidden="true">*</span></label>
                 <InputText id="address" @ref="_addressInput" class="form-control" @bind-Value="_model.Address"
                            maxlength="@HousingUnit.MaxAddressLength" aria-required="true" autocomplete="off" />
-                <ValidationMessage For="() => _model.Address" />
+                <ValidationMessage For="() => _model.Address" role="alert" />
             </div>
         </div>
     </section>
@@ -28,19 +28,19 @@
                 <label for="ownerName" class="form-label">Navn</label>
                 <InputText id="ownerName" class="form-control" @bind-Value="_model.OwnerName"
                            maxlength="@HousingUnit.MaxOwnerNameLength" autocomplete="off" />
-                <ValidationMessage For="() => _model.OwnerName" />
+                <ValidationMessage For="() => _model.OwnerName" role="alert" />
             </div>
             <div class="col-md-6">
                 <label for="ownerPhoneNumber" class="form-label">Telefon</label>
                 <InputText id="ownerPhoneNumber" type="tel" class="form-control" @bind-Value="_model.OwnerPhoneNumber"
                            maxlength="@HousingUnit.MaxPhoneNumberLength" autocomplete="off" />
-                <ValidationMessage For="() => _model.OwnerPhoneNumber" />
+                <ValidationMessage For="() => _model.OwnerPhoneNumber" role="alert" />
             </div>
             <div class="col-md-6">
                 <label for="ownerEmail" class="form-label">E-post</label>
                 <InputText id="ownerEmail" type="email" class="form-control" @bind-Value="_model.OwnerEmail"
                            maxlength="@HousingUnit.MaxEmailLength" autocomplete="off" />
-                <ValidationMessage For="() => _model.OwnerEmail" />
+                <ValidationMessage For="() => _model.OwnerEmail" role="alert" />
             </div>
         </div>
 
@@ -55,19 +55,19 @@
                     <label for="secondOwnerName" class="form-label">Navn</label>
                     <InputText id="secondOwnerName" class="form-control" @bind-Value="_model.SecondOwnerName"
                                maxlength="@HousingUnit.MaxOwnerNameLength" autocomplete="off" />
-                    <ValidationMessage For="() => _model.SecondOwnerName" />
+                    <ValidationMessage For="() => _model.SecondOwnerName" role="alert" />
                 </div>
                 <div class="col-md-6">
                     <label for="secondOwnerPhoneNumber" class="form-label">Telefon</label>
                     <InputText id="secondOwnerPhoneNumber" type="tel" class="form-control" @bind-Value="_model.SecondOwnerPhoneNumber"
                                maxlength="@HousingUnit.MaxPhoneNumberLength" autocomplete="off" />
-                    <ValidationMessage For="() => _model.SecondOwnerPhoneNumber" />
+                    <ValidationMessage For="() => _model.SecondOwnerPhoneNumber" role="alert" />
                 </div>
                 <div class="col-md-6">
                     <label for="secondOwnerEmail" class="form-label">E-post</label>
                     <InputText id="secondOwnerEmail" type="email" class="form-control" @bind-Value="_model.SecondOwnerEmail"
                                maxlength="@HousingUnit.MaxEmailLength" autocomplete="off" />
-                    <ValidationMessage For="() => _model.SecondOwnerEmail" />
+                    <ValidationMessage For="() => _model.SecondOwnerEmail" role="alert" />
                 </div>
             </div>
         }
@@ -84,13 +84,13 @@
                 <InputText id="unitNumber" class="form-control" @bind-Value="_model.UnitNumber"
                            maxlength="@HousingUnit.MaxUnitNumberLength" aria-describedby="unitNumber-help" autocomplete="off" />
                 <div id="unitNumber-help" class="form-text">For eksempel H0101.</div>
-                <ValidationMessage For="() => _model.UnitNumber" />
+                <ValidationMessage For="() => _model.UnitNumber" role="alert" />
             </div>
             <div class="col-md-6">
                 <label for="sectionNumber" class="form-label">Seksjonsnummer</label>
                 <InputNumber id="sectionNumber" class="form-control" @bind-Value="_model.SectionNumber"
                              ParsingErrorMessage="Seksjonsnummer må være et helt tall." inputmode="numeric" />
-                <ValidationMessage For="() => _model.SectionNumber" />
+                <ValidationMessage For="() => _model.SectionNumber" role="alert" />
             </div>
             <div class="col-md-6">
                 <label for="housingType" class="form-label">Boligtype</label>
@@ -101,19 +101,19 @@
                         <option value="@housingType">@HousingTypeText.ToNorwegian(housingType)</option>
                     }
                 </InputSelect>
-                <ValidationMessage For="() => _model.HousingType" />
+                <ValidationMessage For="() => _model.HousingType" role="alert" />
             </div>
             <div class="col-md-6">
                 <label for="areaSquareMeters" class="form-label">Areal (m²)</label>
                 <InputNumber id="areaSquareMeters" class="form-control" @bind-Value="_model.AreaSquareMeters"
                              ParsingErrorMessage="Arealet må være et tall, for eksempel 85.5." inputmode="decimal" />
-                <ValidationMessage For="() => _model.AreaSquareMeters" />
+                <ValidationMessage For="() => _model.AreaSquareMeters" role="alert" />
             </div>
             <div class="col-12">
                 <label for="notes" class="form-label">Merknader</label>
                 <InputTextArea id="notes" class="form-control" rows="4" @bind-Value="_model.Notes"
                                maxlength="@HousingUnit.MaxNotesLength" />
-                <ValidationMessage For="() => _model.Notes" />
+                <ValidationMessage For="() => _model.Notes" role="alert" />
             </div>
         </div>
     </Disclosure>

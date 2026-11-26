@@ -15,21 +15,21 @@
                 <label for="title" class="form-label">Tittel <span class="required-mark" aria-hidden="true">*</span></label>
                 <InputText id="title" @ref="_titleInput" class="form-control" @bind-Value="_model.Title"
                            maxlength="@BoardCase.MaxTitleLength" aria-required="true" autocomplete="off" />
-                <ValidationMessage For="() => _model.Title" />
+                <ValidationMessage For="() => _model.Title" role="alert" />
             </div>
             <div class="col-12">
                 <label for="description" class="form-label">Beskrivelse</label>
                 <InputTextArea id="description" class="form-control" rows="4" @bind-Value="_model.Description"
                                maxlength="@BoardCase.MaxDescriptionLength" aria-describedby="description-help" />
                 <div id="description-help" class="form-text">Hva saken gjelder og hva styret skal ta stilling til.</div>
-                <ValidationMessage For="() => _model.Description" />
+                <ValidationMessage For="() => _model.Description" role="alert" />
             </div>
             <div class="col-md-6">
                 <label for="meetingDate" class="form-label">Registrert møtedato</label>
                 <InputDate id="meetingDate" class="form-control" @bind-Value="_model.MeetingDate"
                            ParsingErrorMessage="Møtedatoen må være en gyldig dato." aria-describedby="meetingDate-help" />
                 <div id="meetingDate-help" class="form-text">Når saken er planlagt behandlet. Det er bare en registrert dato, ikke en innkalling til møte.</div>
-                <ValidationMessage For="() => _model.MeetingDate" />
+                <ValidationMessage For="() => _model.MeetingDate" role="alert" />
             </div>
             <div class="col-12">
                 <ScopeField UnitMode="_unitMode" UnitModeChanged="SetUnitMode"
@@ -50,13 +50,13 @@
                         <option value="@priority">@BoardCaseText.PriorityText(priority)</option>
                     }
                 </InputSelect>
-                <ValidationMessage For="() => _model.Priority" />
+                <ValidationMessage For="() => _model.Priority" role="alert" />
             </div>
             <div class="col-12">
                 <label for="notes" class="form-label">Merknader</label>
                 <InputTextArea id="notes" class="form-control" rows="4" @bind-Value="_model.Notes"
                                maxlength="@BoardCase.MaxNotesLength" />
-                <ValidationMessage For="() => _model.Notes" />
+                <ValidationMessage For="() => _model.Notes" role="alert" />
             </div>
         </div>
     </Disclosure>

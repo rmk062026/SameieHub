@@ -94,7 +94,7 @@ public class FormSimplificationTests : UiTestBase
 
         var text = cut.FindByTestId("task-explanation").TextContent;
         Assert.Contains("En oppgave er noe som skal gjøres.", text);
-        Assert.Contains("Hvis styret først må behandle eller vedta noe, kan du registrere en styresak.", text);
+        Assert.Contains("Hvis styret først må behandle eller vedta noe, kan du opprette en styresak.", text);
         Assert.Equal("/styresaker/ny", cut.FindByTestId("task-explanation").QuerySelector("a")!.GetAttribute("href"));
         Assert.False(cut.HasTestId("case-context"));
         Assert.True(cut.IsWholeCooperativeChosen());
