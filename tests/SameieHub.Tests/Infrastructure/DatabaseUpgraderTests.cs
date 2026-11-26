@@ -55,14 +55,16 @@ public class DatabaseUpgraderTests : IDisposable
     }
 
     [Fact]
-    public async Task Upgrade_AnEmptyFile_IsTreatedAsNoDatabase()
+    public async Task Upgrade_AnExistingEmptyFile_IsRefusedAndNeitherFilledNorReplaced()
     {
         await File.WriteAllBytesAsync(DatabasePath, []);
 
-        await CreateUpgrader().UpgradeAsync();
+        var exception = await Assert.ThrowsAsync<DatabaseUpgradeException>(() => CreateUpgrader().UpgradeAsync());
 
-        Assert.Empty(DatabaseBackupValidator.FindProblems(DatabasePath));
+        Assert.Equal(DatabaseUpgradeFailure.EmptyDatabaseFile, exception.Reason);
+        Assert.Equal(0, new FileInfo(DatabasePath).Length);
         Assert.False(Directory.Exists(BackupFolder));
+        Assert.Equal([DatabasePath], Directory.GetFiles(_folder));
     }
 
     [Fact]

@@ -23,3 +23,34 @@ jobs:
 
       - name: Test
         run: dotnet test SameieHub.slnx --no-build --configuration Release --verbosity normal
+
+  # The internal Windows test package (M8-2): published self-contained, started the way a double-click starts it, checked, and
+  # stopped. The zip is kept as a CI artifact for internal checking only. It is not a release and contains no data.
+  windows-package:
+    runs-on: windows-latest
+    needs: build-and-test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Publish the Windows test package
+        id: publish
+        shell: pwsh
+        run: |
+          $zip = ./scripts/Publish-Windows.ps1 -Version "0.8.2-ci.${{ github.run_number }}"
+          "zip=$zip" >> $env:GITHUB_OUTPUT
+
+      - name: Smoke test the package
+        shell: pwsh
+        run: ./scripts/Test-WindowsPackage.ps1 -Zip "${{ steps.publish.outputs.zip }}"
+
+      - name: Keep the zip as an internal artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SameieHub-windows-test-package
+          path: ${{ steps.publish.outputs.zip }}
+          retention-days: 7
+          if-no-files-found: error

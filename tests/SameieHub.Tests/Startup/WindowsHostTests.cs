@@ -47,9 +47,24 @@ public class WindowsHostTests : IDisposable
     [Fact]
     public void TheWindowsModeIsOnlyUsedWhenItIsAskedFor()
     {
-        Assert.False(WindowsHost.IsRequested([]));
-        Assert.False(WindowsHost.IsRequested(["--seed-demo"]));
-        Assert.True(WindowsHost.IsRequested(["--windows-host"]));
+        Assert.False(WindowsHost.IsRequested([], null, isPublishedWindowsBuild: false));
+        Assert.False(WindowsHost.IsRequested(["--seed-demo"], null, isPublishedWindowsBuild: false));
+        Assert.True(WindowsHost.IsRequested(["--windows-host"], null, isPublishedWindowsBuild: false));
+        Assert.True(WindowsHost.IsRequested([], "1", isPublishedWindowsBuild: false));
+    }
+
+    [Fact]
+    public void ThePublishedWindowsBuildUsesTheWindowsModeByItself_ButCanBeSwitchedOff()
+    {
+        Assert.True(WindowsHost.IsRequested([], null, isPublishedWindowsBuild: true));
+        Assert.False(WindowsHost.IsRequested([], "0", isPublishedWindowsBuild: true));
+        Assert.True(WindowsHost.IsRequested(["--windows-host"], "0", isPublishedWindowsBuild: true));
+    }
+
+    [Fact]
+    public void TheDevelopmentBuildIsNotMarkedAsAPublishedWindowsBuild()
+    {
+        Assert.False(WindowsHost.IsPublishedWindowsBuild(typeof(Program).Assembly));
     }
 
     [Fact]
@@ -64,6 +79,17 @@ public class WindowsHostTests : IDisposable
 
         Assert.Equal(_contentRoot, builder.Environment.ContentRootPath.TrimEnd(Path.DirectorySeparatorChar));
         Assert.Equal("from-the-program-folder", builder.Configuration["Marker"]);
+    }
+
+    [Fact]
+    public void TheShutdownWaitsAtMostAFewSeconds_SoAnOpenBrowserTabCannotKeepTheProgramRunning()
+    {
+        var builder = CreateBuilder();
+        using var app = builder.Build();
+
+        var options = app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<HostOptions>>().Value;
+
+        Assert.True(options.ShutdownTimeout <= TimeSpan.FromSeconds(4), options.ShutdownTimeout.ToString());
     }
 
     [Fact]

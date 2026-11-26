@@ -20,6 +20,10 @@ dotnet test SameieHub.slnx
 dotnet run --project src/SameieHub.Web
 ```
 
+## Windows-testpakke (intern)
+
+`.\scripts\Publish-Windows.ps1` lager en selvstendig mappe og zip (`SameieHub.exe`, ingen .NET nødvendig) for intern testing. Den har ingen tilgangsbeskyttelse ennå og skal ikke distribueres eller brukes med personopplysninger. Se [docs/WINDOWS_DISTRIBUTION_PLAN.md](docs/WINDOWS_DISTRIBUTION_PLAN.md).
+
 ## Dokumentasjon
 Se [docs/README.md](docs/README.md) for indeks og anbefalt leserekkefølge. Forklaringer for å forstå og presentere prosjektet: [Prosjektstruktur](docs/PROJECT_STRUCTURE.md), [Arkitekturen forklart](docs/ARCHITECTURE_EXPLAINED.md), [Kodegjennomgang](docs/CODE_WALKTHROUGH.md), [Designbeslutninger](docs/DESIGN_DECISIONS.md), [Mine bidrag](docs/MY_CONTRIBUTIONS.md) og [Presentasjonsguide](docs/PRESENTATION_GUIDE.md).
 

@@ -23,9 +23,42 @@ internal static class WindowsHost
     /// <summary>Only these host names are answered. Everything else, such as a page on another site that points its own name at this computer, is refused.</summary>
     public const string AllowedHosts = "127.0.0.1;localhost";
 
+    private static readonly TimeSpan ShutdownTimeout = TimeSpan.FromSeconds(3);
+
+    private const string DefaultModeMetadataKey = "SameieHub.DefaultHostMode";
+
     public static bool IsRequested(string[] args)
     {
-        return args.Contains(SwitchName) || Environment.GetEnvironmentVariable(EnvironmentVariableName) == "1";
+        return IsRequested(args, Environment.GetEnvironmentVariable(EnvironmentVariableName), IsPublishedWindowsBuild(typeof(WindowsHost).Assembly));
+    }
+
+    /// <summary>
+    /// The flag always wins. The published Windows program uses the mode without any flag, so a person can start it by
+    /// double-clicking. <c>SAMEIEHUB_WINDOWS_HOST=0</c> switches that off, for testing the published files the development way.
+    /// </summary>
+    public static bool IsRequested(string[] args, string? environmentValue, bool isPublishedWindowsBuild)
+    {
+        if (args.Contains(SwitchName))
+        {
+            return true;
+        }
+
+        return environmentValue switch
+        {
+            "1" => true,
+            "0" => false,
+            _ => isPublishedWindowsBuild
+        };
+    }
+
+    /// <summary>
+    /// True for the self-contained Windows build only: the project file adds this marker to the assembly when it is built self-contained
+    /// (<c>dotnet publish -r win-x64 --self-contained</c>), and never for <c>dotnet run</c> or the tests.
+    /// </summary>
+    public static bool IsPublishedWindowsBuild(System.Reflection.Assembly assembly)
+    {
+        return System.Reflection.CustomAttributeExtensions.GetCustomAttributes<System.Reflection.AssemblyMetadataAttribute>(assembly)
+            .Any(metadata => metadata.Key == DefaultModeMetadataKey && metadata.Value == "Windows");
     }
 
     public static bool IsUnattended(string[] args)
@@ -45,6 +78,10 @@ internal static class WindowsHost
         builder.Configuration["AllowedHosts"] = AllowedHosts;
         builder.WebHost.ConfigureKestrel(server => server.Listen(IPAddress.Loopback, 0));
         ConfigureLogging(builder);
+
+        // An open browser tab keeps its connection to the program, and the default is to wait 30 seconds for it. Windows only
+        // gives a closed console window a few seconds, so the wait must be shorter than that.
+        builder.Services.Configure<HostOptions>(options => options.ShutdownTimeout = ShutdownTimeout);
 
         return builder;
     }

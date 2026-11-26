@@ -5,7 +5,17 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
+    <AssemblyName>SameieHub</AssemblyName>
+    <RootNamespace>SameieHub.Web</RootNamespace>
   </PropertyGroup>
+
+  <!-- Only a self-contained build is the Windows program. It then starts in Windows mode without any flag (see WindowsHost). -->
+  <ItemGroup Condition="'$(SelfContained)' == 'true'">
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>SameieHub.DefaultHostMode</_Parameter1>
+      <_Parameter2>Windows</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
 
   <ItemGroup>
     <InternalsVisibleTo Include="SameieHub.Tests" />

@@ -1,0 +1,48 @@
+SameieHub - INTERN TESTVERSJON
+==============================
+
+Dette er en intern testversjon. Den skal IKKE distribueres til andre og
+IKKE brukes med virkelige personopplysninger. Bruk bare fiktive data.
+
+Programmet har ingen tilgangsbeskyttelse ennå: alle programmer og brukere
+på denne maskinen kan koble til det mens det kjører. Det lytter bare på
+maskinen din (127.0.0.1), ikke på nettverket.
+
+Slik starter du
+---------------
+1. Pakk ut hele zip-filen til en vanlig mappe (ikke kjør fra inne i zip-filen).
+2. Dobbeltklikk SameieHub.exe (eller Start-SameieHub.cmd).
+3. Nettleseren åpnes av seg selv. Det vises også et svart vindu som heter
+   «SameieHub». Det er selve programmet.
+
+Windows kan vise «Windows beskyttet PC» (SmartScreen), fordi programmet ikke er
+signert. Velg «Mer info» og deretter «Kjør likevel».
+
+Du trenger ikke installere .NET eller noe annet.
+
+Slik avslutter du
+-----------------
+Lukk det svarte vinduet «SameieHub» (eller trykk Ctrl+C i det).
+Å lukke nettleseren avslutter ikke programmet. Hvis programmet kjører, kan du
+åpne det igjen ved å starte SameieHub på nytt: da får du en melding om at det
+allerede kjører.
+
+Hvor dataene ligger
+-------------------
+Databasen:   %LOCALAPPDATA%\SameieHub\sameiehub.db
+Loggfiler:   %LOCALAPPDATA%\SameieHub\logs
+Sikkerhetskopi før oppgradering av databasen: %LOCALAPPDATA%\SameieHub\pre-migration
+
+Obs: dette er samme database som utviklingsversjonen av SameieHub bruker.
+Har du allerede data der, brukes de. Bruk en testmaskin eller en egen
+Windows-bruker.
+
+Å slette programmet
+-------------------
+Slett mappen du pakket ut. Dataene i mappen over beholdes.
+Vil du også fjerne dataene, slett mappen %LOCALAPPDATA%\SameieHub selv.
+
+Hvis noe går galt
+-----------------
+Programmet viser en forklaring. Mer informasjon står i loggfilene (de inneholder
+ikke skjemainnhold). Ta vare på mappen pre-migration hvis en oppgradering feilet.

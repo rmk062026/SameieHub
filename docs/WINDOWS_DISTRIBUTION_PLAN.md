@@ -1,6 +1,6 @@
 # Windows-distribusjon: analyse og plan (M8)
 
-**Status:** planen er godkjent (D1–D12, med presiseringer). **M8-1 er gjennomført** (se vedlegg A med faktiske funn). M8-2 til M8-6 er ikke startet. Ingen installasjonsprogram og ingen endringer i domene, migreringer eller grensesnitt er laget. Dokumentet bygger på det koden gjør i dag (kontrollert 2026-11-26, commit `f373965`) og på en testpublisering som ble gjort i en midlertidig mappe utenfor repoet.
+**Status:** planen er godkjent (D1–D12, med presiseringer). **M8-1 er gjennomført** (vedlegg A) og **M8-2 er gjennomført** (vedlegg B). M8-3 til M8-6 er ikke startet. Ingen installasjonsprogram og ingen endringer i domene, migreringer eller grensesnitt er laget. Dokumentet bygger på det koden gjør i dag (kontrollert 2026-11-26, commit `f373965`) og på en testpublisering som ble gjort i en midlertidig mappe utenfor repoet.
 
 **Målet:** en vanlig Windows-bruker installerer SameieHub, starter det fra Start-menyen, får grensesnittet åpnet automatisk, beholder dataene sine ved oppdatering og kan avslutte programmet på en tydelig måte. Ingen Visual Studio, ingen PowerShell, ingen `dotnet`-kommandoer.
 
@@ -490,7 +490,7 @@ Valget gjøres med ett flagg fordi ingenting i utviklingsflyten skal endre seg. 
 
 1. Ta **instanssperren** (ellers: «SameieHub kjører allerede»).
 2. `ApplyPendingRestore` (som før, før noen databaseforbindelse). Er utfallet `Unresolved`, slippes sperren og programmet stopper.
-3. **`DatabaseUpgrader`:** finnes ikke databasen (eller er filen tom), opprettes den. Ellers kontrolleres den med `BackupFileInspector` (samme regler som restore bruker for sikkerhetskopier): skadet, ikke SameieHub og nyere enn programmet avvises uten at noe endres. En eldre database kopieres, og så migreres den.
+3. **`DatabaseUpgrader`:** finnes ikke databasefilen, opprettes den. Finnes den, men er tom (0 byte), stopper programmet (endret i M8-2, se vedlegg B.4). Ellers kontrolleres den med `BackupFileInspector` (samme regler som restore bruker for sikkerhetskopier): skadet, ikke SameieHub og nyere enn programmet avvises uten at noe endres. En eldre database kopieres, og så migreres den.
 4. Serveren starter på `127.0.0.1:0`, og adressen vises i vinduet og i loggen. Nettleseren åpnes (ikke med `--unattended`).
 
 Sperren tas **før** gjenopprettingen, så en annen forekomst aldri kan flytte databasefilene mens den første kjører. Dette er dekket av en test som viser at `ApplyPendingRestore` ikke kalles når sperren er opptatt.
@@ -553,3 +553,119 @@ Programmet ble startet fra en annen arbeidsmappe enn programmappen (self-contain
 ### A.9 Gjenstår (ikke M8-1)
 
 Engangskode og sesjonscookie (M8-3), publisering som `SameieHub.exe` med Windows-modus som standard (M8-2), installasjon (M8-4), knapper for avslutning og omstart (M8-5), og test på en ren maskin eller virtuell maskin (D12, før distribusjon).
+
+---
+
+## Vedlegg B. M8-2: Self-contained Windows-program og intern testpakke (gjennomført)
+
+M8-2 lager en selvstendig programmappe og en zip som kan startes uten Visual Studio, .NET SDK eller terminalkommandoer. **Dette er fortsatt en intern testversjon uten tilgangsbeskyttelse (M8-3). Den skal ikke distribueres og ikke brukes med personopplysninger.**
+
+### B.1 Slik bygges pakken
+
+```powershell
+.\scripts\Publish-Windows.ps1 -Version 0.8.2-test
+```
+
+Skriptet kjører `dotnet publish` for `win-x64`, self-contained, uten trimming, ikke som én fil og uten feilsøkingssymboler (`-p:DebugType=none`, så mappen er mindre og har ingen kildestier). Det fjerner `appsettings.Development.json`, kopierer `packaging/windows/` (les-meg og `Start-SameieHub.cmd`) inn i mappen, kontrollerer at `SameieHub.exe` finnes og lager `SameieHub-<versjon>-win-x64-test.zip`. Resultatet ligger i `artifacts/windows/`, som git ignorerer. **Ingen binærfiler eller zip-filer legges i repoet.**
+
+| Mål (på utviklermaskinen, 2026-11-26) | Verdi |
+|---|---|
+| Mappe | 125,3 MB, 505 filer |
+| Zip | 55,4 MB |
+
+Tallene gjelder denne publiseringen og endres med .NET-versjonen og pakkene.
+
+### B.2 `SameieHub.exe` (AssemblyName)
+
+Web-prosjektet har fått `AssemblyName = SameieHub` og, for å beholde alt annet, `RootNamespace = SameieHub.Web`. Konsekvenser som ble undersøkt:
+
+| Sted | Utfall |
+|---|---|
+| Kodens navnerom og Razor-komponenter | Uendret fordi `RootNamespace` er satt eksplisitt (uten det ville det fulgt `AssemblyName`). |
+| `App.razor` | **Ett nødvendig utslag:** stilarket for komponentene (CSS-isolasjon) heter etter assemblyen, fra `SameieHub.Web.styles.css` til `SameieHub.styles.css`. Lenken er endret. Alle stilark og skript er verifisert (200) i den publiserte pakken, og i demoen. |
+| Tester | Uendret. `InternalsVisibleTo`, `WebApplicationFactory<Program>` og `typeof(Program).Assembly` virker. Alle tester består. |
+| Skript (`demo.ps1`, `Start-demo.cmd`) | Bruker `dotnet run --project`, ikke filnavnet. Uendret. |
+| Dokumentasjon | Navnet `SameieHub.Web.exe` fantes bare i planen (denne filen) og er rettet. Prosjektfilen og mappen heter fortsatt `SameieHub.Web`. |
+| Logg | Kategorien for programmets egen loggmelding heter nå `SameieHub` i stedet for `SameieHub.Web`. Loggfilteret (`SameieHub`) dekker begge. |
+
+### B.3 Windows-modus uten flagg
+
+Den publiserte `SameieHub.exe` bruker Windows-modus av seg selv. Prosjektfilen legger bare ved et `AssemblyMetadata`-merke (`SameieHub.DefaultHostMode = Windows`) når byggingen er **self-contained**. Det er derfor aldri satt for `dotnet run`, `dotnet test` eller vanlig `dotnet build`. Rekkefølgen er:
+
+1. `--windows-host` slår alltid modusen på (beholdt, nyttig ved testing av vanlig bygg).
+2. Ellers: `SAMEIEHUB_WINDOWS_HOST` = `1` slår på, `0` slår av (for å kjøre de publiserte filene som i utvikling).
+3. Ellers: på hvis merket finnes.
+
+Testet: enhetstester av valget, og den publiserte pakken startet uten flagg og lyttet på `127.0.0.1` med en tilfeldig port. Ordinær database og demodatabase har uendret sti.
+
+### B.4 Feilveier i oppstarten (gjennomgang fra M8-1)
+
+- **Uventet feil fra `ApplyPendingRestore()`:** gjennomgangen fant at et unntak derfra ikke var fanget. Sperren ble da ikke frigjort eksplisitt, og programmet krasjet med en stack trace. Nå fanges det (også en `IOException`): sperren frigjøres, oppgraderingen kjøres ikke (så det kan ikke opprettes en tom database), meldingen er den samme som for uavklart gjenoppretting, og loggen får bare typenavnet. Restoremotoren er ikke endret.
+- **Uventet feil ved klargjøring av databasen** (for eksempel en låst fil): gir en lesbar melding («uventet feil», se loggen), frigjør sperren, og påstår ikke at databasen er uendret. Før ble bare `DatabaseUpgradeException` fanget.
+- **Sperren frigjøres på alle feilveier.** `PrepareAsync` har nå ett sted som frigjør den hvis et trinn mislykkes.
+- **Database på 0 byte:** `Inspect()` regnet før en tom fil som «ingen database» og lot migreringen fylle den. Det er endret. **Finnes ingen fil**, er det en normal første oppstart. **Finnes en tom fil**, stopper programmet med en egen melding («Databasefilen er tom (0 byte) …»), uten å fylle eller erstatte filen, og uten å lage en sikkerhetskopi. Skadet og ikke-SameieHub-filer stoppet allerede. Følge: en tom fil etter en avbrutt første oppstart må flyttes til side for hånd.
+
+### B.5 Startfiler
+
+- **`SameieHub.exe`:** dobbeltklikk. Åpner konsollvinduet «SameieHub» og nettleseren.
+- **`Start-SameieHub.cmd`:** gjør det samme, setter «Start i»-mappen og venter på en tast hvis programmet stopper med en feil. Den er et valg, ikke et krav. Programmet finner filene sine uansett hvor det startes fra (innholdsrot i M8-1).
+- **`LES-MEG.txt`:** merker pakken som intern testversjon, forklarer SmartScreen-advarselen (usignert), hvor data ligger (`%LOCALAPPDATA%\SameieHub`) og at dette er **samme database som utviklingsversjonen bruker**.
+- Pakken inneholder ingen database, ingen personopplysninger og ingen hemmeligheter. Det kontrolleres av røykprøven.
+- Brukeren trenger ikke kopiere noe til AppData: mappen og databasen opprettes av programmet.
+
+### B.6 Røykprøve og CI
+
+`scripts/Test-WindowsPackage.ps1 -Zip <zip>` pakker ut zip-filen i en midlertidig mappe, starter `SameieHub.exe` **uten flagg** mot en midlertidig database (via `Database__Path`, så den ordinære databasen aldri brukes) og kontrollerer:
+
+- at nødvendige filer er med (runtime, `hostfxr.dll`, `e_sqlite3.dll`, statiske ressurser, startfiler) og at det ikke følger med database, logg, symboler, nøkler eller hemmeligheter;
+- at programmet lytter bare på `127.0.0.1` (ikke `::1`, ikke nettverket), at forsiden svarer 200, at et fremmed vertsnavn gir 400, og at alle stilark og skript siden lenker til svarer 200;
+- at en andre start gir avslutningskode 1;
+- at programmet avsluttes med Ctrl+C (`-StopWith ctrlc`, standard) eller X (`-StopWith close`, klassisk konsollvindu), at ingen prosess blir igjen, at sperren er fri, at databasen kan åpnes, at `-wal` og `-shm` er borte, og at loggen viser ordnet avslutning uten mappesti.
+
+CI har en egen jobb `windows-package` (etter `build-and-test`) som publiserer pakken, kjører røykprøven (Ctrl+C) og lagrer zip-filen som CI-artifact `SameieHub-windows-test-package` (7 dager). Den er bare til intern kontroll og er ikke en GitHub Release. Lokal kjøring: 39 kontroller bestått med Ctrl+C og 38 med X.
+
+### B.7 Avslutning i den publiserte versjonen (nytt funn)
+
+Med nettleseren **åpen** ventet avslutningen 30 sekunder (rammeverkets standard for å la åpne forbindelser avslutte seg). Windows gir et lukket konsollvindu bare ca. fem sekunder, så X ville latt Windows avslutte programmet midt i nedstengingen. Nå er ventetiden satt til tre sekunder i Windows-modus (testet). Målt på den publiserte pakken med en åpen nettleserfane:
+
+| Hendelse | Tid til programmet er borte | Resultat |
+|---|---|---|
+| Ctrl+C | 3,4 s | Prosessen borte, `-wal`/`-shm` borte |
+| X (SC_CLOSE sendt til klassisk konsollvindu) | 3,5 s | Prosessen borte, `-wal`/`-shm` borte, sperren fri, databasen kan åpnes |
+
+Ved lukking av nettleseren er en pågående forespørsel (for eksempel en nedlasting) det som kan avbrytes av den korte ventetiden. SQLite-transaksjoner er atomiske, så en avbrutt skriving rulles tilbake ved neste åpning.
+
+**Begrensninger:**
+- X-knappen er testet ved å sende det X-knappen sender (`SC_CLOSE`) til et klassisk konsollvindu (`conhost`), ikke ved et museklikk.
+- **Windows Terminal** (standard terminalapplikasjon i Windows 11): lukking av en fane eller et vindu der er ikke testet. Programmet starter i det vinduet som Windows gir det. Hvis Windows Terminal håndterer lukkingen annerledes, er konsekvensen at programmet avsluttes brått (SQLite gjenoppretter fra `-wal`-filen ved neste start), ikke at data forsvinner. Lukking med Ctrl+C er den sikre måten.
+- Avlogging og avslutning av Windows er ikke testet.
+- Meldingsboksen ved oppstartsfeil er ikke vist i en test (`--unattended` hopper over den).
+
+### B.8 Testet på faktisk maskin, og hva som ikke er testet
+
+Alt under er kjørt på **utviklingsmaskinen** (Windows 11, med .NET SDK og runtime installert). **Dette er ikke en test på en ren maskin.**
+
+| Kontroll | Resultat |
+|---|---|
+| Utpakking av zip | Ok |
+| Oppstart uten flagg (som dobbeltklikk, med `Database__Path` mot en midlertidig database) | Ok. Nettleseren åpnes (standardnettleseren på maskinen) |
+| Oppstart med `dotnet` fjernet fra `PATH` og `DOTNET_ROOT` tom | Ok. Dette viser at programmet ikke trenger `dotnet` på `PATH`, men **beviser ikke** at det virker uten .NET installert: runtime ligger fortsatt i registeret og filsystemet |
+| Forsiden, oppgaver, styresaker, boenheter, elbillading, sikkerhetskopi | Alle åpnes og viser innhold (nettleser) |
+| Registrere en fiktiv boenhet (Blazor-forbindelsen) | Ok |
+| Laste ned sikkerhetskopi (fiktive data) | Ok: fil på 90 112 byte med datert filnavn, `transfer`-mappen er tom etterpå |
+| Avslutte, og starte på nytt | Ok. Dataene fra forrige kjøring finnes |
+| Utviklingsmodus (`dotnet run`) og demomodus (`demo.ps1 launch`) | Ok: demoen svarer på port 5100, stilark og sider gir 200 |
+| Gjenoppretting (restore) | **Ikke gjennomført** (ikke på ordinær database, ikke på demoen) |
+| Ren Windows-maskin eller virtuell maskin uten .NET | **Ikke tilgjengelig. Ikke testet.** GitHub-runneren har også .NET installert. Må gjøres før distribusjon (D12). |
+| Zip fra CI-artifact på en annen maskin | Ikke testet |
+
+Til å begynne med ble kontrollene kjørt mot en isolert database i en midlertidig mappe. Den ordinære databasen i AppData ble ikke brukt.
+
+### B.9 Svakheter og kjente begrensninger
+
+- Programmet har ingen tilgangsbeskyttelse før M8-3, og pakken bruker samme database som utviklingsversjonen (`%LOCALAPPDATA%\SameieHub`) hvis ikke noe annet er satt. Den er bare for en testmaskin med fiktive data.
+- Pakken er usignert. SmartScreen vil advare, og en zip lastet ned fra nettet får «Mark of the Web», som kan gi advarsel for hver fil som kjøres.
+- Konsollvinduet er teknisk. Vinduet har en kort norsk forklaring («SameieHub kjører …»), men viser fortsatt loggmeldinger.
+- Mappen er stor (125 MB) fordi runtime følger med og ingenting er trimmet.
+- Versjonsnummeret er et argument til skriptet. Det vises ikke i grensesnittet (M8-5).
+- En tom databasefil gir nå en stopp som brukeren må løse for hånd.

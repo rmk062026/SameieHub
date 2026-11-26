@@ -11,10 +11,12 @@ internal enum StartupFailureReason
     DatabaseNewerThanProgram,
     DatabaseNotSameieHub,
     DatabaseDamaged,
+    DatabaseFileEmpty,
     BackupBeforeUpgradeFailed,
     MigrationFailed,
     DemoDatabaseNotAllowed,
-    ServerCouldNotStart
+    ServerCouldNotStart,
+    UnexpectedError
 }
 
 /// <param name="Reason">What stopped the start. Only this is logged, never the message, which can contain a path.</param>
@@ -49,7 +51,7 @@ internal static class WindowsStartup
     public static async Task<StartupResult> PrepareAsync(
         string databasePath,
         IDatabaseRestore restore,
-        DatabaseUpgrader upgrader,
+        Func<Task> upgradeDatabase,
         ILogger logger)
     {
         InstanceLock? instanceLock;
@@ -67,7 +69,34 @@ internal static class WindowsStartup
             return Failed(StartupFailureReason.AlreadyRunning, logger);
         }
 
-        var restoreOutcome = restore.ApplyPendingRestore();
+        // From here on the lock is held, so every way out except success must release it.
+        var failure = await RunStepsAsync(restore, upgradeDatabase, logger);
+        if (failure != null)
+        {
+            instanceLock.Dispose();
+
+            return new StartupResult(null, failure);
+        }
+
+        return new StartupResult(instanceLock, null);
+    }
+
+    private static async Task<StartupFailure?> RunStepsAsync(IDatabaseRestore restore, Func<Task> upgradeDatabase, ILogger logger)
+    {
+        RestoreOutcome restoreOutcome;
+        try
+        {
+            restoreOutcome = restore.ApplyPendingRestore();
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // The restore engine is not meant to throw. If it does, the state of the database files is uncertain, so the program
+            // stops before it migrates, which could create a new, empty database.
+            logger.LogError("The restore at startup failed unexpectedly ({ExceptionType}).", exception.GetType().Name);
+
+            return Report(StartupMessages.For(StartupFailureReason.RestoreUnresolved), logger);
+        }
+
         if (restoreOutcome.Kind != RestoreOutcomeKind.NothingPending)
         {
             logger.LogWarning("Database restore at startup: {Result}.", restoreOutcome.Kind);
@@ -75,23 +104,26 @@ internal static class WindowsStartup
 
         if (restoreOutcome.Kind == RestoreOutcomeKind.Unresolved)
         {
-            instanceLock.Dispose();
-
-            return Failed(StartupFailureReason.RestoreUnresolved, logger);
+            return Report(StartupMessages.For(StartupFailureReason.RestoreUnresolved), logger);
         }
 
         try
         {
-            await upgrader.UpgradeAsync();
+            await upgradeDatabase();
         }
         catch (DatabaseUpgradeException exception)
         {
-            instanceLock.Dispose();
+            return Report(StartupMessages.For(exception), logger);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // Anything else (a locked file, a full disk) must still end in a readable message, not a crash with a stack trace.
+            logger.LogError("The database could not be prepared ({ExceptionType}).", exception.GetType().Name);
 
-            return new StartupResult(null, Report(StartupMessages.For(exception), logger));
+            return Report(StartupMessages.For(StartupFailureReason.UnexpectedError), logger);
         }
 
-        return new StartupResult(instanceLock, null);
+        return null;
     }
 
     private static StartupResult Failed(StartupFailureReason reason, ILogger logger)
@@ -125,6 +157,8 @@ internal static class StartupMessages
                 "Databasen er laget av en nyere versjon av SameieHub enn denne. Programmet har ikke åpnet databasen og ikke endret den. Installer den nyeste versjonen av SameieHub.",
             StartupFailureReason.DatabaseNotSameieHub =>
                 "Filen som skal være SameieHub-databasen, er ikke en SameieHub-database. Programmet har ikke endret den. Kontroller at riktig database er valgt.",
+            StartupFailureReason.DatabaseFileEmpty =>
+                "Databasefilen er tom (0 byte). Programmet har ikke endret eller erstattet den. Hvis du vet at dette er en ny installasjon, kan du flytte filen til side og starte på nytt. Ellers: gjenopprett fra en sikkerhetskopi, eller få hjelp.",
             StartupFailureReason.DatabaseDamaged =>
                 "Databasefilen er skadet eller kan ikke leses. Programmet har ikke endret den. Gjenopprett fra en sikkerhetskopi, eller få hjelp.",
             StartupFailureReason.BackupBeforeUpgradeFailed =>
@@ -133,6 +167,8 @@ internal static class StartupMessages
                 "Databasen kunne ikke oppgraderes. Programmet er stoppet.",
             StartupFailureReason.DemoDatabaseNotAllowed =>
                 "Demodatabasen kan ikke brukes i Windows-modus. Start demoen med Start-demo.cmd.",
+            StartupFailureReason.UnexpectedError =>
+                "SameieHub kunne ikke starte på grunn av en uventet feil. Programmet har ikke gjort flere endringer i databasen. Se loggfilen i mappen «logs» ved siden av databasen.",
             StartupFailureReason.ServerCouldNotStart =>
                 "SameieHub kunne ikke starte den lokale serveren. Start programmet på nytt. Hvis det skjer igjen, se loggfilen i mappen «logs».",
             _ => "SameieHub kunne ikke starte."
@@ -147,6 +183,8 @@ internal static class StartupMessages
                 return For(StartupFailureReason.DatabaseNewerThanProgram);
             case DatabaseUpgradeFailure.NotSameieHubDatabase:
                 return For(StartupFailureReason.DatabaseNotSameieHub);
+            case DatabaseUpgradeFailure.EmptyDatabaseFile:
+                return For(StartupFailureReason.DatabaseFileEmpty);
             case DatabaseUpgradeFailure.DamagedDatabase:
                 return For(StartupFailureReason.DatabaseDamaged);
             case DatabaseUpgradeFailure.BackupFailed:

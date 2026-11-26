@@ -69,12 +69,21 @@ public sealed class DatabaseUpgrader
         }
     }
 
-    /// <summary>Null means there is no database yet, so migrating creates one.</summary>
+    /// <summary>
+    /// Null means there is no database file at all, so migrating creates one. A file that exists is never created over or filled:
+    /// an empty or invalid file stops the start, because it may be what is left of a database.
+    /// </summary>
     private BackupFileStatus? Inspect()
     {
-        if (!File.Exists(_databasePath) || new FileInfo(_databasePath).Length == 0)
+        if (!File.Exists(_databasePath))
         {
             return null;
+        }
+
+        if (new FileInfo(_databasePath).Length == 0)
+        {
+            _logger.LogError("The database file exists but is empty, so it was not changed.");
+            throw new DatabaseUpgradeException(DatabaseUpgradeFailure.EmptyDatabaseFile, "The database file is empty.");
         }
 
         var inspection = BackupFileInspector.Inspect(_databasePath);
@@ -211,6 +220,9 @@ public enum DatabaseUpgradeFailure
 
     /// <summary>Not readable as SQLite, damaged, or with broken references.</summary>
     DamagedDatabase,
+
+    /// <summary>The database file exists but has no content (0 bytes). It is neither filled nor replaced.</summary>
+    EmptyDatabaseFile,
 
     /// <summary>The backup before the upgrade could not be made, so nothing was migrated.</summary>
     BackupFailed,

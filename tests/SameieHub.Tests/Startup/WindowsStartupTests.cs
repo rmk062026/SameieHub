@@ -45,7 +45,7 @@ public class WindowsStartupTests : IDisposable
         var restore = new RecordingRestore();
         using var firstInstance = InstanceLock.TryAcquire(InstanceLock.PathFor(DatabasePath));
 
-        var result = await WindowsStartup.PrepareAsync(DatabasePath, restore, CreateUpgrader(), NullLogger.Instance);
+        var result = await WindowsStartup.PrepareAsync(DatabasePath, restore, () => CreateUpgrader().UpgradeAsync(), NullLogger.Instance);
 
         Assert.NotNull(firstInstance);
         Assert.Null(result.Lock);
@@ -59,7 +59,7 @@ public class WindowsStartupTests : IDisposable
     {
         var restore = new RecordingRestore();
 
-        using var result = await WindowsStartup.PrepareAsync(DatabasePath, restore, CreateUpgrader(), NullLogger.Instance);
+        using var result = await WindowsStartup.PrepareAsync(DatabasePath, restore, () => CreateUpgrader().UpgradeAsync(), NullLogger.Instance);
 
         Assert.Null(result.Failure);
         Assert.NotNull(result.Lock);
@@ -73,7 +73,7 @@ public class WindowsStartupTests : IDisposable
     {
         var restore = new RecordingRestore { Outcome = RestoreOutcomeKind.Unresolved };
 
-        var result = await WindowsStartup.PrepareAsync(DatabasePath, restore, CreateUpgrader(), NullLogger.Instance);
+        var result = await WindowsStartup.PrepareAsync(DatabasePath, restore, () => CreateUpgrader().UpgradeAsync(), NullLogger.Instance);
 
         Assert.Equal(StartupFailureReason.RestoreUnresolved, result.Failure!.Reason);
         Assert.Null(result.Lock);
@@ -89,7 +89,7 @@ public class WindowsStartupTests : IDisposable
         await DatabaseTestFiles.ExecuteAsync(DatabasePath, "INSERT INTO __EFMigrationsHistory (MigrationId, ProductVersion) VALUES ('99999999999999_FromTheFuture', '99.0.0')");
         SqliteConnection.ClearAllPools();
 
-        var result = await WindowsStartup.PrepareAsync(DatabasePath, new RecordingRestore(), CreateUpgrader(), NullLogger.Instance);
+        var result = await WindowsStartup.PrepareAsync(DatabasePath, new RecordingRestore(), () => CreateUpgrader().UpgradeAsync(), NullLogger.Instance);
 
         Assert.Equal(StartupFailureReason.DatabaseNewerThanProgram, result.Failure!.Reason);
         Assert.Null(result.Lock);
@@ -111,12 +111,63 @@ public class WindowsStartupTests : IDisposable
         await DatabaseTestFiles.ExecuteAsync(DatabasePath, "ALTER TABLE HousingUnits ADD COLUMN OwnerName TEXT");
         SqliteConnection.ClearAllPools();
 
-        var result = await WindowsStartup.PrepareAsync(DatabasePath, new RecordingRestore(), CreateUpgrader(), NullLogger.Instance);
+        var result = await WindowsStartup.PrepareAsync(DatabasePath, new RecordingRestore(), () => CreateUpgrader().UpgradeAsync(), NullLogger.Instance);
 
         Assert.Equal(StartupFailureReason.MigrationFailed, result.Failure!.Reason);
         Assert.Contains(DatabaseUpgrader.BackupFolderName, result.Failure.Message);
         Assert.Contains("kontrollert", result.Failure.Message);
         Assert.Null(result.Lock);
+    }
+
+    [Fact]
+    public async Task AnUnexpectedErrorFromTheRestore_StopsTheStartBeforeAnyDatabaseIsCreated_AndReleasesTheLock()
+    {
+        var restore = new RecordingRestore { ExceptionToThrow = new IOException("fictional disk problem") };
+        var upgraded = false;
+
+        var result = await WindowsStartup.PrepareAsync(DatabasePath, restore, () =>
+        {
+            upgraded = true;
+
+            return Task.CompletedTask;
+        }, NullLogger.Instance);
+
+        Assert.Equal(StartupFailureReason.RestoreUnresolved, result.Failure!.Reason);
+        Assert.Null(result.Lock);
+        Assert.False(upgraded);
+        Assert.False(File.Exists(DatabasePath));
+        using var free = InstanceLock.TryAcquire(InstanceLock.PathFor(DatabasePath));
+        Assert.NotNull(free);
+    }
+
+    [Fact]
+    public async Task AnUnexpectedErrorWhenUpgradingTheDatabase_GivesAReadableMessage_AndReleasesTheLock()
+    {
+        var result = await WindowsStartup.PrepareAsync(
+            DatabasePath,
+            new RecordingRestore(),
+            () => throw new InvalidOperationException("fictional problem with Fiktivdalen 1A"),
+            NullLogger.Instance);
+
+        Assert.Equal(StartupFailureReason.UnexpectedError, result.Failure!.Reason);
+        Assert.DoesNotContain("Fiktivdalen", result.Failure.Message);
+        Assert.Null(result.Lock);
+        using var free = InstanceLock.TryAcquire(InstanceLock.PathFor(DatabasePath));
+        Assert.NotNull(free);
+    }
+
+    [Fact]
+    public async Task AnEmptyDatabaseFile_StopsTheStartWithAClearMessage_AndReleasesTheLock()
+    {
+        await File.WriteAllBytesAsync(DatabasePath, []);
+
+        var result = await WindowsStartup.PrepareAsync(DatabasePath, new RecordingRestore(), () => CreateUpgrader().UpgradeAsync(), NullLogger.Instance);
+
+        Assert.Equal(StartupFailureReason.DatabaseFileEmpty, result.Failure!.Reason);
+        Assert.Contains("tom", result.Failure.Message);
+        Assert.Equal(0, new FileInfo(DatabasePath).Length);
+        using var free = InstanceLock.TryAcquire(InstanceLock.PathFor(DatabasePath));
+        Assert.NotNull(free);
     }
 
     [Fact]
@@ -149,9 +200,15 @@ public class WindowsStartupTests : IDisposable
 
         public RestoreOutcomeKind Outcome { get; init; } = RestoreOutcomeKind.NothingPending;
 
+        public Exception? ExceptionToThrow { get; init; }
+
         public RestoreOutcome ApplyPendingRestore()
         {
             ApplyCalls++;
+            if (ExceptionToThrow != null)
+            {
+                throw ExceptionToThrow;
+            }
 
             return new RestoreOutcome(Outcome, DateTime.UtcNow, null);
         }

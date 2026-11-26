@@ -48,7 +48,7 @@ if (windowsHost)
         var result = await WindowsStartup.PrepareAsync(
             databasePath,
             app.Services.GetRequiredService<IDatabaseRestore>(),
-            app.Services.GetRequiredService<DatabaseUpgrader>(),
+            () => app.Services.GetRequiredService<DatabaseUpgrader>().UpgradeAsync(),
             app.Logger);
         failure = result.Failure;
         instanceLock = result.Lock;

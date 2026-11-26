@@ -57,3 +57,19 @@ dotnet run --project src/SameieHub.Web --no-launch-profile -- --windows-host "--
 - Loggfiler ligger i `logs` ved siden av databasefilen, og en sikkerhetskopi før oppgradering i `pre-migration`.
 - Bruk alltid en egen testdatabase med `--Database:Path`. Demodatabasen avvises i Windows-modus (bruk `Start-demo.cmd`).
 - Før M8-3 (engangskode og cookie) er modusen bare for kontrollert testing med fiktive data. Se [WINDOWS_DISTRIBUTION_PLAN.md](WINDOWS_DISTRIBUTION_PLAN.md), vedlegg A.
+
+### Windows-pakken (M8-2)
+Den interne testpakken lages og kontrolleres med to skript. Pakken er en selvstendig mappe (`SameieHub.exe` og runtime), og trenger ikke .NET hos den som starter den.
+
+```powershell
+.\scripts\Publish-Windows.ps1 -Version 0.8.2-test
+```
+
+```powershell
+.\scripts\Test-WindowsPackage.ps1 -Zip .\artifacts\windows\SameieHub-0.8.2-test-win-x64-test.zip
+```
+
+- Pakken legges i `artifacts\windows` (ignorert av git). Pakk ut zip-filen og dobbeltklikk `SameieHub.exe` (eller `Start-SameieHub.cmd`).
+- Den publiserte filen bruker Windows-modus uten flagg. Merket legges bare på ved en self-contained bygging, så `dotnet run` og testene er uendret. `SAMEIEHUB_WINDOWS_HOST=0` slår modusen av for en publisert fil.
+- **Pakken bruker databasen i `%LOCALAPPDATA%\SameieHub`, altså den ordinære.** Under testing: sett `Database__Path` til en midlertidig fil, slik røykprøven gjør.
+- Røykprøven bruker bare en midlertidig database og kjøres også i CI (jobben `windows-package`). Se [WINDOWS_DISTRIBUTION_PLAN.md](WINDOWS_DISTRIBUTION_PLAN.md), vedlegg B.
