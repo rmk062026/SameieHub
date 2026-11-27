@@ -138,7 +138,14 @@ function Get-StatusOf([string]$Url) {
 function Start-Holder([string]$MutexName) {
     $holder = Start-Process powershell -ArgumentList '-NoProfile', '-Command', "`$m = New-Object System.Threading.Mutex(`$false, '$MutexName'); Start-Sleep -Seconds 240" -PassThru -WindowStyle Hidden
     $script:holders.Add($holder)
-    Start-Sleep -Seconds 2
+    # Wait until the mutex really exists. A slow machine can take several seconds to start the process.
+    $seen = Wait-Until {
+        $existing = $null
+        $found = [System.Threading.Mutex]::TryOpenExisting($MutexName, [ref]$existing)
+        if ($existing) { $existing.Dispose() }
+        return $found
+    } 30
+    if (-not $seen) { throw "The helper process did not create the mutex $MutexName." }
     return $holder
 }
 
