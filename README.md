@@ -26,6 +26,10 @@ dotnet run --project src/SameieHub.Web
 
 I Windows-versjonen avslutter du med «Avslutt SameieHub» nederst i menyen (ikke bare ved å lukke nettleseren), og «Om SameieHub» viser installert versjon. Etter at en gjenoppretting er klargjort, velger du «Avslutt og start på nytt» på Sikkerhetskopi-siden.
 
+## Installasjon og utgivelse (Windows)
+- Brukerveiledning (installere, starte, sikkerhetskopi, oppdatere, avinstallere, feil): [docs/BRUKERVEILEDNING.md](docs/BRUKERVEILEDNING.md). Installasjonsfilen er **ikke signert**, og veiledningen forklarer hva det betyr.
+- Utgivelsesprosess og sjekkliste: [docs/RELEASE_PROCESS.md](docs/RELEASE_PROCESS.md) og [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md). Windows-versjonen er klar for **intern testing**. Den er ikke prøvd på en ren maskin eller av andre brukere, og er derfor ikke klar for distribusjon.
+
 ## Dokumentasjon
 Se [docs/README.md](docs/README.md) for indeks og anbefalt leserekkefølge. Forklaringer for å forstå og presentere prosjektet: [Prosjektstruktur](docs/PROJECT_STRUCTURE.md), [Arkitekturen forklart](docs/ARCHITECTURE_EXPLAINED.md), [Kodegjennomgang](docs/CODE_WALKTHROUGH.md), [Designbeslutninger](docs/DESIGN_DECISIONS.md), [Mine bidrag](docs/MY_CONTRIBUTIONS.md) og [Presentasjonsguide](docs/PRESENTATION_GUIDE.md).
 

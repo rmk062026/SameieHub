@@ -14,18 +14,20 @@ internal sealed class ShutdownService
     private readonly IHostApplicationLifetime _lifetime;
     private readonly ILogger<ShutdownService> _logger;
     private readonly bool _canRestart;
+    private readonly Func<bool> _hasValidAccess;
     private readonly TimeSpan _messageDelay;
     private readonly object _gate = new();
     private bool _requested;
     private bool _restartRequested;
 
-    public ShutdownService(IHostApplicationLifetime lifetime, ILogger<ShutdownService> logger, bool canShutDown, bool canRestart, TimeSpan messageDelay)
+    public ShutdownService(IHostApplicationLifetime lifetime, ILogger<ShutdownService> logger, bool canShutDown, bool canRestart, TimeSpan messageDelay, Func<bool>? hasValidAccess = null)
     {
         _lifetime = lifetime;
         _logger = logger;
         CanShutDown = canShutDown;
         _canRestart = canRestart;
         _messageDelay = messageDelay;
+        _hasValidAccess = hasValidAccess ?? (() => true);
     }
 
     /// <summary>True in the Windows mode only. When false, the interface shows no way to stop the program.</summary>
@@ -68,6 +70,14 @@ internal sealed class ShutdownService
     {
         if (!CanShutDown || (restart && !CanRestart))
         {
+            return false;
+        }
+
+        // A page that was opened earlier keeps its connection after the session has expired. It may not stop the program then.
+        if (!_hasValidAccess())
+        {
+            _logger.LogWarning("A request to stop SameieHub was refused because no session is valid any more.");
+
             return false;
         }
 

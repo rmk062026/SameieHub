@@ -57,6 +57,10 @@
             </ol>
         }
         <p>Dataene du har nå tas vare på i en egen mappe, slik at de kan reddes hvis noe skulle gå galt. Frem til du starter på nytt er ingenting endret, og du kan avbryte.</p>
+        @if (_restartRefused)
+        {
+            <p class="text-danger" role="alert" data-testid="restart-refused">SameieHub kunne ikke starte på nytt herfra. Økten kan ha utløpt. Lukk vinduet «SameieHub» og start det fra Start-menyen. Gjenopprettingen gjennomføres da.</p>
+        }
         <div class="form-actions">
             @if (Shutdown.CanRestart)
             {
@@ -70,7 +74,7 @@
 <section class="surface-card form-section" aria-labelledby="backup-title">
     <h2 id="backup-title">Lag sikkerhetskopi</h2>
     <p>
-        Sikkerhetskopien er én fil med alle boenheter, styresaker, oppgaver og elbillingsavlesninger. Den lastes ned til nettleseren
+        Sikkerhetskopien er én fil med alle boenheter, styresaker, oppgaver og avlesninger for elbillading. Den lastes ned til nettleseren
         din, og du velger selv hvor den lagres.
     </p>
     <p class="text-muted">
@@ -203,6 +207,7 @@
     private bool _isCreatingBackup;
     private bool _isChecking;
     private bool _isPreparing;
+    private bool _restartRefused;
     private bool _confirming;
     private string? _backupMessage;
     private string? _backupError;
@@ -427,7 +432,7 @@
     {
         // Only asks the program to stop and start again. The restore itself is carried out by the new program at startup, before the
         // database is opened, exactly as when the person closes and starts SameieHub by hand.
-        Shutdown.Request(restart: true);
+        _restartRefused = !Shutdown.Request(restart: true);
     }
 
     private void CancelPending()

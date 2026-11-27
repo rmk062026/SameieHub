@@ -91,6 +91,17 @@ internal sealed class AccessSession
         }
     }
 
+    /// <summary>True while at least one session is still valid. A connection that was opened earlier uses this to find out that every session has expired.</summary>
+    public bool HasValidSession()
+    {
+        lock (_lock)
+        {
+            RemoveExpired(_sessions);
+
+            return _sessions.Count > 0;
+        }
+    }
+
     private static string NewSecret()
     {
         return Base64Url.EncodeToString(RandomNumberGenerator.GetBytes(SecretBytes));

@@ -1,4 +1,6 @@
 using Bunit;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using SameieHub.Infrastructure.Restore;
@@ -248,5 +250,18 @@ public class ShutdownUiTests : UiTestBase
         {
             Assert.DoesNotContain(forbidden, markup, StringComparison.OrdinalIgnoreCase);
         }
+    }
+
+    [Fact]
+    public void WhenTheProgramRefusesTheShutdown_TheMenuSaysSoInsteadOfDoingNothing()
+    {
+        Services.AddSingleton(new ShutdownService(Lifetime, NullLogger<ShutdownService>.Instance, canShutDown: true, canRestart: false, TimeSpan.Zero, () => false));
+        var cut = Render<NavMenu>();
+        cut.Find("[data-testid=shutdown-open]").Click();
+
+        cut.Find("#confirm-shutdown").Click();
+
+        Assert.Contains("kunne ikke avsluttes", cut.Find("[data-testid=shutdown-refused]").TextContent);
+        Assert.Equal(0, Lifetime.StopCalls);
     }
 }

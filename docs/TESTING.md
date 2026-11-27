@@ -157,3 +157,10 @@ Se [ARCHITECTURE.md](ARCHITECTURE.md), «Sikkerhetskontroll av gjenopprettingen 
 - `scripts/Test-WindowsPackage.ps1` (93 kontroller): en ny del ber testbyggingen starte på nytt og sjekker at bare ett program kjører etterpå.
 - `scripts/Test-Installer.ps1` (63 kontroller): det installerte programmet har ingen `--restart` utenfra.
 - Ikke automatisert: nettleserflyten for avslutning og omstart med gjenoppretting (gjort manuelt, se vedlegg E.8 i `WINDOWS_DISTRIBUTION_PLAN.md`).
+
+## M8-6: Sluttkontroll og utgivelsesrutiner
+- `ShutdownServiceTests`, `ShutdownAccessTests`, `AccessSessionTests`, `ShutdownUiTests`: avslutning og omstart nektes når ingen sesjon er gyldig lenger (en åpen side etter at sesjonen er utløpt), og menyen sier fra i stedet for å gjøre ingenting.
+- `DatabaseUpgraderTests`: kopien fra før en migrering kan velges som sikkerhetskopi i restoremotoren.
+- `scripts/Test-InterruptedUpdate.ps1` (15 kontroller, også i CI): en oppdatering som feiler midt i (en programfil holdes åpen) lar programmappen være ufullstendig, men dataene urørt, og samme installasjonsfil repareres. Se `WINDOWS_DISTRIBUTION_PLAN.md`, F.4.
+- `scripts/Build-Release.ps1` kontrollerer selv utgivelsesfilene (ingen database, logg, symbol eller nøkkel, ingen testkroker, riktig versjon, zip med `SameieHub.exe`), og arbeidsflyten `Release build` kontrollerer kontrollsummene og kjører installasjonstesten mot utgivelsesinstallasjonen.
+- Ikke testet (se [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)): ren maskin uten .NET, en annen Windows-bruker, Edge, Firefox, interaktiv veiviser, SmartScreen og skjermleser.

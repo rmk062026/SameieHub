@@ -13,7 +13,9 @@ param(
     # A build for the automatic checks only: it honours the test setting Launch:UrlFile, which the installed program must not. Never ship it.
     [switch]$TestHooks,
     # Only the folder, no zip (the installer is made from the folder).
-    [switch]$NoZip
+    [switch]$NoZip,
+    # The name of a release build has no "-test" in it. It is still the normal build, without test hooks.
+    [switch]$Release
 )
 
 $ErrorActionPreference = 'Stop'
@@ -21,7 +23,8 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 if (-not $OutputRoot) { $OutputRoot = Join-Path $root 'artifacts\windows' }
 $project = Join-Path $root 'src\SameieHub.Web\SameieHub.Web.csproj'
-$packageName = if ($TestHooks) { "SameieHub-$Version-win-x64-testhooks" } else { "SameieHub-$Version-win-x64-test" }
+if ($Release -and $TestHooks) { throw 'A release build cannot have test hooks.' }
+$packageName = if ($TestHooks) { "SameieHub-$Version-win-x64-testhooks" } elseif ($Release) { "SameieHub-$Version-win-x64" } else { "SameieHub-$Version-win-x64-test" }
 $stage = Join-Path $OutputRoot $packageName
 $zip = Join-Path $OutputRoot "$packageName.zip"
 

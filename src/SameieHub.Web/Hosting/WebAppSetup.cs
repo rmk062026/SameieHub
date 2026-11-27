@@ -28,7 +28,8 @@ internal static class WebAppSetup
             provider.GetRequiredService<ILogger<ShutdownService>>(),
             canShutDown: windowsHost,
             canRestart: windowsHost && RestartLaunch.CanStartItself(Environment.ProcessPath),
-            MessageDelay));
+            MessageDelay,
+            hasValidAccess: windowsHost ? provider.GetRequiredService<AccessSession>().HasValidSession : null));
 
         if (windowsHost)
         {

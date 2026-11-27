@@ -27,6 +27,9 @@ Disse ble skrevet i samme endring som koden, milepæl for milepæl, og beskriver
 | [TESTING.md](TESTING.md) | Teststrategi og hva testene dekker |
 | [DEVELOPMENT.md](DEVELOPMENT.md) | Kommandoer, database, git-arbeidsflyt, hvordan legge til et felt |
 | [DEMO.md](DEMO.md) | Demodatabasen, kommandoer og sikkerhetsregler |
+| [BRUKERVEILEDNING.md](BRUKERVEILEDNING.md) | Installere, bruke, sikkerhetskopiere, oppdatere og avinstallere SameieHub (for brukere) |
+| [RELEASE_PROCESS.md](RELEASE_PROCESS.md) | Hvordan en utgivelse bygges, testes og godkjennes |
+| [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) | Status per utgivelseskriterium: bestått, ikke bestått, ikke testet |
 | [TEST_AUDIT.md](TEST_AUDIT.md) | Revisjon av testpakken og plan for forbedring (M4T) |
 | [REDESIGN_PLAN.md](REDESIGN_PLAN.md) | Plan for å forenkle brukeropplevelsen (M5D, ikke implementert) |
 | [WINDOWS_DISTRIBUTION_PLAN.md](WINDOWS_DISTRIBUTION_PLAN.md) | Plan for selvstendig Windows-versjon: arkitekturvalg, oppstart og avslutning, sikkerhet, lagring, installasjon og milepæler (M8, bare plan) |

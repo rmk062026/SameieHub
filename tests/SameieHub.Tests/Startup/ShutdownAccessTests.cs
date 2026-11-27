@@ -104,4 +104,18 @@ public class ShutdownAccessTests : IClassFixture<GuardedAppFixture>
     {
         Assert.True(Shutdown.CanShutDown);
     }
+
+    [Fact]
+    public async Task AfterEverySessionHasExpired_AnAlreadyOpenPageCannotStopTheProgram()
+    {
+        await _app.LoginAsync();
+        Assert.True(_app.Session.HasValidSession());
+
+        _app.Clock.Advance(AccessSession.SessionLifetime + TimeSpan.FromMinutes(1));
+
+        Assert.False(_app.Session.HasValidSession());
+        Assert.False(Shutdown.Request(restart: false));
+        Assert.False(Shutdown.IsRequested);
+        Assert.False(IsStopping);
+    }
 }

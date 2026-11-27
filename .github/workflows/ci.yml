@@ -93,6 +93,10 @@ jobs:
         shell: pwsh
         run: ./scripts/Test-Installer.ps1 -Setup "${{ steps.build.outputs.new }}" -OldSetup "${{ steps.build.outputs.old }}" -UseDefaultDirectory
 
+      - name: Test an update that fails half-way, and the repair
+        shell: pwsh
+        run: ./scripts/Test-InterruptedUpdate.ps1 -OldSetup "${{ steps.build.outputs.old }}" -Setup "${{ steps.build.outputs.new }}"
+
       - name: Keep the installer as an internal artifact
         uses: actions/upload-artifact@v4
         with:

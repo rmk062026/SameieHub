@@ -132,4 +132,18 @@ public class AccessSessionTests
 
         Assert.True(session.TryRedeemLaunchCode(newest, out _));
     }
+
+    [Fact]
+    public void HasValidSession_IsTrueOnlyWhileASessionHasNotExpired()
+    {
+        var clock = new SameieHub.Tests.Fakes.ManualTimeProvider(new DateTime(2026, 11, 27, 9, 0, 0, DateTimeKind.Utc));
+        var session = new AccessSession(clock);
+        Assert.False(session.HasValidSession());
+
+        Assert.True(session.TryRedeemLaunchCode(session.CreateLaunchCode(), out _));
+        Assert.True(session.HasValidSession());
+
+        clock.Advance(AccessSession.SessionLifetime + TimeSpan.FromSeconds(1));
+        Assert.False(session.HasValidSession());
+    }
 }

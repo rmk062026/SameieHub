@@ -134,10 +134,29 @@ public class ShutdownServiceTests
 
         Assert.Equal(expectedCanShutDown, service.CanShutDown);
         Assert.False(service.CanRestart, "The test host is not SameieHub.exe, so it cannot start itself again.");
-        Assert.Equal(expectedCanShutDown, service.Request(restart: false));
+        // No one has logged in to this program, so there is no valid session, and even the Windows start refuses.
+        Assert.False(service.Request(restart: false));
         if (!expectedCanShutDown)
         {
             Assert.False(service.IsRequested);
         }
+    }
+
+    [Fact]
+    public async Task WhenNoSessionIsValidAnyMore_AnOldPageCannotStopTheProgram()
+    {
+        var valid = true;
+        var service = new ShutdownService(_lifetime, NullLogger<ShutdownService>.Instance, canShutDown: true, canRestart: true, TimeSpan.Zero, () => valid);
+
+        valid = false;
+
+        Assert.False(service.Request(restart: false));
+        Assert.False(service.Request(restart: true));
+        Assert.False(service.IsRequested);
+        Assert.False(await _lifetime.WaitForStopAsync(TimeSpan.FromMilliseconds(300)));
+
+        valid = true;
+        Assert.True(service.Request(restart: false));
+        Assert.True(await _lifetime.WaitForStopAsync(Wait));
     }
 }

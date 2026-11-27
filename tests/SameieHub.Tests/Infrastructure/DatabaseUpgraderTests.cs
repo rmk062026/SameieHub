@@ -95,6 +95,20 @@ public class DatabaseUpgraderTests : IDisposable
     }
 
     [Fact]
+    public async Task Upgrade_TheCopyFromBeforeTheMigration_CanBeChosenAsARestoreSource()
+    {
+        await CreateOlderDatabaseAsync("AddTaskItems");
+        await CreateUpgrader().UpgradeAsync();
+        var backup = Assert.Single(Directory.GetFiles(BackupFolder));
+        var restore = new SqliteDatabaseRestore(DatabasePath, TimeProvider.System, Microsoft.Extensions.Logging.Abstractions.NullLogger<SqliteDatabaseRestore>.Instance);
+
+        var preparation = await restore.PrepareAsync(backup);
+
+        Assert.True(preparation.WasUpgraded);
+        Assert.NotNull(restore.GetPending());
+    }
+
+    [Fact]
     public async Task Upgrade_TheBackupIncludesRowsThatOnlyExistInTheWalFile()
     {
         await CreateOlderDatabaseAsync("AddTaskItems");

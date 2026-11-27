@@ -1,6 +1,6 @@
 # Windows-distribusjon: analyse og plan (M8)
 
-**Status:** planen er godkjent (D1–D12, med presiseringer). **M8-1 er gjennomført** (vedlegg A) og **M8-2 er gjennomført** (vedlegg B) **M8-3 er gjennomført** (vedlegg C: tilgangsbeskyttelse og andre oppstart) og **M8-4 er gjennomført** (vedlegg D: installasjonsprogram og sikkerhetsretting) og **M8-5 er gjennomført** (vedlegg E: avslutt, start på nytt og Om SameieHub). M8-5 og M8-6 er ikke startet. Ingen installasjonsprogram og ingen endringer i domene, migreringer eller grensesnitt er laget. Dokumentet bygger på det koden gjør i dag (kontrollert 2026-11-26, commit `f373965`) og på en testpublisering som ble gjort i en midlertidig mappe utenfor repoet.
+**Status:** planen er godkjent (D1–D12, med presiseringer). **M8-1 er gjennomført** (vedlegg A) og **M8-2 er gjennomført** (vedlegg B) **M8-3 er gjennomført** (vedlegg C: tilgangsbeskyttelse og andre oppstart) og **M8-4 er gjennomført** (vedlegg D: installasjonsprogram og sikkerhetsretting) og **M8-5 er gjennomført** (vedlegg E: avslutt, start på nytt og Om SameieHub) og **M8-6 er gjennomført** (vedlegg F: sluttkontroll og utgivelsesrutiner). Windows-distribusjonen er klar for intern testing, men **ikke ferdig verifisert**: se [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md). M8-5 og M8-6 er ikke startet. Ingen installasjonsprogram og ingen endringer i domene, migreringer eller grensesnitt er laget. Dokumentet bygger på det koden gjør i dag (kontrollert 2026-11-26, commit `f373965`) og på en testpublisering som ble gjort i en midlertidig mappe utenfor repoet.
 
 **Målet:** en vanlig Windows-bruker installerer SameieHub, starter det fra Start-menyen, får grensesnittet åpnet automatisk, beholder dataene sine ved oppdatering og kan avslutte programmet på en tydelig måte. Ingen Visual Studio, ingen PowerShell, ingen `dotnet`-kommandoer.
 
@@ -1039,3 +1039,67 @@ Den installerte filen har ingen testkroker, så nettleserdelen ble kjørt mot te
 - **Omstart og antivirus:** et antivirusprogram kan i teori forsinke at det nye programmet starter. Da vises ingenting før det er oppe, og meldingen i den gamle fanen sier at programmet kan startes fra Start-menyen.
 - **Meldingen i den gamle fanen** er en statisk side. Den åpner ikke den nye fanen selv; det gjør programmet (nettleseren åpnes med en ny kode). Hvis nettleseren ikke åpner en ny fane, må brukeren åpne SameieHub fra Start-menyen.
 - **Ventetid 1,5 sekunder** ved avslutning er et valg, ikke en garanti: en svært treg nettleser kan vise tilkoblingsfeil i stedet for meldingen.
+
+
+## Vedlegg F. M8-6: Sluttkontroll og utgivelsesrutiner (gjennomført)
+
+Denne milepælen gjør ikke noe nytt i programmet. Den kartlegger, kontrollerer og dokumenterer, retter små feil og lager utgivelsesrutinene. **Windows-distribusjonen er klar for intern testing, men ikke ferdig verifisert:** den utfyllende statusen står i [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md), og rutinene i [RELEASE_PROCESS.md](RELEASE_PROCESS.md).
+
+### F.1 Oversikt: hva som fungerer, hva som er oppfylt, hva som gjenstår
+
+| Krav fra planen (D1–D12 og M8-1 til M8-5) | Status |
+|---|---|
+| Selvstendig `SameieHub.exe`, ingen .NET nødvendig (Alternativ A) | Oppfylt og testet (røyktest og installasjonstest) |
+| Synlig konsollvindu, ingen automatisk avslutning | Oppfylt |
+| Engangskode og cookie før distribusjon | Oppfylt (M8-3), med ett kjent unntak (F.3) |
+| Installasjon per bruker, avinstallasjon beholder dataene | Oppfylt og testet |
+| Enkel lokal logging uten personopplysninger | Oppfylt |
+| Ingen demomodus i installert program | Oppfylt |
+| UI for avslutning og omstart | Oppfylt (M8-5) |
+| Filnavn `SameieHub.exe`, versjon i installasjonsfilen og i programmet | Oppfylt, kontrollert av `Build-Release.ps1` |
+| **Test på ren maskin før reell distribusjon (D12)** | **Ikke oppfylt: ingen ren maskin.** Åpent akseptansekriterium. |
+| Kodesignering | Utenfor (D6). Ikke gjort. |
+
+### F.2 Utgivelsesprosess
+
+Versjon fra Git-tag (`Get-Version.ps1`), `Build-Release.ps1` (installasjonsfil, zip, SHA-256, utkast til utgivelsesnotater, kontroller), arbeidsflyten `Release build` og en manuell godkjenning før noe publiseres. Se [RELEASE_PROCESS.md](RELEASE_PROCESS.md). Ingen Release og ingen tag er laget.
+
+### F.3 Sikkerhetskontroll
+
+| Punkt | Resultat |
+|---|---|
+| **Sesjonsutløp ved en allerede etablert Blazor-forbindelse** | **Funn.** Tilgangsvakten sjekker cookien når en forbindelse opprettes (negotiate og WebSocket), men ikke for hver melding etterpå. En side som ble åpnet med gyldig sesjon, kan derfor fortsette å bruke programmet etter at sesjonen (8 timer) er utløpt, så lenge forbindelsen holder. Mister den forbindelsen, kreves ny gyldig cookie, så den kommer ikke inn igjen. **Rettet delvis:** å avslutte eller starte på nytt kontrollerer nå at minst én sesjon fortsatt er gyldig (`ShutdownService`, med tester), og viser en forståelig melding hvis ikke. **Ikke rettet:** at en gammel forbindelse kan lese og endre data. En fullstendig retting krever at hver Blazor-forbindelse bindes til sin egen sesjon, noe som er en større endring (en egen `CircuitHandler` med sesjons-id fra første forespørsel, og avslutning av forbindelsen ved utløp). Rapportert som åpent, ikke gjort i denne milepælen. Rimelig vurdering: det er et enbrukerprogram på én maskin, og forbindelsen avsluttes uansett når nettleserfanen lukkes. |
+| Tilgangsvakt for HTTP, POST og WebSocket | Ingen vei utenom vakten: alt unntatt `/start` krever cookie, `Origin` og `Sec-Fetch-Site` kontrolleres, WebSocket nektes uten cookie (`AccessGuardTests`, røyktest) |
+| Fremmed `Origin` og `Host` | `Origin` som ikke er programmets egen adresse gir 403. Vertsnavn utenom `127.0.0.1` og `localhost` gir 400 (`AllowedHosts` tvinges, og `*` fra innstillinger virker ikke) |
+| Test- og utviklingskroker i produksjonsbygg | `SAMEIEHUB_WINDOWS_HOST=0`, `--windows-host=false`, `--urls` og `Launch:UrlFile` har ingen virkning i den publiserte filen. `--restart` avvises. `Build-Release.ps1` avviser en bygging med testkroker. |
+| Loopback-binding | Bare `127.0.0.1`; et annet adresse (`Kestrel:Endpoints`) fører til at programmet stopper seg selv (fail closed) |
+| Rettigheter til named pipes | `CurrentUserOnly`; ACL kontrollert i test (ingen bred gruppe). Ikke prøvd fra en annen Windows-bruker. |
+| Hemmeligheter i logger | Loggene inneholder bare unntakstyper og fast tekst. Ingen kode, cookie, sti eller data (kontrollert i røyktesten og i enhetstester) |
+| Webhandling som stopper programmet | Ingen adresse finnes. Over Blazor-forbindelsen kreves nå en gyldig sesjon (se øverst) |
+| Cookie | `HttpOnly`, `SameSite=Strict`, uten `Secure` (bare http på 127.0.0.1) og uten utløpsdato. Dokumentert (C.3). |
+
+Gjenstående begrensninger er de samme som i C.8, D.8 og E.9, pluss dem i [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md): usignert fil, ukryptert database, en prosess som samme Windows-bruker kan lese filene og stoppe programmet, og den ubegrensede levetiden til en etablert forbindelse.
+
+### F.4 Avbrutt oppdatering
+
+**Risiko.** Inno Setup sletter de gamle programfilene (`InstallDelete`) før de nye kopieres. Går noe galt midt imellom (strømbrudd, antivirus som holder en fil, avbrutt installasjon), er programmappen ufullstendig, og programmet starter ikke.
+
+**Testet i et isolert miljø** (`scripts/Test-InterruptedUpdate.ps1`, 15 kontroller, kjøres også i CI): en fil i programmappen holdes åpen, så den nye versjonen verken kan slette eller erstatte den. Resultat: installasjonsprogrammet avslutter med feilkode 5, og programmappen har bare én DLL igjen og mangler `SameieHub.exe`. **Dataene er uberørt:** databasen er byte for byte lik, datamappen og den virkelige `%LOCALAPPDATA%\SameieHub` er uendret. Kjøres **samme installasjonsfil igjen** (filen er sluppet), repareres programmet (exit 0, alle filer er tilbake, riktig versjon), og det starter på den gamle databasen.
+
+**Definert gjenopprettingsprosedyre** (også i brukerveiledningen):
+
+1. *Feilet oppdatering:* kjør den samme installasjonsfilen på nytt. Det er trygt, og dataene røres ikke.
+2. *Bevare databasen:* installasjonen rører aldri datamappen. Lag likevel en sikkerhetskopi før en oppdatering.
+3. *Database oppgradert av en nyere versjon:* programmet åpner den ikke og endrer den ikke. Installer nyeste versjon. Det finnes ingen nedgradering.
+4. *Kopi fra før migrering:* `pre-migration` har de tre siste kopiene. De er gyldige sikkerhetskopier (testet at restoremotoren godtar dem), og kan velges under «Gjenopprett fra sikkerhetskopi». Ved behov uten fungerende program flyttes databasen til side for hånd (aldri slett), og kopien legges i stedet (`RELEASE_PROCESS.md`).
+
+**Automatisk tilbakerulling av databasen er ikke gjort**, i tråd med kravet. **Ikke testet:** en avbrutt installasjon ved at selve installasjonsprosessen drepes midt i kopieringen (tidspunktet kan ikke styres trygt). Utfallet er det samme som i testen over, siden begge gir en ufullstendig programmappe.
+
+### F.5 Kompatibilitet
+
+Se tabellen «Kompatibilitet» i [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md). Kort: Windows 11 og Windows Defender er prøvd, og Chromium. **Ren maskin, annen Windows-bruker, Edge, Firefox, interaktiv veiviser, SmartScreen og skjermleser er ikke prøvd**, og det er ikke laget nye Windows-brukere eller virtuelle maskiner (krever eierens godkjenning). Disse er åpne akseptansekriterier for begrenset distribusjon.
+
+### F.6 Små rettelser
+
+- «elbillingsavlesninger» på Sikkerhetskopi-siden heter nå «avlesninger for elbillading».
+- Avslutning og omstart nektes og forklares hvis ingen sesjon er gyldig lenger (F.3).

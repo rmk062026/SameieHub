@@ -1,0 +1,99 @@
+name: Release build
+
+# Builds and tests the release files (installer, zip, SHA-256, release notes) and keeps them as a workflow artifact.
+# It NEVER creates a GitHub Release and never tags anything: publishing is a manual step after approval (docs/RELEASE_PROCESS.md).
+# Started by hand (Actions > Release build > Run workflow), or by a version tag such as v1.0.0 that the owner has pushed.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version without the v, for example 1.0.0-rc.1. Empty: taken from the Git tags.'
+        required: false
+        default: ''
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+*']
+
+permissions:
+  contents: read
+
+jobs:
+  release-build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # the tags are needed for the version and the release notes
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Decide the version
+        id: version
+        shell: pwsh
+        run: |
+          if ("${{ github.ref_type }}" -eq 'tag') { $version = ./scripts/Get-Version.ps1 -Tag "${{ github.ref_name }}" }
+          elseif ("${{ inputs.version }}" -ne '') { $version = "${{ inputs.version }}" }
+          else { $version = ./scripts/Get-Version.ps1 }
+          if ($version -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$') { throw "Not a usable version: $version" }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "Version: $version"
+
+      - name: Build and test
+        shell: pwsh
+        run: |
+          dotnet restore SameieHub.slnx
+          dotnet build SameieHub.slnx --no-restore --configuration Release
+          dotnet test SameieHub.slnx --no-build --configuration Release
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          $known = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe", "$env:ProgramFiles\Inno Setup 6\ISCC.exe"
+          if (-not ($known | Where-Object { Test-Path $_ })) { choco install innosetup --no-progress -y }
+
+      - name: Smoke test the program (test-hooks build of the same code)
+        shell: pwsh
+        run: |
+          $zip = ./scripts/Publish-Windows.ps1 -Version "${{ steps.version.outputs.version }}" -TestHooks | Select-Object -Last 1
+          ./scripts/Test-WindowsPackage.ps1 -Zip $zip
+
+      - name: Build the release files
+        id: release
+        shell: pwsh
+        run: |
+          $out = ./scripts/Build-Release.ps1 -Version "${{ steps.version.outputs.version }}" | Select-Object -Last 1
+          "folder=$out" >> $env:GITHUB_OUTPUT
+
+      - name: Check the SHA-256 sums
+        shell: pwsh
+        run: |
+          $folder = "${{ steps.release.outputs.folder }}"
+          foreach ($line in Get-Content (Join-Path $folder 'SHA256SUMS.txt')) {
+            $hash, $name = $line -split ' \*', 2
+            $actual = (Get-FileHash (Join-Path $folder $name) -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($actual -ne $hash) { throw "SHA-256 differs for ${name}: $hash and $actual" }
+            "$name  $actual  ok"
+          }
+
+      - name: Test install, update, uninstall and reinstall with the release installer
+        shell: pwsh
+        run: |
+          $old = ./scripts/Build-Installer.ps1 -Version 0.0.1 -OutputDir "${{ runner.temp }}\old-installer" | Select-Object -Last 1
+          $new = Join-Path "${{ steps.release.outputs.folder }}" "SameieHub-${{ steps.version.outputs.version }}-win-x64-Setup.exe"
+          ./scripts/Test-Installer.ps1 -Setup $new -OldSetup $old -UseDefaultDirectory
+
+      - name: Test an update that fails half-way, and the repair
+        shell: pwsh
+        run: |
+          $old = Get-ChildItem "${{ runner.temp }}\old-installer" -Filter *.exe | Select-Object -First 1
+          $new = Join-Path "${{ steps.release.outputs.folder }}" "SameieHub-${{ steps.version.outputs.version }}-win-x64-Setup.exe"
+          ./scripts/Test-InterruptedUpdate.ps1 -OldSetup $old.FullName -Setup $new
+
+      - name: Keep the release files for review (not published)
+        uses: actions/upload-artifact@v4
+        with:
+          name: SameieHub-release-${{ steps.version.outputs.version }}
+          path: ${{ steps.release.outputs.folder }}
+          retention-days: 30
+          if-no-files-found: error

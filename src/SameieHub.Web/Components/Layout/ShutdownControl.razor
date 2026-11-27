@@ -17,6 +17,10 @@
             <p id="shutdown-text">
                 Programmet stopper, og denne siden slutter å virke. Dataene dine endres ikke. Start SameieHub fra Start-menyen når du vil bruke det igjen.
             </p>
+            @if (_refused)
+            {
+                <p id="shutdown-refused" role="alert" data-testid="shutdown-refused">SameieHub kunne ikke avsluttes herfra. Økten kan ha utløpt. Lukk vinduet «SameieHub» i stedet, eller åpne SameieHub på nytt fra Start-menyen.</p>
+            }
             <div class="shutdown-actions">
                 <button type="button" id="confirm-shutdown" class="btn btn-light btn-sm" @onclick="Confirm">Avslutt</button>
                 <button type="button" id="cancel-shutdown" class="btn btn-outline-light btn-sm" @ref="_cancelButton" @onclick="Cancel">Avbryt</button>
@@ -29,6 +33,7 @@
     private ElementReference _openButton;
     private ElementReference _cancelButton;
     private bool _asking;
+    private bool _refused;
     private bool _focusCancel;
     private bool _focusOpen;
 
@@ -46,7 +51,7 @@
 
     private void Confirm()
     {
-        Shutdown.Request(restart: false);
+        _refused = !Shutdown.Request(restart: false);
     }
 
     private void CancelOnEscape(KeyboardEventArgs e)
