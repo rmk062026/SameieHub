@@ -4,7 +4,7 @@
 
 Relaterte dokumenter: [læringsguiden](MEETING_MODULE_LEARNING_GUIDE.md), [arkitekturen](MEETING_MODULE_ARCHITECTURE.md), [kodereferansen](MEETING_MODULE_REFERENCE.md).
 
-> **Merk:** `CLAUDE.md` sier at Claude implementerer all kode i godkjente milepæler og ikke gir studentoppgaver. For møtemodulen har eieren bestemt det motsatte (studenten skriver koden). `CLAUDE.md` er ikke endret, så dette står som en åpen beslutning (se nederst).
+> **Hvem skriver koden:** for møtemodulen (MM0–MM11) er prosjekteieren hovedutvikler og skriver produksjonskoden selv, med ChatGPT som veileder. Claude Code kartlegger, dokumenterer og kontrollerer, og implementerer ingenting uten uttrykkelig godkjenning. Selvskrevet kode og AI-generert implementasjon holdes atskilt når det er praktisk mulig (se 1.10). Se også «Unntak: møteadministrasjonen» i `CLAUDE.md`.
 
 ---
 
@@ -97,7 +97,7 @@ dotnet ef migrations has-pending-model-changes --project src/SameieHub.Infrastru
 - Tester skal **aldri** bruke `%LOCALAPPDATA%\SameieHub`. Testdata er fiktive.
 
 ### 1.9 Git og GitHub Actions
-- Repo `rmk062026/SameieHub`, branch `main` (`CLAUDE.md`). Vil dere jobbe på en egen gren, avtales det (åpen beslutning).
+- Repo `rmk062026/SameieHub`. **MM1–MM11 implementeres på grenen `feature/meeting-management`.** MM0 og dokumentasjonsendringer kan gjøres på `main`. Grenen opprettes først når du skal begynne på MM1.
 - Før hver push:
 
 ```powershell
@@ -111,13 +111,24 @@ git remote -v
 ```
 
 - Commit-meldinger: Conventional Commits (`feat:`, `test:`, `fix:`, `docs:`, `refactor:`). Små, meningsfulle commits, helst «test + kode» sammen. Aldri force-push. Aldri databaser, sikkerhetskopier, personopplysninger eller hemmeligheter.
-- Push:
+- Opprette grenen (én gang, ved starten av MM1, fra en oppdatert `main`):
 
 ```powershell
-git push origin main
+git switch main
+```
+```powershell
+git pull
+```
+```powershell
+git switch -c feature/meeting-management
+```
+```powershell
+git push -u origin feature/meeting-management
 ```
 
-- GitHub Actions (`.github/workflows/ci.yml`) kjører `build-and-test`, `windows-package` og `windows-installer` på hver push:
+- Senere push fra grenen: `git push`. Push fra `main` (MM0 og dokumentasjon): `git push origin main`. Sjekk alltid med `git branch --show-current` hvilken gren du står på.
+
+- GitHub Actions (`.github/workflows/ci.yml`) kjører `build-and-test`, `windows-package` og `windows-installer` på push til `main` og på pull requests. **En push til `feature/meeting-management` starter ikke CI alene.** Åpne en pull request (gjerne som utkast) mot `main`, så kjøres CI for hver push til grenen. Se CI for `main`:
 
 ```powershell
 gh run list --branch main --limit 3
@@ -125,6 +136,18 @@ gh run list --branch main --limit 3
 ```powershell
 gh run watch
 ```
+
+### 1.10 Opphav til kode (eier og AI)
+- Kode du skriver selv, committer du normalt uten AI-medforfatter.
+- Kode Claude implementerer, ligger i egne commits og merkes med `Co-Authored-By` der det er reelt medforfatterskap.
+- Kode ChatGPT genererer og du kopierer direkte inn, dokumenteres også som AI-bidrag. Si det i commit-meldingen, og commit den gjerne for seg, for eksempel:
+
+```powershell
+git commit -m "feat: møtestatus (MM2)" -m "AI-bidrag: ChangeStatus er generert av ChatGPT og kopiert inn."
+```
+
+- Veiledning, forklaringer og vanlig feilsøkingshjelp gjør ikke i seg selv AI til medforfatter.
+- Skill de to når det er praktisk mulig.
 
 ---
 
@@ -296,4 +319,4 @@ Guiden: TDD/AAA → 1–4 → 5–7 (domene) → 8–10 (tjeneste og DI) → 11�
 10. **Meny og rute:** eget menypunkt (bryter dagens «seks punkter»-regel) eller under Styresaker? Norsk rute (`/moter`)?
 11. **Dashbord og sikkerhetskopi:** skal møter vises og telles?
 12. **Demo:** fiktive møter i demoen?
-13. **Arbeidsregler:** oppdatere `CLAUDE.md` om at studenten skriver koden for denne modulen? Egen gren eller rett på `main`?
+13. **Arbeidsregler:** avklart. Eieren skriver koden, MM1–MM11 gjøres på `feature/meeting-management`, og opphav til kode følger 1.10. Gjenstår: hvordan grenen flettes inn i `main` (samlet til slutt eller per milepæl)?

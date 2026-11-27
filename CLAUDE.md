@@ -40,8 +40,23 @@ Lokalt administrasjonsprogram for et lite sameie (selveide boliger i tomannsboli
 
 ## Læring (obligatorisk)
 - Forklaringer på norsk; kode på engelsk.
-- Claude implementerer all kode i godkjent milepæl; ingen studentoppgaver som stopper utviklingen. Eieren lærer gjennom forklaringer, kodegjennomgang og egne øvelser utenfor utviklingsflyten (gis kun på forespørsel).
+- Claude implementerer all kode i godkjent milepæl; ingen studentoppgaver som stopper utviklingen. Eieren lærer gjennom forklaringer, kodegjennomgang og egne øvelser utenfor utviklingsflyten (gis kun på forespørsel). **Unntak: møteadministrasjonen (se under).**
 - Etter hver deloppgave: kort forklaring (hva ble laget, hvem har ansvar for hva, hvordan klassene samarbeider, viktige C#-konsepter, hvor i prosjektet koden finnes) med eksempler fra faktisk kode. Ingen lange teoriforelesninger.
+
+## Unntak: møteadministrasjonen (MM0–MM11)
+Går foran reglene over om hvem som skriver koden. Plan: `docs/MEETING_MODULE_IMPLEMENTATION_PLAN.md`.
+- Prosjekteieren er hovedutvikler og skriver produksjonskoden selv (domene, tjenester, repositories, EF Core, Blazor og tester), med ChatGPT som veileder: teori, avgrensede oppgaver, kodegjennomgang og feilsøking.
+- Claude Code kan kartlegge eksisterende kode, skrive dokumentasjon og gjennomføre avtalte kontroller.
+- Claude implementerer **ikke** noe i møtemodulen uten uttrykkelig godkjenning.
+- Reglene om tester, sikkerhet, kvalitet og GitHub gjelder fortsatt.
+- Branch: MM1–MM11 implementeres på `feature/meeting-management` (opprettes først når eieren ber om det). MM0 og dokumentasjonsendringer kan gjøres på `main`.
+
+### Opphav til kode (eier og AI)
+Skill mellom selvskrevet kode og AI-generert implementasjon når det er praktisk mulig.
+- Kode eieren skriver selv, committes normalt uten AI-medforfatter.
+- Kode Claude implementerer, ligger i egne commits og merkes med `Co-Authored-By` der det er reelt medforfatterskap. Den nevnes i kontrollrapporten.
+- Kode ChatGPT genererer og eieren kopierer direkte inn, dokumenteres også som AI-bidrag (for eksempel i commit-meldingen).
+- Veiledning, forklaringer og vanlig feilsøkingshjelp gjør ikke i seg selv AI til medforfatter.
 
 ## Milepælbasert arbeid
 - Jobb kun innen godkjent milepæl; STOPP ved slutten og vent på uttrykkelig godkjenning før neste. Avslutt hver milepæl med kontrollrapport (struktur, endrede filer, build/test-resultater, CI-status lokalt vs. GitHub, commits, feil, begreper, kontrollspørsmål).
