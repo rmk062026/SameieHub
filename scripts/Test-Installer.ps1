@@ -210,6 +210,11 @@ try {
     Stop-Process -Id $weak.Id -Force -ErrorAction SilentlyContinue
     Wait-Until { -not [bool](Get-Process -Id $weak.Id -ErrorAction SilentlyContinue) } 10 | Out-Null
 
+    $env:Database__Path = $database
+    try { $restartAttempt = Start-Process (Join-Path $installDir 'SameieHub.exe') -ArgumentList '--restart' -Wait -PassThru -WindowStyle Hidden } finally { Remove-Item Env:Database__Path }
+    Assert-That ($restartAttempt.ExitCode -eq 4) 'the installed program has no restart command from outside (--restart is refused)'
+    Assert-That ((Get-RunningProgram).Count -eq 1) 'and it keeps running'
+
     Write-Host '3. Orderly stop (the command the installer uses)'
     $stopped = Stop-ProgramGently
     Assert-That ($stopped.ExitCode -eq 0) '--stop is accepted by the running program'

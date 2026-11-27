@@ -191,6 +191,47 @@ try {
     Assert-That ($redeemSecond.StatusCode -eq 204) 'the new code gives access'
     Assert-That ((Send-Request 'GET' '/' $cookie).StatusCode -eq 200) 'the first session is still valid'
 
+    Write-Host 'Restart (the program stops and starts itself again)'
+    function Get-StartCount { return @(Select-String -Path (Join-Path $databaseFolder 'logs\*.log') -Pattern 'running on http://127\.0\.0\.1:\d+').Count }
+    $oldId = $process.Id
+    $startsBefore = Get-StartCount
+    Assert-That ($startsBefore -eq 1) 'the log shows one start so far'
+    $env:Database__Path = $database
+    try {
+        $ask = Start-Process $program.FullName -ArgumentList '--restart' -WorkingDirectory $work -PassThru -Wait
+    }
+    finally {
+        Remove-Item Env:Database__Path
+    }
+    Assert-That ($ask.ExitCode -eq 0) 'the running program accepted the request to restart (exit code 0)'
+    Assert-That ($process.WaitForExit(30000)) 'the old program stopped within 30 seconds'
+    if ($started) { Assert-That ($started.ExitCode -eq 0) "the old program ended with exit code 0 (was $($started.ExitCode))"; $started = $null }
+
+    $newProcess = $null
+    $deadline = (Get-Date).AddSeconds(90)
+    while (-not $newProcess -and (Get-Date) -lt $deadline) {
+        Start-Sleep -Milliseconds 500
+        if ((Get-StartCount) -ge 2) {
+            $newProcess = @(Get-RunningProgram $folder | Where-Object { $_.Id -ne $oldId }) | Select-Object -First 1
+        }
+    }
+    Assert-That ($null -ne $newProcess) 'a new program started by itself and logged its address'
+    if (-not $newProcess) { throw 'The program did not start again.' }
+    Assert-That ((Get-RunningProgram $folder).Count -eq 1) 'exactly one SameieHub process after the restart (never two)'
+    Assert-That ($newProcess.Id -ne $oldId) 'the new program is another process'
+    $address = [regex]::Matches((Get-Content (Get-ChildItem (Join-Path $databaseFolder 'logs') -Filter *.log | Select-Object -First 1).FullName -Raw), 'running on (http://127\.0\.0\.1:\d+)')[-1].Groups[1].Value
+    $newListeners = @(Get-NetTCPConnection -OwningProcess $newProcess.Id -State Listen -ErrorAction SilentlyContinue)
+    Assert-That (($newListeners.Count -ge 1) -and (@($newListeners | Where-Object { $_.LocalAddress -ne '127.0.0.1' }).Count -eq 0)) 'the new program listens on 127.0.0.1 only'
+    Assert-That ((Send-Request 'GET' '/' $cookie).StatusCode -eq 403) 'the old session is not valid in the new program (it has its own sessions)'
+    $thirdCode = Get-Code $urlFile
+    Assert-That (($thirdCode -ne $firstCode) -and ($thirdCode -ne $secondCode)) 'the new program made its own launch code'
+    $redeemThird = Send-Request 'POST' '/start' '' @{} $thirdCode
+    Assert-That ($redeemThird.StatusCode -eq 204) 'the new code gives access in the new program'
+    $cookie = ($redeemThird.Headers.GetValues('Set-Cookie') | Select-Object -First 1) -split ';' | Select-Object -First 1
+    Assert-That ((Send-Request 'GET' '/oppgaver' $cookie).StatusCode -eq 200) 'the new program serves the pages with the new cookie'
+    Assert-That (Test-Path $database) 'the database is still there'
+    $process = $newProcess
+
     Write-Host "Stop with $StopWith"
     $signal = Join-Path $PSScriptRoot 'Send-ConsoleSignal.ps1'
     & powershell -NoProfile -File $signal -ProcessId $process.Id -Mode $StopWith | ForEach-Object { Write-Host "  $_" }
@@ -210,7 +251,7 @@ try {
     $logText = Get-Content (Get-ChildItem (Join-Path $databaseFolder 'logs') -Filter *.log | Select-Object -First 1).FullName -Raw
     Assert-That ($logText -match 'shutting down') 'the log shows an orderly shutdown'
     Assert-That ($logText -notmatch [regex]::Escape($work)) 'the log contains no folder path'
-    Assert-That (($logText -notmatch [regex]::Escape($firstCode)) -and ($logText -notmatch [regex]::Escape($secondCode))) 'the log contains no launch code'
+    Assert-That (($logText -notmatch [regex]::Escape($firstCode)) -and ($logText -notmatch [regex]::Escape($secondCode)) -and ($logText -notmatch [regex]::Escape($thirdCode))) 'the log contains no launch code'
 }
 catch {
     Write-Host "ERROR: $($_.Exception.Message)" -ForegroundColor Red
