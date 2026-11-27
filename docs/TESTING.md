@@ -144,3 +144,16 @@ Se [ARCHITECTURE.md](ARCHITECTURE.md), «Sikkerhetskontroll av gjenopprettingen 
 - `scripts/Test-Installer.ps1` (61 kontroller, kjøres også i CI): en ekte stille installasjon, oppdatering (også mens programmet kjører), et program som ikke lar seg stoppe, start under installasjon, avinstallasjon og ny installasjon, med brukerdata sjekket etter hvert trinn. Den bruker bare en midlertidig database og en fiktiv markørfil i datamappen.
 - `scripts/Test-WindowsPackage.ps1` setter nå `SAMEIEHUB_WINDOWS_HOST=0` ved oppstart, så alle sikkerhetskontrollene også beviser at forsøket ikke virker. Den må kjøres mot testbyggingen (`-TestHooks`).
 - Ikke automatisert: en annen Windows-bruker, en ren maskin uten .NET, interaktiv veiviser og SmartScreen (se vedlegg D.7 og D.6).
+
+## M8-5: Avslutt, start på nytt og Om SameieHub
+- `ShutdownServiceTests` (nye): avslutning gjør ingenting utenfor Windows-modus (også registreringen i `WebAppSetup`), stopper bare én gang selv ved ti samtidige forespørsler, stopper ikke før meldingen har hatt tid, en omstart nektes når programmet ikke kan starte seg selv, og en side som feiler hindrer ikke stoppen.
+- `RestartLaunchTests` (nye): argumentene som følger med til det nye programmet, et ugyldig prosessnummer ignoreres, bare `SameieHub.exe` kan starte seg selv (ikke `dotnet` eller testverten), venting på en prosess som ikke finnes, som kjører og som avsluttes, og at et program som ikke kan startes gir `false` og ikke et unntak.
+- `AppVersionTests`: versjonen kommer fra assemblyens versjonsinformasjon, commit-delen etter «+» vises ikke.
+- `ShutdownAccessTests` (integrasjon mot en ekte server i Windows-modus): ingen adresse stopper programmet, uansett metode, med eller uten cookie, og ikke fra en annen nettside. `/om` krever gyldig sesjon.
+- `ShutdownUiTests` (bUnit): menyen har «Om SameieHub» alltid og «Avslutt» bare i Windows-modus, Avslutt er en knapp og ikke en lenke, spørsmålet må bekreftes, Avbryt og Escape lukker det uten å stoppe, bekreftelse stopper én gang, alle åpne sider viser meldingen, meldingen for omstart og for en ventende gjenoppretting (som ikke sier at dataene er uendret), og Om-siden viser versjonen og ingen hemmeligheter.
+- `BackupPageTests` (nye): «Avslutt og start på nytt» vises bare i Windows-modus med ventende gjenoppretting, klikket ber bare om omstart og gjennomfører ikke gjenopprettingen selv, «Avbryt» virker som før, og utviklingsmodus har den gamle forklaringen og ingen knapp.
+- `WindowsStartupTests` (nye): et omstartet program venter på at sperren frigis og gjenoppretter da én gang, gir opp etter tidsfristen uten å røre databasen, og to samtidige starter gjenoppretter aldri to ganger.
+- `ActivationPipeTests` (nye): `RESTART` svares bare når programmet tilbyr det, og åpner eller stopper ikke.
+- `scripts/Test-WindowsPackage.ps1` (93 kontroller): en ny del ber testbyggingen starte på nytt og sjekker at bare ett program kjører etterpå.
+- `scripts/Test-Installer.ps1` (63 kontroller): det installerte programmet har ingen `--restart` utenfra.
+- Ikke automatisert: nettleserflyten for avslutning og omstart med gjenoppretting (gjort manuelt, se vedlegg E.8 i `WINDOWS_DISTRIBUTION_PLAN.md`).

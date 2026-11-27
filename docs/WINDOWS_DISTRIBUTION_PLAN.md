@@ -1,6 +1,6 @@
 # Windows-distribusjon: analyse og plan (M8)
 
-**Status:** planen er godkjent (D1–D12, med presiseringer). **M8-1 er gjennomført** (vedlegg A) og **M8-2 er gjennomført** (vedlegg B) **M8-3 er gjennomført** (vedlegg C: tilgangsbeskyttelse og andre oppstart) og **M8-4 er gjennomført** (vedlegg D: installasjonsprogram og sikkerhetsretting). M8-5 og M8-6 er ikke startet. Ingen installasjonsprogram og ingen endringer i domene, migreringer eller grensesnitt er laget. Dokumentet bygger på det koden gjør i dag (kontrollert 2026-11-26, commit `f373965`) og på en testpublisering som ble gjort i en midlertidig mappe utenfor repoet.
+**Status:** planen er godkjent (D1–D12, med presiseringer). **M8-1 er gjennomført** (vedlegg A) og **M8-2 er gjennomført** (vedlegg B) **M8-3 er gjennomført** (vedlegg C: tilgangsbeskyttelse og andre oppstart) og **M8-4 er gjennomført** (vedlegg D: installasjonsprogram og sikkerhetsretting) og **M8-5 er gjennomført** (vedlegg E: avslutt, start på nytt og Om SameieHub). M8-5 og M8-6 er ikke startet. Ingen installasjonsprogram og ingen endringer i domene, migreringer eller grensesnitt er laget. Dokumentet bygger på det koden gjør i dag (kontrollert 2026-11-26, commit `f373965`) og på en testpublisering som ble gjort i en midlertidig mappe utenfor repoet.
 
 **Målet:** en vanlig Windows-bruker installerer SameieHub, starter det fra Start-menyen, får grensesnittet åpnet automatisk, beholder dataene sine ved oppdatering og kan avslutte programmet på en tydelig måte. Ingen Visual Studio, ingen PowerShell, ingen `dotnet`-kommandoer.
 
@@ -934,3 +934,108 @@ En feil ble funnet og rettet underveis: testen regnet et gammelt loggutdrag som 
 - **`--unattended`** skjuler meldingsbokser ved oppstartsfeil og hindrer at nettleseren åpnes, i alle bygg. Det gir ingen kode, men kan skjule en feil for den som bruker det.
 - **Fail closed-sjekken** av adresser kjører etter at serveren har startet (se D.1).
 - Gjenværende risiko fra M8-3 (kode i kommandolinjen i opptil 60 sekunder, ukryptert database, sesjoner) er uendret (vedlegg C.8).
+
+
+## Vedlegg E. M8-5: Avslutt, start på nytt og Om SameieHub (gjennomført)
+
+Mål: brukeren skal kunne avslutte SameieHub uten å lukke konsollvinduet, starte på nytt etter at en gjenoppretting er klargjort, og se hvilken versjon som er installert. Konsollvinduet er beholdt (ikke WebView2, WPF eller systemstatusfelt). Domene, migreringer, backupformat og restoremotor er uendret.
+
+### E.1 Slik ser det ut for brukeren
+
+- **Nederst i sidemenyen** (på smal skjerm inne i den utvidede menyen, under en egen strek) står «Om SameieHub» (en lenke til `/om`) og «Avslutt SameieHub» (en **knapp**, ikke en lenke, i dempet omriss og ikke rød: avslutning sletter ingenting). Hovedmenyen har fortsatt de samme seks punktene.
+- **Avslutt** åpner et lite spørsmål i menyen: «Avslutte SameieHub?», med forklaringen at dataene ikke endres og at programmet startes fra Start-menyen. Fokus settes på «Avbryt» (et refleksmessig Enter avbryter altså), Escape avbryter, og fokus går tilbake til knappen.
+- **Etter bekreftelse** erstattes hele siden (i alle åpne faner) av en rolig melding: «SameieHub avsluttes. Programmet stopper nå. Du kan lukke denne fanen.» Hvis en gjenoppretting er klargjort, står det at den gjennomføres første gang SameieHub startes igjen.
+- **Sikkerhetskopi-siden:** når en gjenoppretting venter, står det tydelig «Gjenopprettingen er ennå ikke gjennomført», og knappen **«Avslutt og start på nytt»** står ved siden av den uendrede «Avbryt gjenopprettingen». Bekreftelsene før gjenopprettingen forberedes er uendret. Knappen er ett klikk: brukeren har allerede bekreftet selve gjenopprettingen, og den kan fortsatt avbrytes helt til omstarten.
+- **Om SameieHub** (`/om`): navn, installert versjon, at dataene lagres lokalt (ingenting sendes til internett), og hvor dokumentasjon finnes (README og `docs` i GitHub-prosjektet). Ingen koder, adresser eller stier.
+
+### E.2 Hvordan avslutning fungerer
+
+`ShutdownService` (`Hosting/ShutdownService.cs`) er den eneste veien til å stoppe programmet fra grensesnittet. Den kalles fra knappen og fra pipekommandoen `STOP` (installasjonsprogrammet), så begge går samme vei.
+
+1. `Request(restart)` returnerer `false` og gjør **ingenting** når startmåten ikke er Windows-modus. Første gyldige forespørsel merkes, og senere forespørsler godtas men ignoreres (programmet stopper én gang).
+2. Stoppen planlegges først (`IHostApplicationLifetime.StopApplication()` etter 1,5 sekunder), og deretter varsles alle åpne sider gjennom en hendelse (`Requested`). En side som ikke klarer å håndtere varselet kan altså ikke holde programmet i live.
+3. `MainLayout` bytter ut sidens innhold med `ShutdownNotice`. Det gjelder **alle åpne faner**, ikke bare der knappen ble trykket.
+4. `ShutdownNotice` kaller et lite skript (`markStopped`) som setter et merke på siden, slik at gjenkoblingsdialogen skjules, og som avslutter Blazor-forbindelsen fra nettleserens side. Uten dette ville brukeren sett «Kobler til serveren på nytt …» og «Kunne ikke koble til» i stedet for en forklaring. Meldingen står igjen på siden etter at programmet er borte (kontrollert i nettleseren).
+5. ASP.NET Core stopper på vanlig måte: pågående forespørsler får inntil 3 sekunder (`ShutdownTimeout`), tilkoblingene lukkes (`ClearAllPools`), pipen og instanssperren frigis, og prosessen avsluttes med kode 0. En database-operasjon som pågår er en SQLite-transaksjon, så den enten fullføres eller rulles tilbake. Brukeren avbrytes ikke annet enn at stoppen venter inntil 3 sekunder.
+6. Ingen ny programinstans opprettes av en vanlig avslutning.
+
+**Hvorfor 1,5 sekunder?** Det er tiden meldingen trenger for å nå nettleseren før forbindelsen brytes. Kortere gir noen ganger bare en tilkoblingsfeil. Lengre får brukeren til å vente uten grunn.
+
+**Hvorfor ikke et HTTP-endepunkt?** En adresse som stopper programmet kan treffes av en lenke, et bilde eller et skjema på en annen nettside, selv med beskyttelse mot dem. Her finnes ingen slik adresse: forespørselen kommer over sidens egen Blazor-forbindelse, som tilgangsvakten (M8-3) bare slipper inn med gyldig cookie, riktig `Origin` og `Sec-Fetch-Site`. En fremmed nettside får ikke engang opprettet forbindelsen. Det er testet at ingen tenkelig adresse stopper programmet, med eller uten cookie, med noen metode (`ShutdownAccessTests`).
+
+### E.3 Hvordan omstart fungerer
+
+«Avslutt og start på nytt» går gjennom samme avslutning som over, men merker i tillegg at programmet skal starte seg selv igjen. Rekkefølgen er avgjørende:
+
+1. Det gamle programmet stopper som beskrevet i E.2. Instanssperren (`sameiehub.lock`) og databasetilkoblingene frigis når `RunWindowsHostAsync` er ferdig.
+2. **Først da** (i `Program.cs`, etter at sperren er frigitt) starter det gamle programmet `SameieHub.exe` på nytt med de samme argumentene som det selv fikk (en testdatabase følger altså med) pluss `--restarted-after=<prosessnummer>` (`RestartLaunch`).
+3. Det nye programmet **venter** til den gamle prosessen er helt borte (inntil 20 sekunder), og deretter på instanssperren (inntil 10 sekunder). Uten dette merket venter ikke en vanlig oppstart på noe: en sperre som er tatt betyr da at et program faktisk kjører.
+4. Deretter er oppstarten helt vanlig (`WindowsStartup.PrepareAsync`): sperren tas, en **ventende gjenoppretting gjennomføres** (før noen databasetilkobling åpnes, som alltid), databasen kontrolleres og oppgraderes, serveren starter, og nettleseren åpnes med en ny engangskode. Resultatet av gjenopprettingen vises på forsiden som før.
+5. Det nye programmet bruker det samme konsollvinduet (arvet konsoll, `UseShellExecute = false`), så vinduet brukeren har åpent blir stående og viser det nye programmet.
+
+**Hva som hindrer to samtidige programmer eller dobbel gjenoppretting:** instanssperren er den eneste dørvakten, og den tas før gjenopprettingen. To programmer som starter samtidig (testet) gir ett som får sperren og ett som får «kjører allerede». Gjenopprettingen kjøres kun av det som har sperren.
+
+**Når omstarten feiler:** hvis det nye programmet ikke kan startes, vises en melding (konsoll og meldingsboks) om at SameieHub er avsluttet og må startes fra Start-menyen, og programmet avslutter med kode 4. Gjenopprettingen står da klar og gjennomføres ved neste vanlige start. Hvis det nye programmet starter men ikke får sperren innen tidsfristen, stopper det med «kjører allerede» eller åpner det som kjører. **Ingen omstart utløses av programmet selv**: bare brukerens valg i grensesnittet setter merket, og det nye programmet leser det aldri som en grunn til å starte på nytt. En feil kan derfor aldri bli en løkke. Ingenting gjenoppretter en annen database: hver start bruker bare sin egen database og sin egen `restore`-mappe.
+
+**Alternativer vurdert**
+
+| Alternativ | Vurdering |
+|---|---|
+| A. Starte det nye programmet *før* det gamle stopper, og la det vente | Fungerer, men to prosesser er i live samtidig, og hvis det gamle ikke stopper, venter det nye uten at noen vet det. |
+| **B. Stoppe, frigi sperren, så starte det nye (valgt)** | Aldri to programmer som bruker databasen. Det nye venter likevel på prosessen og sperren, for sikkerhets skyld. Ingen ekstra filer eller skript. |
+| C. En hjelpe-cmd eller et PowerShell-skript som venter og starter | Må skrives til disk, kan stoppes av skriptregler (kjørepolicy), og er en ny angrepsflate. |
+| D. Windows Oppgaveplanlegger eller Restart Manager | Krever rettigheter eller oppsett utenfor programmet. Uforholdsmessig. |
+
+Omstarten krevde ikke større endringer enn planlagt, så den er automatisk og ikke bare en sikker avslutning med manuell oppstart. Manuell oppstart fra Start-menyen er beholdt som reserve, og teksten i grensesnittet sier det.
+
+**Bare programfilen kan starte seg selv.** `RestartLaunch.CanStartItself` krever at prosessen heter `SameieHub.exe`. Under `dotnet run` (prosessen heter `dotnet`) og i testverten er «start på nytt» derfor ikke tilbudt, og grensesnittet sier hva som må gjøres manuelt.
+
+### E.4 Ventende gjenoppretting: slik gjennomføres den
+
+Sikkerhetskopi-siden kaller `IDatabaseRestore.PrepareAsync`, som bare klargjør filer i `restore`-mappen ved siden av databasen. **Ingenting skjer med den levende databasen før neste oppstart.** Ved oppstart kaller `WindowsStartup.PrepareAsync` `ApplyPendingRestore()` etter at instanssperren er tatt og før noe åpner databasen (utviklingsstarten gjør det samme i `Program.cs`). Motoren flytter da den gamle databasen til `restore\before-restore-<tidspunkt>` og setter den klargjorte på plass. Omstartsknappen endrer ingenting av dette: den starter bare programmet på nytt. Avbryt (`CancelPending`) er uendret og kan brukes helt til omstarten.
+
+### E.5 Hvordan funksjonene er sikret mot uautorisert bruk
+
+- Avslutning og omstart har **ingen HTTP-adresse**. De kommer over Blazor-forbindelsen, som tilgangsvakten (cookie, `Origin`, `Sec-Fetch-Site`, vertsnavn) beskytter. Testet: alle tenkelige adresser, alle metoder, med og uten cookie, og med fremmed `Origin`, stopper ikke programmet.
+- En **GET stopper aldri** programmet, fordi det ikke finnes noe som svarer på GET med en slik effekt.
+- Knappen krever en aktiv bekreftelse, med «Avbryt» som fokus.
+- I **utviklingsmodus** er `CanShutDown = false`: knappene vises ikke, og selve tjenesten gjør ingenting selv om noen kaller den.
+- Pipen har fortsatt bare `OPEN` og `STOP`, begge bare for samme Windows-bruker. Kommandoen `RESTART` finnes i tillegg, men bare i en testbygging (`TestHooksAllowed`): den installerte filen svarer ikke på den (`--restart` gir kode 4, kontrollert i installasjonstesten).
+- `--restarted-after=<nummer>` kan gis av hvem som helst som kan starte programmet, men gjør bare at oppstarten venter litt på en prosess. Et nummer som ikke er et gyldig prosessnummer ignoreres.
+
+### E.6 Utviklingsmodus
+
+`dotnet run`, demoen og testene er uendret: `ShutdownService` registreres i alle starter, men er av utenfor Windows-modus. Grensesnittet skjuler «Avslutt SameieHub» og «Avslutt og start på nytt», og sikkerhetskopi-siden viser den gamle forklaringen («Lukk SameieHub …»). «Om SameieHub» vises overalt. Ingen ny innlogging i utviklingsmodus. Versjonen leses fra programmets versjonsinformasjon (`AssemblyInformationalVersion`, uten commit-delen etter «+»), ikke fra en tekst i koden. Under `dotnet run` er den standardverdien fra byggingen (1.0.0), og i den publiserte filen er den versjonen som ble gitt til `Publish-Windows.ps1` (`-Version`).
+
+### E.7 Tester
+
+- 87 nye automatiske tester (totalt 1728, alle grønne): `ShutdownServiceTests`, `RestartLaunchTests`, `AppVersionTests`, `ShutdownAccessTests` (integrasjon mot ekte server i Windows-modus), `ShutdownUiTests` (bUnit), nye tester i `BackupPageTests`, `WindowsStartupTests` (venting på sperren, to samtidige starter) og `ActivationPipeTests` (`RESTART`).
+- `scripts/Test-WindowsPackage.ps1` har en ny del (13 kontroller, nå 93 totalt) som ber testbyggingen om å starte på nytt med `--restart`: gammelt program stoppes (kode 0), nytt starter av seg selv, bare én prosess finnes, den lytter bare på 127.0.0.1, den gamle sesjonen gjelder ikke, en ny kode gir tilgang, og databasen er der.
+- `scripts/Test-Installer.ps1` (63 kontroller) sjekker at det installerte programmet ikke har noen `--restart` utenfra.
+
+### E.8 Manuell test på Windows (utviklingsmaskinen, testbygging mot en isolert database)
+
+Den installerte filen har ingen testkroker, så nettleserdelen ble kjørt mot testbyggingen (`-TestHooks`) av **samme kode**, med en midlertidig database. Installasjon, oppdatering og avinstallasjon er testet separat med den ekte installasjonsfilen (63 kontroller). Ordinær AppData-database og demoen ble ikke brukt.
+
+1. Start med startadressen fra programmet. Menyen viser «Om SameieHub» og «Avslutt SameieHub» nederst. **OK.**
+2. «Om SameieHub» viste versjon 0.8.5-test.1 (versjonen som ble gitt ved bygging). **OK.**
+3. «Avslutt SameieHub», så «Avbryt»: spørsmålet lukkes, fokus tilbake på knappen, programmet kjører. **OK.**
+4. Opprettet to fiktive boenheter, tok en sikkerhetskopi etter den første, og lastet den opp igjen (skriptet i nettleseren la den nedlastede filen inn i filvelgeren). Kontrollen viste 2 boenheter nå og 1 i kopien. «Ja, forbered gjenopprettingen»: siden viste «Gjenopprettingen er ennå ikke gjennomført» og de to knappene. **OK.**
+5. «Avslutt og start på nytt»: meldingen «SameieHub starter på nytt» vistes uten gjenkoblingsdialog. Etter noen sekunder var prosessnummeret et annet, bare én prosess kjørte, og loggen viser «asked to restart», «shutting down», «has stopped», **så** «Restore result: Applied» og en ny start (rekkefølgen er stoppet før gjenopprettet før startet). **OK.**
+6. Forsiden i det nye programmet viste «Gjenopprettingen er gjennomført». Databasen har nå bare «Testveien 1». Mappen `restore\before-restore-…` har den gamle databasen med både «Testveien 1» og «Testveien 2». **OK.**
+7. «Avslutt SameieHub», så «Avslutt»: meldingen «SameieHub avsluttes» sto igjen etter at programmet var borte, uten gjenkoblingsdialog. Etter noen sekunder fantes ingen SameieHub-prosess, sperren var fri, og loggen viser en ordnet avslutning. **OK.**
+8. Ny start mot samme database: dataene (Testveien 1) var der. Smal skjerm (375 px): menyen med bunnfeltet fungerer. **OK.**
+
+**Funn underveis.** Første forsøk viste en tom side til høyre for menyen. Årsaken var gamle filer i `obj\Release` fra en tidligere lokal bygging (en utdatert stilfil), ikke koden: rydding av mappen og ny publisering ga riktig utseende. CI bygger fra rent utgangspunkt og er ikke berørt. **Rettet i tekst:** meldingen ved omstart sa først at «dataene ikke er endret av omstarten», noe som er feil når en gjenoppretting venter. Den sier nå at gjenopprettingen gjennomføres under oppstarten (testet).
+
+**Ikke testet:** en ren maskin uten .NET, en annen Windows-bruker, interaktiv klikking gjennom installasjonsveiviseren, Firefox og Edge, skjermleser, og at snarveien i Start-menyen selv åpner «Avslutt» (snarveien starter samme fil som er testet). «Start fra Start-menyen» etter avslutning er testet ved å starte `SameieHub.exe` direkte, slik snarveien gjør.
+
+### E.9 Gjenstående svakheter og åpne problemer
+
+- **Sesjonen kontrolleres ikke på nytt ved avslutning.** En Blazor-forbindelse som ble opprettet med gyldig sesjon, kan be om avslutning også etter at sesjonen (8 timer) er utløpt, på samme måte som den fortsatt kan endre data. Å binde hver forbindelse til sesjonen er en større endring enn denne milepælen.
+- **Alle faner med gyldig sesjon kan avslutte.** Det er et lokalt enbrukerprogram, og alle faner får meldingen.
+- **Et annet program som samme Windows-bruker** kan fortsatt stoppe programmet over pipen (`STOP`) eller bare avslutte prosessen. Det var allerede slik (D.8).
+- **Konsollvinduet** er beholdt, og en bruker kan fortsatt lukke det direkte (håndtert som tidligere, med ordnet avslutning). Etter en omstart er det et annet program som bruker det samme vinduet; lukkes vinduet, avsluttes det nye programmet.
+- **Omstart og antivirus:** et antivirusprogram kan i teori forsinke at det nye programmet starter. Da vises ingenting før det er oppe, og meldingen i den gamle fanen sier at programmet kan startes fra Start-menyen.
+- **Meldingen i den gamle fanen** er en statisk side. Den åpner ikke den nye fanen selv; det gjør programmet (nettleseren åpnes med en ny kode). Hvis nettleseren ikke åpner en ny fane, må brukeren åpne SameieHub fra Start-menyen.
+- **Ventetid 1,5 sekunder** ved avslutning er et valg, ikke en garanti: en svært treg nettleser kan vise tilkoblingsfeil i stedet for meldingen.

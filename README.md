@@ -24,6 +24,8 @@ dotnet run --project src/SameieHub.Web
 
 `.\scripts\Publish-Windows.ps1` lager en selvstendig mappe og zip (`SameieHub.exe`, ingen .NET nødvendig) for intern testing. Den har ingen tilgangsbeskyttelse ennå og skal ikke distribueres eller brukes med personopplysninger. Se [docs/WINDOWS_DISTRIBUTION_PLAN.md](docs/WINDOWS_DISTRIBUTION_PLAN.md).
 
+I Windows-versjonen avslutter du med «Avslutt SameieHub» nederst i menyen (ikke bare ved å lukke nettleseren), og «Om SameieHub» viser installert versjon. Etter at en gjenoppretting er klargjort, velger du «Avslutt og start på nytt» på Sikkerhetskopi-siden.
+
 ## Dokumentasjon
 Se [docs/README.md](docs/README.md) for indeks og anbefalt leserekkefølge. Forklaringer for å forstå og presentere prosjektet: [Prosjektstruktur](docs/PROJECT_STRUCTURE.md), [Arkitekturen forklart](docs/ARCHITECTURE_EXPLAINED.md), [Kodegjennomgang](docs/CODE_WALKTHROUGH.md), [Designbeslutninger](docs/DESIGN_DECISIONS.md), [Mine bidrag](docs/MY_CONTRIBUTIONS.md) og [Presentasjonsguide](docs/PRESENTATION_GUIDE.md).
 

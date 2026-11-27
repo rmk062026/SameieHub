@@ -58,6 +58,12 @@ dotnet run --project src/SameieHub.Web --no-launch-profile -- --windows-host "--
 - Bruk alltid en egen testdatabase med `--Database:Path`. Demodatabasen avvises i Windows-modus (bruk `Start-demo.cmd`).
 - Siden M8-3 krever Windows-modus en sesjonscookie. Programmet åpner nettleseren med en engangskode (`/start#kode`). Adressen i vinduet fungerer ikke alene. Start programmet en gang til for å åpne en ny fane. For skript: `--unattended` sammen med `--Launch:UrlFile=<fil>` (eller miljøvariabelen `Launch__UrlFile`) skriver startadressen til filen i stedet for å åpne nettleseren. Det er en testmekanisme, ikke for normal bruk. Se [WINDOWS_DISTRIBUTION_PLAN.md](WINDOWS_DISTRIBUTION_PLAN.md), vedlegg A og C.
 
+### Avslutt og start på nytt (M8-5)
+- Brukeren avslutter med «Avslutt SameieHub» nederst i menyen (bare i Windows-modus), eller starter på nytt med «Avslutt og start på nytt» på Sikkerhetskopi-siden når en gjenoppretting venter. Under `dotnet run` og i demoen vises ingen av dem.
+- Testbyggingen (`Publish-Windows.ps1 -TestHooks`) har i tillegg `SameieHub.exe --restart`, som ber et kjørende program starte på nytt uten nettleser. Den bruker `Test-WindowsPackage.ps1`. Den installerte filen avviser kommandoen.
+- Det nye programmet får `--restarted-after=<prosessnummer>`. Det er en intern markering som gjør at oppstarten venter på den gamle prosessen og instanssperren. Bruk den ikke selv.
+- Etter gamle bygginger kan `src\SameieHub.Web\obj\Release` inneholde utdaterte stilfiler som gir en blank side når du publiserer lokalt. Slett mappen og publiser på nytt. CI bygger rent.
+
 ### Installasjonsprogram (M8-4)
 ```powershell
 winget install JRSoftware.InnoSetup

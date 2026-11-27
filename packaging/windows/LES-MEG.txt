@@ -23,7 +23,8 @@ Du trenger ikke installere .NET eller noe annet.
 
 Slik avslutter du
 -----------------
-Lukk det svarte vinduet «SameieHub» (eller trykk Ctrl+C i det).
+Velg «Avslutt SameieHub» nederst i menyen i nettleseren, lukk det svarte
+vinduet «SameieHub», eller trykk Ctrl+C i det.
 Å lukke nettleseren avslutter ikke programmet. Vil du åpne det igjen mens det
 kjører, start SameieHub på nytt (dobbeltklikk SameieHub.exe): da åpnes en ny
 fane i programmet som allerede kjører. Adressen i nettleseren virker ikke

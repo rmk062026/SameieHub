@@ -49,12 +49,15 @@ wwwroot/app.css  designvariabler og felles stiler
 | `/elbillading/avstemming` | Avstemming for valgt periode | Funksjonell |
 | `/elbillading/maler/{id}` | Historikk for en måler | Funksjonell |
 | `/innstillinger/sikkerhetskopi` | Lag og last ned sikkerhetskopi; kontroller, bekreft og forbered gjenoppretting; resultat etter omstart | Funksjonell |
+| `/om` | Om SameieHub: versjon, lokal lagring, hvor hjelp finnes (M8-5) | Funksjonell |
 
 Sidemeny på bred skjerm (≥ 768 px); på smal skjerm en toppstripe med menyknapp.
 
 ### Navigasjonsregler (M5D-R6)
 - **Hovedmeny, i denne rekkefølgen:** Oversikt, Styresaker, Oppgaver, Boenheter, Elbillading, og «Sikkerhetskopi» adskilt nederst (egen strek; på bred skjerm nederst i sidemenyen). Det finnes ikke noe menypunkt for møteadministrasjon. Ingen fast bunnmeny.
 - **Aktiv side** markeres med `NavLink` (prefikssamsvar), så riktig punkt er markert også på detalj-, registrerings- og redigeringssider. Dette er kontrollert for alle rutene i tabellen over.
+- **Bunnfelt i menyen (M8-5):** under hovedmenyen, adskilt av plass, står «Om SameieHub» (en lenke til `/om`, markeres aktiv som andre punkter) og, bare i Windows-modus, «Avslutt SameieHub». Avslutt er en **knapp** (omrisset, dempet, ikke rød: den sletter ingenting). Den åpner et spørsmål i menyen med «Avslutt» og «Avbryt»; fokus settes på «Avbryt», Escape avbryter, og fokus går tilbake til knappen. På smal skjerm ligger bunnfeltet i den utvidede menyen, og alle knapper er minst 44 px høye. I utviklingsmodus vises ikke Avslutt. Ingen nye hovedmenypunkter.
+- **Avslutningsmelding (M8-5):** etter bekreftelse byttes hele siden (i alle åpne faner) med et enkelt kort: «SameieHub avsluttes» eller «SameieHub starter på nytt», med hva brukeren gjør videre. Gjenkoblingsdialogen skjules, så meldingen står igjen når programmet er borte. Er en gjenoppretting klargjort, står det at den gjennomføres ved neste oppstart.
 - **Hopp til innhold:** den første lenken på hver side (synlig bare ved fokus) flytter fokus til innholdet, så tastaturbrukere slipper å tabbe gjennom menyen.
 - **Faner** (`QuickTabs`) er vanlige lenker eller knapper med `aria-current` eller `aria-pressed`. De er ikke ARIA-faner (`role=tab`), fordi de bare navigerer mellom sider eller bytter visning i en liste.
 - **Ordlyd:** oppretting heter «Ny oppgave», «Ny styresak», «Ny boenhet», «Ny lader» og «Ny avlesning» (knapper, sidetitler og faner). Skjemaer lagrer med «Lagre» (oppretting) eller «Lagre endringer» (redigering) og har «Avbryt». «Gjelder» brukes for boenhetstilknytning, og «Oversikt» for forsiden (ikke «Dashboard»). Setninger kan fortsatt si «registrert» om noe som er lagret. «Registrer vedtak» er en handling i en styresak, ikke oppretting av en ny post.
@@ -140,6 +143,8 @@ Registrering og redigering av boenheter, styresaker og oppgaver følger samme m�
 
 ## Sikkerhetskopi (M5C)
 Én side med to atskilte kort: «Lag sikkerhetskopi» og «Gjenopprett fra sikkerhetskopi». Fra R7 er gjenoppretting en sammenleggbar seksjon (`Disclosure`) som er **lukket som standard**, med en sammendragslinje som sier at den erstatter alle dataene og krever omstart. Den åpner seg selv når filen avvises (feil) eller en fil er kontrollert og venter på bekreftelse. En **ventende gjenoppretting** vises alltid øverst på siden, over begge kortene (med «Lukk SameieHub, start på nytt» og «Avbryt gjenopprettingen»), og da vises ikke filvalget. Advarselen om at filen ikke er kryptert står åpent i kortet «Lag sikkerhetskopi». Bekreftelsesboksen og motorenes kontroller er uendret. Ingen tekniske begreper (ingen migreringer, sjekksummer eller SQLite). Knappene deaktiveres mens en handling pågår. Filvalg (`InputFile`) viser en kontroll med forskjell på «nå» og «i sikkerhetskopien», en bekreftelsesboks (`role="alertdialog"`) og en forklaring på hva brukeren må gjøre ved omstart. Resultatet vises som en beskjed på forsiden og på siden. Interne banenavn vises aldri. Se [ARCHITECTURE.md](ARCHITECTURE.md), «Sikkerhetskopi og gjenoppretting i brukergrensesnittet (M5C)».
+
+Fra M8-5 står en klargjort gjenoppretting som en gul boks med «Gjenopprettingen er ennå ikke gjennomført». I Windows-modus har boksen knappen «Avslutt og start på nytt» ved siden av «Avbryt gjenopprettingen»; ellers står den gamle forklaringen («Lukk SameieHub …»). Bekreftelsene før gjenopprettingen forberedes er uendret.
 
 ## Ikke laget ennå
 Endringshistorikk for styresaker.
