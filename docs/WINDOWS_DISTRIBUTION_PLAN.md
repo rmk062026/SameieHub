@@ -1,6 +1,6 @@
 # Windows-distribusjon: analyse og plan (M8)
 
-**Status:** planen er godkjent (D1–D12, med presiseringer). **M8-1 er gjennomført** (vedlegg A) og **M8-2 er gjennomført** (vedlegg B). M8-3 til M8-6 er ikke startet. Ingen installasjonsprogram og ingen endringer i domene, migreringer eller grensesnitt er laget. Dokumentet bygger på det koden gjør i dag (kontrollert 2026-11-26, commit `f373965`) og på en testpublisering som ble gjort i en midlertidig mappe utenfor repoet.
+**Status:** planen er godkjent (D1–D12, med presiseringer). **M8-1 er gjennomført** (vedlegg A) og **M8-2 er gjennomført** (vedlegg B) og **M8-3 er gjennomført** (vedlegg C: tilgangsbeskyttelse og andre oppstart). M8-4 til M8-6 er ikke startet. Ingen installasjonsprogram og ingen endringer i domene, migreringer eller grensesnitt er laget. Dokumentet bygger på det koden gjør i dag (kontrollert 2026-11-26, commit `f373965`) og på en testpublisering som ble gjort i en midlertidig mappe utenfor repoet.
 
 **Målet:** en vanlig Windows-bruker installerer SameieHub, starter det fra Start-menyen, får grensesnittet åpnet automatisk, beholder dataene sine ved oppdatering og kan avslutte programmet på en tydelig måte. Ingen Visual Studio, ingen PowerShell, ingen `dotnet`-kommandoer.
 
@@ -669,3 +669,149 @@ Til å begynne med ble kontrollene kjørt mot en isolert database i en midlertid
 - Mappen er stor (125 MB) fordi runtime følger med og ingenting er trimmet.
 - Versjonsnummeret er et argument til skriptet. Det vises ikke i grensesnittet (M8-5).
 - En tom databasefil gir nå en stopp som brukeren må løse for hånd.
+
+---
+
+## Vedlegg C. M8-3: Sikker lokal tilgang og andre oppstart (gjennomført)
+
+I Windows-modus får bare nettleseren som programmet selv har åpnet, bruke programmet. Det er ikke en brukerinnlogging: det finnes ingen konto, passord eller roller, og ingenting å skrive inn. Beskyttelsen gjelder tilgangen til nettgrensesnittet. **Den krypterer ikke dataene** (se C.8).
+
+### C.1 Hvordan det fungerer (hele forløpet)
+
+```mermaid
+sequenceDiagram
+    participant P as SameieHub.exe
+    participant B as Nettleseren
+    P->>P: lager engangskode (256 bit, 60 s, én gang)
+    P->>B: åpner http://127.0.0.1:port/start#kode
+    B->>P: GET /start (uten kode: koden er etter #)
+    P-->>B: startside (ingen eksterne ressurser, strengt CSP)
+    B->>B: skriptet fjerner koden fra adressen
+    B->>P: POST /start med koden i innholdet
+    P-->>B: 204 og sesjonscookie (HttpOnly, SameSite=Strict)
+    B->>P: GET / med cookie, deretter Blazor-forbindelsen
+```
+
+Klassene ligger i `Web/Hosting/`: `AccessSession` (hemmelighetene), `AccessGuardMiddleware` (vakten), `StartPage` (startsiden), `ActivationPipe` (andre start) og `BrowserLauncher` (åpner nettleseren). `WebAppSetup` samler tjenestene og rekkefølgen i pipelinen, så Windows-starten, utviklingsstarten og testene bygger dem likt.
+
+### C.2 Engangskoden
+
+| Krav | Slik er det løst |
+|---|---|
+| Kryptografisk sikker, minst 256 bit | 32 byte fra `RandomNumberGenerator`, kodet som base64url (43 tegn) |
+| Høyst 60 sekunder | `CodeLifetime`. Testet på 59 og 61 sekunder |
+| Bare én gang | Koden fjernes når den brukes. Testet også gjennom nettverket |
+| Sammenlignes sikkert | Bare en SHA-256-hash lagres. En presentert verdi hashes og sammenlignes med alle lagrede hasher i fast tid (`FixedTimeEquals`), uten å stoppe ved første treff |
+| Ugyldig etter omstart | Alt ligger i minnet. Et nytt program har nye hemmeligheter |
+| Aldri logget, ikke lagret | Koden og sesjonstokenet skrives aldri til logg, konsoll eller fil (testet mot loggfilen). Loggen sier bare at en kode ble laget |
+| Ikke i feilrapporter | Det finnes ingen telemetri. Unntak logges som typenavn |
+
+**Overføring til nettleseren:** koden legges i adressens fragment (`/start#kode`), ikke i søkestrengen (`?kode=`). Nettleseren sender aldri fragmentet til serveren, så det havner ikke i serverlogger, ikke i `Referer` og ikke i en eventuell proxy. En kode i søkestrengen virker bevisst ikke (testet). Startsiden:
+- har `Cache-Control: no-store` og `Referrer-Policy: no-referrer` (også `X-Content-Type-Options`, `X-Frame-Options: DENY` og `Cross-Origin-Resource-Policy` på alle svar);
+- laster ingenting utenfra: ingen eksterne skript, fonter, stiler eller bilder;
+- har en innholdspolicy (`default-src 'none'`) som tillater nøyaktig ett innebygd skript og én innebygd stil, ved hash (testet at hashen stemmer med innholdet);
+- fjerner koden fra adressefeltet med `history.replaceState` før noe annet skjer, sender den med POST, og bytter siden med `location.replace('/')`, så koden ikke ligger igjen i historikken for denne fanen.
+
+**Ikke antatt hemmelig:** en kode i en adresse er ikke automatisk skjult. Se gjenværende risiko i C.8.
+
+### C.3 Sesjonscookien
+
+- **Navn:** `SameieHub-<port>`. En cookie hører til vertsnavnet, ikke porten. To SameieHub-programmer på maskinen ville ellers overskrevet hverandres cookie.
+- **Egenskaper:** `HttpOnly`, `SameSite=Strict`, `Path=/`, ingen `Domain` (bare `127.0.0.1`, ikke `localhost`), ingen utløpsdato (nettleseren fjerner den når den lukkes). Testet gjennom nettverket og i en ekte nettleser (cookien er ikke synlig for skript).
+- **Levetid i programmet:** 8 timer, deretter nekter vakten den. Den gjelder for nye forespørsler og nye forbindelser. En Blazor-forbindelse som allerede er åpen, fortsetter til den lukkes.
+- **Innholdet:** et tilfeldig tall, ikke et signert eller kryptert objekt. Ingen hemmeligheter i konfigurasjonsfiler. Ingenting vedvarer mellom kjøringer.
+- **Hvorfor ikke ASP.NET Cores cookie-autentisering:** den krever datakrypteringsnøkler (Data Protection) som lagres på disk. Da kunne en cookie overleve programmet, og den har ingen engangskode. En minnebasert, tilfeldig sesjon er enklere og gir «ugyldig etter omstart» av seg selv.
+- **`Secure`:** bevisst ikke satt. Det finnes bare vanlig http på `127.0.0.1`, og ikke alle nettlesere sender en `Secure`-cookie tilbake over http. Cookien går aldri over et nettverk. Kontrollert i Chromium: cookien aksepteres og sendes, også til Blazor-forbindelsen.
+
+### C.4 Hva som er beskyttet
+
+Vakten ligger **først** i pipelinen (før feilsider, statiske filer, antiforgery og endepunkter), så ingen adresse, nå eller senere, kan nås utenom den.
+
+| Endepunkt | Uten cookie |
+|---|---|
+| Sider (forside, lister, detaljer, oppretting, redigering, sikkerhetskopi) | 403 |
+| Direkte lenker til detaljsider | 403 |
+| Statiske filer (stilark, skript, bilder, `_framework`) | 403 |
+| Blazor-forbindelsen: `/_blazor` (negotiate og WebSocket) | 403 |
+| Skjemaposter og andre metoder (POST, PUT, DELETE) | 403, før noe annet ser på dem |
+| Adresser som ikke finnes, `/Error` | 403 (ingen forskjell på «finnes» og «finnes ikke») |
+| Nedlasting og opplasting av sikkerhetskopi, gjenoppretting | Går over Blazor-forbindelsen (ingen egen adresse), som er beskyttet |
+| **Unntak: `GET /start` og `POST /start`** | Åpne. Det er hele unntakslisten. Startsiden viser ingen brukerdata. `POST` krever en gyldig engangskode |
+
+Statiske filer har **ikke** et eget unntak: ingen fil leveres uten cookie. Det gjør også at feilsiden («Ingen tilgang») er selvstendig, uten stilark.
+
+**Kontroller for alle forespørsler (også WebSocket):**
+- `Origin`, hvis den finnes, må være programmets egen adresse. Ellers 403.
+- `Sec-Fetch-Site`, hvis den finnes, må være `same-origin` eller `none`. En side på en annen lokal port er «same-site» og ville fått cookien med `SameSite=Strict`, så cookien alene er ikke nok. Testet.
+- Vertsnavnet kontrolleres før vakten (M8-1): bare `127.0.0.1` og `localhost`. Fremmed vertsnavn gir 400 (også med gyldig cookie).
+- `UseAntiforgery()` er beholdt for skjemaer. Blazor Server sender hendelser over WebSocket, ikke som skjemaposter. Hele forbindelsen er derfor sjekket for cookie, `Origin` og `Sec-Fetch-Site`. Dette er undersøkt i de faktiske endepunktene (`/_blazor/negotiate` og WebSocket-oppgraderingen) og ikke bare antatt.
+
+Vakten gjelder bare i Windows-modus. Utviklingsstarten og demoen har ingen vakt og ingen `/start` (testet), og ingen nye krav til innlogging.
+
+### C.5 Andre oppstart
+
+Samme sperre som før avgjør om et program kjører. Når sperren er opptatt:
+
+1. Den nye prosessen kobler til en **navngitt pipe** (`SameieHub.Activation.<hash av databasebanen>`), venter inntil fem sekunder, og sier `OPEN`.
+2. Det kjørende programmet lager en **ny engangskode selv** og åpner nettleseren med den. Koden sendes aldri gjennom pipen.
+3. Svaret er `OK`. Den andre prosessen skriver «SameieHub kjører allerede. Åpner en ny fane …» og avslutter med kode 0. Den har ikke åpnet databasen og ikke startet noen server.
+4. Kan pipen ikke nås (programmet starter eller stopper akkurat nå, eller pipen mangler), vises den vanlige meldingen «SameieHub kjører allerede …» med kode 1.
+
+**Tilgangskontroll på pipen:**
+- Pipen lages med `PipeOptions.CurrentUserOnly`, som gir tilgang bare til den nåværende Windows-brukeren. Testet: tilgangslisten gir den nåværende brukeren tilgang og ingen bred gruppe (Everyone, Users, Authenticated Users, Interactive, Network, Anonymous). **Det er ikke testet med en annen Windows-konto.**
+- Klienten bruker også `CurrentUserOnly`, så den stoler ikke på en pipe som en annen bruker har laget. Navnet er ikke hemmelig; det er tilgangskontrollen som beskytter.
+- **Bare én kommando finnes: `OPEN`.** En melding er høyst 16 byte og må være nøyaktig `OPEN` og linjeskift. Alt annet (annen tekst, stier, programtekst, for lang, uten linjeskift) gir `ERR` eller ingen svar, og åpner ingenting (testet).
+- Tilkoblinger behandles én og én med to sekunders grense, så en klient som ikke sender noe, ikke kan blokkere. Alle svarene er korte og faste.
+- Funn under testing: uten buffer venter en skriving til den andre siden leser. En klient som sendte mer enn serveren leste, og en server som svarte først, ventet da på hverandre for alltid. Pipen har nå en buffer på 4 KB, og serveren venter ikke blokkerende på klienten.
+
+Testet: første start, andre start, tre nesten samtidige starter, en klient som ikke sender noe, ingen pipe, avslutning mens en klient kobler til, ny pipe etter at et program er avsluttet, og at pipen ikke kan brukes av en annen bruker (tilgangslisten).
+
+### C.6 Testverktøy for røykprøven
+
+For at CI skal kunne spille nettleserens rolle, finnes innstillingen `Launch:UrlFile`, som **bare virker sammen med `--unattended`**: programmet skriver da startadressen (med koden) til den filen i stedet for å åpne nettleseren. Den er ikke en del av normal bruk. Er den satt, ligger en gyldig kode i en fil i 60 sekunder (til den brukes). Filen ligger i testens midlertidige mappe og slettes sammen med den.
+
+### C.7 Hva som er testet
+
+**Automatisk (91 nye tester, 1611 totalt):**
+- Engangskode: lengde og tilfeldighet, bare én gang, utløper etter 60 s (og virker etter 59 s), feil verdier avvises og bruker ikke opp en ekte kode, kode fra en annen kjøring avvises, sesjon varer 8 timer, ugyldig token, kode og token kan ikke byttes om, mange ubrukte koder fyller ikke opp minnet.
+- Vakt (ekte komponenter og Blazor-pipeline på en lokal port, uten automatisk cookie eller videresending): 15 adresser uten cookie, seks dataendrende forespørsler uten cookie, Blazor WebSocket uten cookie, ugyldig og utløpt cookie, cookie fra en annen port og fra en annen kjøring, startside og policy, cookiens egenskaper, kode bare én gang, utløpt/feil/ingen/for lang kode, kode i adressen virker ikke, fremmed `Origin` ved innløsning bruker ikke opp koden, andre metoder på `/start`, sider med cookie, Blazor negotiate og WebSocket med cookie, fremmed `Origin` og `Sec-Fetch-Site` med gyldig cookie, fremmed vertsnavn, sikkerhetshodene, at loggen ikke har kode eller token, og at utviklingsstarten ikke har noen vakt.
+- Pipe og andre start (se C.5), og at `PrepareAsync` ber det kjørende programmet åpne nettleseren uten å røre database eller gjenoppretting.
+- `Test-WindowsPackage.ps1` (CI og lokalt) er skrevet om: **forsiden gir ikke lenger 200 uten cookie.** Den kontrollerer 403 uten cookie (sider, filer, `_blazor`, skjemapost), startsiden og hodene, feil kode, selve kodeinnløsningen med cookiens egenskaper, at koden bare virker én gang, 200 for sider og filer med cookie, `Origin`, `Sec-Fetch-Site` og vertsnavn med gyldig cookie, andre start (kode 0, ny kode, ny tilgang, første sesjon gyldig), og som før avslutningen. Lokalt: 81 kontroller (Ctrl+C) og 80 (X).
+
+**Manuelt i en faktisk nettleser (Chromium i appens nettleservindu), mot den publiserte pakken og en midlertidig database:**
+- Åpning med koden: innlogging uten at noe skrives inn, forsiden vises, adressen er `/` uten fragment, og cookien er ikke synlig for skript.
+- Uten cookie: `fetch` uten cookie gir 403. Samme program på `localhost` i stedet for `127.0.0.1` (annen cookiebeholder, tilsvarer en privat økt) gir «Ingen tilgang».
+- Samme kode en gang til: tydelig melding om at koden er ugyldig, og adressen er renset.
+- Andre start (`SameieHub.exe` en gang til): kode 0, ny kode, og en ny innlogging i nettleseren.
+- Vanlig bruk: fiktiv boenhet og fiktiv oppgave opprettet og vist, navigasjon gjennom alle seks modulene, og nedlasting av sikkerhetskopi (90 112 byte, datert filnavn).
+- **Gjenoppkobling etter et kortvarig brudd:** nettleserens egen forbindelse ble lukket fra nettleseren. Siden koblet til igjen (og gikk gjennom vakten med cookien), og navigasjon virket etterpå.
+- Avslutning med Ctrl+C mens nettleseren var tilkoblet: 3,5 s, prosess borte, `-wal` borte. Ny start etter dette: den gamle cookien (fra forrige port) gir «Ingen tilgang», og en ny kode gir tilgang. Dataene fra forrige kjøring fantes.
+- Utviklingsmodus og demomodus (`demo.ps1 launch`): uendret, 200 uten innlogging, og `/start` finnes ikke.
+
+**Ikke testet:**
+- Et ekte, privat nettleservindu i brukerens standardnettleser (en tilsvarende, annen cookiebeholder er brukt). Når programmet startes uten `--unattended`, åpnes standardnettleseren, og koden brukes opp der. Jeg kan ikke se det vinduet, og fant ingen nettleserprosess med adressen på kommandolinjen (nettleseren kan ha en kjørende instans som mottok adressen). Åpningen gikk uten feil i loggen.
+- Firefox og Edge. Safari-oppførsel for `Secure` og lokal http er ikke relevant (Windows).
+- En annen Windows-bruker som prøver å koble til porten eller pipen.
+- DNS-rebinding med en ekte rebinding-tjener (bare vertsnavnet og cookien er kontrollert).
+- Windows Terminal, en ren maskin uten .NET, og gjenoppretting (som tidligere).
+
+### C.8 Hva beskyttelsen faktisk gjør, og gjenværende risiko
+
+**Den beskytter mot:**
+- nettsteder i nettleseren (kryssopprinnelse, CSRF, fremmed `Origin`, kryss-nettsted-WebSocket, DNS-rebinding med fremmed vertsnavn);
+- en annen nettleser eller et annet nettleservindu som ikke har fått koden (cookien er bundet til nettleseren som løste inn koden);
+- en annen Windows-bruker som kobler til porten (uten cookie) eller pipen (tilgangslisten);
+- en gammel cookie eller kode etter omstart.
+
+**Den beskytter ikke mot:**
+- **Skadevare eller et annet program som kjører som samme Windows-bruker.** Slikt kan lese den ukrypterte SQLite-databasen og sikkerhetskopiene direkte, lese nettleserens cookie eller minne, og bruke pipen. Å beskytte webgrensesnittet er ikke det samme som å kryptere dataene.
+- **Koden i løpet av de første sekundene.** Programmet gir den til nettleseren som en adresse (kommandolinje). Et annet program som samme bruker kan lese kommandolinjen til andre prosesser og bruke koden før nettleseren gjør det. Koden varer 60 sekunder og kan brukes én gang (da får nettleseren «ugyldig kode», som er et tegn), men det er en reell vei. Andre brukere kan vanligvis ikke lese kommandolinjen til en annens prosess (ikke verifisert).
+- **Nettleserhistorikk.** Fragmentet fjernes fra fanens adresse og historikk, men nettleserens globale historikk kan ha lagret `/start#kode` (ikke undersøkt per nettleser). Koden er da brukt og utløpt.
+- **Nettleserutvidelser** og alt annet som kan lese siden når den vises.
+- **En sesjon som er stjålet** gjelder i opptil åtte timer eller til programmet avsluttes.
+- Avsluttede sesjoner stopper ikke en Blazor-forbindelse som allerede er åpen.
+- **Avvisning av tjeneste:** det finnes ingen begrensning på hvor mange «åpne nettleser»-forespørsler et program som samme bruker kan sende over pipen (hver åpner en fane), og ingen grense på forsøk med feil kode (256 bit gjør gjetting meningsløst).
+- Trafikken er ukryptert http, men går aldri ut av maskinen.
+- Databasen er ukryptert og beskyttes av Windows-filtilgang og eventuell BitLocker, som før.
+
+Pakken er fortsatt en **intern testversjon**. Den skal ikke distribueres før en ren maskin og en test med flere Windows-brukere er gjort (D12), og ikke brukes med virkelige personopplysninger.

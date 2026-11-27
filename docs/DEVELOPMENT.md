@@ -56,7 +56,7 @@ dotnet run --project src/SameieHub.Web --no-launch-profile -- --windows-host "--
 - `--unattended` hindrer at nettleseren åpnes og at meldingsboks vises. Bruk det i skript.
 - Loggfiler ligger i `logs` ved siden av databasefilen, og en sikkerhetskopi før oppgradering i `pre-migration`.
 - Bruk alltid en egen testdatabase med `--Database:Path`. Demodatabasen avvises i Windows-modus (bruk `Start-demo.cmd`).
-- Før M8-3 (engangskode og cookie) er modusen bare for kontrollert testing med fiktive data. Se [WINDOWS_DISTRIBUTION_PLAN.md](WINDOWS_DISTRIBUTION_PLAN.md), vedlegg A.
+- Siden M8-3 krever Windows-modus en sesjonscookie. Programmet åpner nettleseren med en engangskode (`/start#kode`). Adressen i vinduet fungerer ikke alene. Start programmet en gang til for å åpne en ny fane. For skript: `--unattended` sammen med `--Launch:UrlFile=<fil>` (eller miljøvariabelen `Launch__UrlFile`) skriver startadressen til filen i stedet for å åpne nettleseren. Det er en testmekanisme, ikke for normal bruk. Se [WINDOWS_DISTRIBUTION_PLAN.md](WINDOWS_DISTRIBUTION_PLAN.md), vedlegg A og C.
 
 ### Windows-pakken (M8-2)
 Den interne testpakken lages og kontrolleres med to skript. Pakken er en selvstendig mappe (`SameieHub.exe` og runtime), og trenger ikke .NET hos den som starter den.

@@ -26,11 +26,15 @@ internal sealed record StartupFailure(StartupFailureReason Reason, string Messag
 /// <summary>Either the lock the program must hold while it runs, or the reason it cannot start.</summary>
 internal sealed class StartupResult : IDisposable
 {
-    public StartupResult(InstanceLock? instanceLock, StartupFailure? failure)
+    public StartupResult(InstanceLock? instanceLock, StartupFailure? failure, bool activatedRunningInstance = false)
     {
         Lock = instanceLock;
         Failure = failure;
+        ActivatedRunningInstance = activatedRunningInstance;
     }
+
+    /// <summary>The program was already running and was asked to open the browser. This start has nothing more to do.</summary>
+    public bool ActivatedRunningInstance { get; }
 
     public InstanceLock? Lock { get; }
 
@@ -52,7 +56,8 @@ internal static class WindowsStartup
         string databasePath,
         IDatabaseRestore restore,
         Func<Task> upgradeDatabase,
-        ILogger logger)
+        ILogger logger,
+        Func<Task<bool>>? activateRunningInstance = null)
     {
         InstanceLock? instanceLock;
         try
@@ -66,6 +71,14 @@ internal static class WindowsStartup
 
         if (instanceLock == null)
         {
+            // Another instance holds the lock. It is asked to open the browser; nothing here touches the database or starts a server.
+            if (activateRunningInstance != null && await activateRunningInstance())
+            {
+                logger.LogInformation("The running program was asked to open the browser.");
+
+                return new StartupResult(null, null, activatedRunningInstance: true);
+            }
+
             return Failed(StartupFailureReason.AlreadyRunning, logger);
         }
 

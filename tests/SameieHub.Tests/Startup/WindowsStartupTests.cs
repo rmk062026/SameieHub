@@ -171,6 +171,58 @@ public class WindowsStartupTests : IDisposable
     }
 
     [Fact]
+    public async Task ASecondStart_ThatReachesTheRunningProgram_AsksItToOpenTheBrowser_AndStopsQuietly()
+    {
+        var restore = new RecordingRestore();
+        var asked = 0;
+        using var firstInstance = InstanceLock.TryAcquire(InstanceLock.PathFor(DatabasePath));
+
+        var result = await WindowsStartup.PrepareAsync(DatabasePath, restore, () => CreateUpgrader().UpgradeAsync(), NullLogger.Instance, () =>
+        {
+            asked++;
+
+            return Task.FromResult(true);
+        });
+
+        Assert.NotNull(firstInstance);
+        Assert.True(result.ActivatedRunningInstance);
+        Assert.Null(result.Failure);
+        Assert.Null(result.Lock);
+        Assert.Equal(1, asked);
+        Assert.Equal(0, restore.ApplyCalls);
+        Assert.False(File.Exists(DatabasePath));
+    }
+
+    [Fact]
+    public async Task ASecondStart_ThatCannotReachTheRunningProgram_KeepsTheAlreadyRunningMessage()
+    {
+        using var firstInstance = InstanceLock.TryAcquire(InstanceLock.PathFor(DatabasePath));
+
+        var result = await WindowsStartup.PrepareAsync(
+            DatabasePath, new RecordingRestore(), () => CreateUpgrader().UpgradeAsync(), NullLogger.Instance, () => Task.FromResult(false));
+
+        Assert.False(result.ActivatedRunningInstance);
+        Assert.Equal(StartupFailureReason.AlreadyRunning, result.Failure!.Reason);
+    }
+
+    [Fact]
+    public async Task TheRunningProgramIsNotAskedToDoAnything_WhenTheLockIsFree()
+    {
+        var asked = 0;
+
+        using var result = await WindowsStartup.PrepareAsync(DatabasePath, new RecordingRestore(), () => CreateUpgrader().UpgradeAsync(), NullLogger.Instance, () =>
+        {
+            asked++;
+
+            return Task.FromResult(true);
+        });
+
+        Assert.Null(result.Failure);
+        Assert.False(result.ActivatedRunningInstance);
+        Assert.Equal(0, asked);
+    }
+
+    [Fact]
     public void EveryFailureHasAReadableNorwegianMessage()
     {
         foreach (var reason in Enum.GetValues<StartupFailureReason>())

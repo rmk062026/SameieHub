@@ -4,16 +4,17 @@ SameieHub - INTERN TESTVERSJON
 Dette er en intern testversjon. Den skal IKKE distribueres til andre og
 IKKE brukes med virkelige personopplysninger. Bruk bare fiktive data.
 
-Programmet har ingen tilgangsbeskyttelse ennå: alle programmer og brukere
-på denne maskinen kan koble til det mens det kjører. Det lytter bare på
-maskinen din (127.0.0.1), ikke på nettverket.
+Tilgangen til programmet er beskyttet lokalt: bare nettleseren programmet
+selv åpner kan bruke det, og programmet lytter bare på maskinen din
+(127.0.0.1). Databasen er likevel ikke kryptert, og et annet program som
+kjører som deg kan lese den.
 
 Slik starter du
 ---------------
 1. Pakk ut hele zip-filen til en vanlig mappe (ikke kjør fra inne i zip-filen).
 2. Dobbeltklikk SameieHub.exe (eller Start-SameieHub.cmd).
-3. Nettleseren åpnes av seg selv. Det vises også et svart vindu som heter
-   «SameieHub». Det er selve programmet.
+3. Nettleseren åpnes av seg selv, og du slipper å logge inn. Det vises også
+   et svart vindu som heter «SameieHub». Det er selve programmet.
 
 Windows kan vise «Windows beskyttet PC» (SmartScreen), fordi programmet ikke er
 signert. Velg «Mer info» og deretter «Kjør likevel».
@@ -23,9 +24,11 @@ Du trenger ikke installere .NET eller noe annet.
 Slik avslutter du
 -----------------
 Lukk det svarte vinduet «SameieHub» (eller trykk Ctrl+C i det).
-Å lukke nettleseren avslutter ikke programmet. Hvis programmet kjører, kan du
-åpne det igjen ved å starte SameieHub på nytt: da får du en melding om at det
-allerede kjører.
+Å lukke nettleseren avslutter ikke programmet. Vil du åpne det igjen mens det
+kjører, start SameieHub på nytt (dobbeltklikk SameieHub.exe): da åpnes en ny
+fane i programmet som allerede kjører. Adressen i nettleseren virker ikke
+alene, den trenger en ny åpning fra programmet. Avslutter du programmet og
+starter det igjen, må du åpne nettleseren på nytt på samme måte.
 
 Hvor dataene ligger
 -------------------

@@ -24,17 +24,8 @@ if ((seedDemo || checkDemo) && !DemoDatabaseSeeder.IsDemoDatabasePath(builder.Co
     return 1;
 }
 
-// Add services to the container.
-builder.Services.AddRazorComponents()
-    .AddInteractiveServerComponents();
-
 var databasePath = builder.Configuration["Database:Path"] ?? DatabaseLocation.GetDefaultPath();
-builder.Services.AddSameieHubInfrastructure(databasePath);
-builder.Services.AddScoped<HousingUnitService>();
-builder.Services.AddScoped<BoardCaseService>();
-builder.Services.AddScoped<TaskItemService>();
-builder.Services.AddScoped<ChargingService>();
-builder.Services.AddSingleton(TimeProvider.System);
+WebAppSetup.AddServices(builder, databasePath, windowsHost);
 
 var app = builder.Build();
 
@@ -49,7 +40,15 @@ if (windowsHost)
             databasePath,
             app.Services.GetRequiredService<IDatabaseRestore>(),
             () => app.Services.GetRequiredService<DatabaseUpgrader>().UpgradeAsync(),
-            app.Logger);
+            app.Logger,
+            () => ActivationClient.TryActivateAsync(ActivationPipe.NameFor(databasePath), TimeSpan.FromSeconds(5)));
+        if (result.ActivatedRunningInstance)
+        {
+            Console.WriteLine("SameieHub kjører allerede. Åpner en ny fane i nettleseren.");
+
+            return 0;
+        }
+
         failure = result.Failure;
         instanceLock = result.Lock;
     }
@@ -102,28 +101,7 @@ app.Logger.LogInformation(
     Path.GetFileName(Path.GetDirectoryName(databasePath)),
     Path.GetFileName(databasePath));
 
-// Configure the HTTP request pipeline.
-if (!app.Environment.IsDevelopment())
-{
-    app.UseExceptionHandler("/Error", createScopeForErrors: true);
-    if (!windowsHost)
-    {
-        // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
-        app.UseHsts();
-    }
-}
-app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
-if (!windowsHost)
-{
-    // The Windows mode only has a plain http address on this computer, so there is no https address to redirect to.
-    app.UseHttpsRedirection();
-}
-
-app.UseAntiforgery();
-
-app.MapStaticAssets();
-app.MapRazorComponents<App>()
-    .AddInteractiveServerRenderMode();
+WebAppSetup.UsePipeline(app, windowsHost);
 
 if (!windowsHost)
 {
@@ -138,8 +116,10 @@ static async Task<int> RunWindowsHostAsync(WebApplication app, InstanceLock inst
 {
     using (instanceLock)
     {
+        var launcher = new BrowserLauncher(app, unattended);
+        ActivationListener? activation = null;
         WindowsHost.RegisterShutdown(app.Lifetime, app.Logger);
-        app.Lifetime.ApplicationStarted.Register(() => AnnounceStart(app, unattended));
+        app.Lifetime.ApplicationStarted.Register(() => activation = AnnounceStart(app, launcher, databasePath: app.Configuration["Database:Path"] ?? DatabaseLocation.GetDefaultPath()));
         WindowsConsole.SetTitle();
         WindowsConsole.RegisterCloseHandler(app.Lifetime, app.Logger);
 
@@ -154,6 +134,10 @@ static async Task<int> RunWindowsHostAsync(WebApplication app, InstanceLock inst
 
             return 1;
         }
+        finally
+        {
+            activation?.Dispose();
+        }
 
         app.Logger.LogInformation("SameieHub has stopped.");
 
@@ -161,20 +145,22 @@ static async Task<int> RunWindowsHostAsync(WebApplication app, InstanceLock inst
     }
 }
 
-static void AnnounceStart(WebApplication app, bool unattended)
+static ActivationListener? AnnounceStart(WebApplication app, BrowserLauncher launcher, string databasePath)
 {
     var address = WindowsHost.GetAddress(app);
     if (address == null)
     {
-        return;
+        return null;
     }
 
     app.Logger.LogInformation("SameieHub is running on {Address}.", address);
-    WindowsConsole.ShowRunningBanner(address);
-    if (!unattended)
-    {
-        WindowsConsole.OpenBrowser(address, app.Logger);
-    }
+    WindowsConsole.ShowRunningBanner();
+
+    // From now on a second start can ask this program to open the browser again.
+    var activation = ActivationListener.TryStart(ActivationPipe.NameFor(databasePath), launcher.OpenAsync, app.Logger);
+    launcher.OpenAsync();
+
+    return activation;
 }
 
 static async Task<int> RunDemoSeedingAsync(IServiceProvider services)

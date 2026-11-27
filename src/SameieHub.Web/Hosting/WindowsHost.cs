@@ -142,13 +142,13 @@ internal static class WindowsConsole
         }
     }
 
-    public static void ShowRunningBanner(string address)
+    public static void ShowRunningBanner()
     {
         Console.WriteLine();
         Console.WriteLine("SameieHub kjører.");
-        Console.WriteLine($"Adresse: {address}");
+        Console.WriteLine("Nettleseren åpnes av seg selv. Lukket du den? Start SameieHub på nytt (SameieHub.exe): da åpnes en ny fane.");
         Console.WriteLine("Lukk dette vinduet eller trykk Ctrl+C for å avslutte SameieHub. Å lukke nettleseren avslutter ikke programmet.");
-        Console.WriteLine("Intern testversjon uten tilgangsbeskyttelse: bruk bare fiktive data.");
+        Console.WriteLine("Intern testversjon: tilgangen er beskyttet lokalt, men databasen er ikke kryptert. Bruk bare fiktive data.");
         Console.WriteLine();
     }
 
@@ -183,7 +183,7 @@ internal static class WindowsConsole
         }
         catch (Exception exception) when (exception is System.ComponentModel.Win32Exception or InvalidOperationException)
         {
-            logger.LogWarning("The browser could not be opened ({ExceptionType}). Open the address shown in the window.", exception.GetType().Name);
+            logger.LogWarning("The browser could not be opened ({ExceptionType}). Start SameieHub again to try once more.", exception.GetType().Name);
         }
     }
 
@@ -232,4 +232,48 @@ internal static class WindowsConsole
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern int MessageBoxW(IntPtr window, string text, string caption, uint type);
+}
+
+/// <summary>
+/// Opens the browser with a new launch code: <c>http://127.0.0.1:port/start#code</c>. The code is only ever passed to the browser
+/// (and, for tests, to a file), never logged or printed. With <c>--unattended</c> no browser is opened; when the setting
+/// <c>Launch:UrlFile</c> is given, the address is written to that file instead, so a test can play the browser's part.
+/// </summary>
+internal sealed class BrowserLauncher
+{
+    private readonly WebApplication _app;
+    private readonly bool _unattended;
+
+    public BrowserLauncher(WebApplication app, bool unattended)
+    {
+        _app = app;
+        _unattended = unattended;
+    }
+
+    public Task OpenAsync()
+    {
+        var address = WindowsHost.GetAddress(_app);
+        if (address == null)
+        {
+            return Task.CompletedTask;
+        }
+
+        var url = $"{address}{StartPage.Path}#{_app.Services.GetRequiredService<AccessSession>().CreateLaunchCode()}";
+        var urlFile = _app.Configuration["Launch:UrlFile"];
+        if (_unattended)
+        {
+            if (!string.IsNullOrEmpty(urlFile))
+            {
+                File.WriteAllText(urlFile, url);
+            }
+        }
+        else
+        {
+            WindowsConsole.OpenBrowser(url, _app.Logger);
+        }
+
+        _app.Logger.LogInformation("A launch code was made for the browser.");
+
+        return Task.CompletedTask;
+    }
 }

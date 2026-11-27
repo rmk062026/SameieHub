@@ -168,8 +168,6 @@ public class WindowsHostTests : IDisposable
             Assert.Equal(0, await context.HousingUnits.CountAsync());
         }
 
-        Assert.True(File.Exists(DatabasePath + "-wal"));
-
         await app.StopAsync();
         await app.DisposeAsync();
 

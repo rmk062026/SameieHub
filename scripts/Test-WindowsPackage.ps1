@@ -1,7 +1,8 @@
 <#
 .SYNOPSIS
 Smoke test of the internal Windows test package. It unpacks the zip to a temporary folder, starts SameieHub.exe the way a double-click
-does (no flags) against a temporary database, checks it, stops it the way a person would, and checks that nothing is left behind.
+does (no flags) against a temporary database, checks that nothing can be reached without the session cookie, plays the browser's part
+(the one-time code, the cookie, a second start), stops the program the way a person would, and checks that nothing is left behind.
 The ordinary database in AppData is never used, and the test data is empty.
 
 .EXAMPLE
@@ -56,7 +57,9 @@ try {
 
     Write-Host "Start ($StopWith)"
     # No --windows-host: the published program has to choose the Windows mode itself. The database path is set by environment variable.
+    $urlFile = Join-Path $work 'launch-url.txt'
     $env:Database__Path = $database
+    $env:Launch__UrlFile = $urlFile
     try {
         $arguments = @('--unattended')
         if ($StopWith -eq 'close') {
@@ -69,6 +72,7 @@ try {
     }
     finally {
         Remove-Item Env:Database__Path
+        Remove-Item Env:Launch__UrlFile
     }
 
     $address = $null
@@ -94,23 +98,78 @@ try {
     Assert-That ($listeners.Count -ge 1) 'the program listens on a port'
     Assert-That (@($listeners | Where-Object { $_.LocalAddress -ne '127.0.0.1' }).Count -eq 0) 'every listening address is 127.0.0.1 (no network, no ::1)'
 
-    $client = New-Object System.Net.Http.HttpClient
-    $response = $client.GetAsync($address).GetAwaiter().GetResult()
-    $html = $response.Content.ReadAsStringAsync().GetAwaiter().GetResult()
-    Assert-That ($response.StatusCode -eq 200) 'the front page answers 200'
+    $client = New-Object System.Net.Http.HttpClient ((New-Object System.Net.Http.HttpClientHandler -Property @{ UseCookies = $false; AllowAutoRedirect = $false }))
+    function Send-Request([string]$Method, [string]$Path, [string]$Cookie = '', [hashtable]$Headers = @{}, [string]$Body = $null) {
+        $request = New-Object System.Net.Http.HttpRequestMessage ([System.Net.Http.HttpMethod]::new($Method)), ($address.TrimEnd('/') + $Path)
+        if ($Cookie) { $request.Headers.Add('Cookie', $Cookie) }
+        foreach ($name in $Headers.Keys) {
+            if ($name -eq 'Host') { $request.Headers.Host = $Headers[$name] } else { $request.Headers.Add($name, $Headers[$name]) }
+        }
+        if ($null -ne $Body) { $request.Content = New-Object System.Net.Http.StringContent ($Body) }
+        return $client.SendAsync($request).GetAwaiter().GetResult()
+    }
+    function Get-Code([string]$File) {
+        $url = (Get-Content $File -Raw).Trim()
+        return $url.Substring($url.IndexOf('#') + 1)
+    }
+
+    Write-Host 'Without a session'
+    foreach ($path in '/', '/oppgaver', '/boenheter/ny', '/innstillinger/sikkerhetskopi', '/favicon.png', '/_blazor', '/nothing-here') {
+        Assert-That ((Send-Request 'GET' $path).StatusCode -eq 403) "GET $path is refused (403)"
+    }
+    Assert-That ((Send-Request 'POST' '/_blazor/negotiate?negotiateVersion=1').StatusCode -eq 403) 'the Blazor connection (negotiate) is refused'
+    Assert-That ((Send-Request 'POST' '/boenheter/ny' '' @{} 'x=y').StatusCode -eq 403) 'a form post is refused'
+    Assert-That ((Send-Request 'GET' '/' '' @{ Host = 'evil.example' }).StatusCode -eq 400) 'a foreign host name is refused (400)'
+
+    $start = Send-Request 'GET' '/start'
+    $startHtml = $start.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+    Assert-That ($start.StatusCode -eq 200) 'the start page answers 200'
+    Assert-That ($start.Headers.GetValues('Referrer-Policy') -contains 'no-referrer') 'the start page sends Referrer-Policy: no-referrer'
+    Assert-That ($start.Headers.CacheControl.ToString() -match 'no-store') 'the start page sends Cache-Control: no-store'
+    Assert-That (($start.Headers.GetValues('Content-Security-Policy') -join ' ') -match "default-src 'none'") 'the start page has a content security policy'
+    Assert-That ($startHtml -notmatch 'https?://') 'the start page loads nothing from outside'
+    Assert-That ((Send-Request 'POST' '/start' '' @{} 'wrong-code').StatusCode -eq 403) 'a wrong code is refused'
+
+    Write-Host 'The one-time code'
+    Assert-That (Test-Path $urlFile) 'the program made a launch address for the browser'
+    $firstCode = Get-Code $urlFile
+    Assert-That ($firstCode.Length -ge 43) 'the code is long (at least 256 bits as text)'
+    $redeem = Send-Request 'POST' '/start' '' @{} $firstCode
+    Assert-That ($redeem.StatusCode -eq 204) 'the code is accepted once (204)'
+    $setCookie = ($redeem.Headers.GetValues('Set-Cookie') | Select-Object -First 1)
+    Assert-That ($setCookie -match '(?i)httponly') 'the cookie is HttpOnly'
+    Assert-That ($setCookie -match '(?i)samesite=strict') 'the cookie is SameSite=Strict'
+    Assert-That ($setCookie -notmatch '(?i)domain=|expires=|max-age=') 'the cookie has no domain and no expiry (it ends with the browser)'
+    Assert-That ((Send-Request 'POST' '/start' '' @{} $firstCode).StatusCode -eq 403) 'the same code cannot be used twice'
+    $cookie = ($setCookie -split ';')[0]
+    Assert-That ($cookie -notmatch [regex]::Escape($firstCode)) 'the cookie does not contain the code'
+
+    Write-Host 'With a session'
+    $page = Send-Request 'GET' '/' $cookie
+    $html = $page.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+    Assert-That ($page.StatusCode -eq 200) 'the front page answers 200 with the cookie'
     Assert-That ($html -match 'SameieHub') 'the front page is SameieHub'
-    $request = New-Object System.Net.Http.HttpRequestMessage ([System.Net.Http.HttpMethod]::Get), $address
-    $request.Headers.Host = 'evil.example'
-    Assert-That ($client.SendAsync($request).GetAwaiter().GetResult().StatusCode -eq 400) 'a foreign host name is refused (400)'
+    foreach ($path in '/oppgaver', '/styresaker', '/boenheter', '/elbillading', '/innstillinger/sikkerhetskopi') {
+        Assert-That ((Send-Request 'GET' $path $cookie).StatusCode -eq 200) "GET $path answers 200 with the cookie"
+    }
 
     $assets = @([regex]::Matches($html, '(?:href|src)="(?<path>[^"]+\.(?:css|js))"') | ForEach-Object { $_.Groups['path'].Value } | Sort-Object -Unique)
     Assert-That ($assets.Count -ge 3) "the page links its style sheets and scripts ($($assets.Count) found)"
     foreach ($asset in $assets) {
-        $status = $client.GetAsync($address.TrimEnd('/') + '/' + $asset.TrimStart('/')).GetAwaiter().GetResult().StatusCode
-        Assert-That ($status -eq 200) "static file $asset answers 200"
+        $path = '/' + $asset.TrimStart('/')
+        Assert-That ((Send-Request 'GET' $path).StatusCode -eq 403) "static file $asset is refused without the cookie"
+        Assert-That ((Send-Request 'GET' $path $cookie).StatusCode -eq 200) "static file $asset answers 200 with the cookie"
     }
 
+    $negotiate = Send-Request 'POST' '/_blazor/negotiate?negotiateVersion=1' $cookie @{ Origin = $address }
+    Assert-That ($negotiate.StatusCode -eq 200) 'the Blazor connection (negotiate) works with the cookie'
+    Assert-That ((Send-Request 'POST' '/_blazor/negotiate?negotiateVersion=1' $cookie @{ Origin = 'https://evil.example' }).StatusCode -eq 403) 'a foreign origin is refused even with the cookie'
+    Assert-That ((Send-Request 'GET' '/' $cookie @{ 'Sec-Fetch-Site' = 'cross-site' }).StatusCode -eq 403) 'a cross-site request is refused even with the cookie'
+    Assert-That ((Send-Request 'GET' '/' $cookie @{ Host = 'evil.example' }).StatusCode -eq 400) 'a foreign host name is refused even with the cookie'
+
     Write-Host 'A second start'
+    $before = (Get-Item $urlFile).LastWriteTimeUtc
+    Start-Sleep -Milliseconds 1100
     $env:Database__Path = $database
     try {
         $second = Start-Process $program.FullName -ArgumentList '--unattended' -WorkingDirectory $work -PassThru -Wait
@@ -118,8 +177,14 @@ try {
     finally {
         Remove-Item Env:Database__Path
     }
-    Assert-That ($second.ExitCode -eq 1) 'a second start stops with exit code 1 (the program already runs)'
+    Assert-That ($second.ExitCode -eq 0) 'a second start asks the running program to open the browser and ends with exit code 0'
     Assert-That ((Get-RunningProgram $folder).Count -eq 1) 'still exactly one SameieHub process'
+    Assert-That ((Get-Item $urlFile).LastWriteTimeUtc -gt $before) 'the running program made a new launch address'
+    $secondCode = Get-Code $urlFile
+    Assert-That ($secondCode -ne $firstCode) 'the new code is a different code'
+    $redeemSecond = Send-Request 'POST' '/start' '' @{} $secondCode
+    Assert-That ($redeemSecond.StatusCode -eq 204) 'the new code gives access'
+    Assert-That ((Send-Request 'GET' '/' $cookie).StatusCode -eq 200) 'the first session is still valid'
 
     Write-Host "Stop with $StopWith"
     $signal = Join-Path $PSScriptRoot 'Send-ConsoleSignal.ps1'
@@ -140,6 +205,7 @@ try {
     $logText = Get-Content (Get-ChildItem (Join-Path $databaseFolder 'logs') -Filter *.log | Select-Object -First 1).FullName -Raw
     Assert-That ($logText -match 'shutting down') 'the log shows an orderly shutdown'
     Assert-That ($logText -notmatch [regex]::Escape($work)) 'the log contains no folder path'
+    Assert-That (($logText -notmatch [regex]::Escape($firstCode)) -and ($logText -notmatch [regex]::Escape($secondCode))) 'the log contains no launch code'
 }
 catch {
     Write-Host "ERROR: $($_.Exception.Message)" -ForegroundColor Red
