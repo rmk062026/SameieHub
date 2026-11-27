@@ -1,7 +1,9 @@
 using Bunit;
 using Microsoft.Extensions.DependencyInjection;
 using SameieHub.Domain;
+using Microsoft.Extensions.Logging.Abstractions;
 using SameieHub.Tests.Fakes;
+using SameieHub.Web.Hosting;
 
 namespace SameieHub.Tests.Web;
 
@@ -25,6 +27,20 @@ public abstract class UiTestBase : BunitContext
         Services.AddSingleton<IMeterReadingRepository>(Readings);
         Services.AddSingleton<ChargingService>();
         Services.AddSingleton<SameieHub.Infrastructure.Restore.IDatabaseRestore>(new FakeDatabaseRestore());
+        UseShutdown(canShutDown: false);
+    }
+
+    protected FakeHostLifetime Lifetime { get; } = new();
+
+    internal ShutdownService Shutdown => Services.GetRequiredService<ShutdownService>();
+
+    /// <summary>
+    /// The development start cannot stop the program (the default here, as in <c>dotnet run</c>). The Windows mode can, and can start itself
+    /// again. Call this before a component is rendered.
+    /// </summary>
+    protected void UseShutdown(bool canShutDown, bool canRestart = false)
+    {
+        Services.AddSingleton(new ShutdownService(Lifetime, NullLogger<ShutdownService>.Instance, canShutDown, canRestart, TimeSpan.Zero));
     }
 
     protected FakeMeterRepository Meters { get; } = new();

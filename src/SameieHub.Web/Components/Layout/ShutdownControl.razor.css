@@ -1,0 +1,61 @@
+.footer-button {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.7rem 0.85rem;
+    min-height: 2.75rem;
+    color: var(--sh-sidebar-text);
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: var(--sh-radius);
+    text-align: left;
+}
+
+    .footer-button:hover {
+        background: rgba(255, 255, 255, 0.08);
+        color: #fff;
+    }
+
+    .footer-button:focus-visible {
+        outline: 2px solid #fff;
+        outline-offset: 2px;
+    }
+
+svg {
+    width: 1.25rem;
+    height: 1.25rem;
+    flex-shrink: 0;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.75;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.shutdown-confirm {
+    padding: 0.75rem;
+    color: var(--sh-sidebar-text);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: var(--sh-radius);
+    font-size: 0.9rem;
+}
+
+    .shutdown-confirm p {
+        margin: 0 0 0.6rem;
+    }
+
+.shutdown-title {
+    color: #fff;
+    font-weight: 650;
+}
+
+.shutdown-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+    .shutdown-actions .btn {
+        min-height: 2.75rem;
+    }

@@ -182,10 +182,11 @@ public class ActivationPipeTests
     }
 
     [Fact]
-    public void TheOnlyCommandsAreOpenAndStop_SoNoCodePathOrProgramTextCanBeSentOverThePipe()
+    public void TheOnlyCommandsAreOpenStopAndRestart_SoNoCodePathOrProgramTextCanBeSentOverThePipe()
     {
         Assert.Equal("OPEN", ActivationListener.OpenCommand);
         Assert.Equal("STOP", ActivationListener.StopCommand);
+        Assert.Equal("RESTART", ActivationListener.RestartCommand);
     }
 
     [Fact]
@@ -236,6 +237,51 @@ public class ActivationPipeTests
 
         Assert.Equal(1, opened);
         Assert.Equal(1, stopped);
+    }
+
+    [Fact]
+    public async Task ARestartRequest_IsOnlyAnsweredWhenTheProgramHasAWayToRestart_AndNeverOpensOrStops()
+    {
+        var name = NewPipeName();
+        var restarted = 0;
+        var opened = 0;
+        var stopped = 0;
+        using var listener = ActivationListener.TryStart(
+            name,
+            () => { opened++; return Task.CompletedTask; },
+            NullLogger.Instance,
+            () => { stopped++; return Task.CompletedTask; },
+            () => { restarted++; return Task.CompletedTask; });
+
+        Assert.True(await ActivationClient.TryRestartAsync(name, TimeSpan.FromSeconds(5)));
+
+        Assert.Equal(1, restarted);
+        Assert.Equal(0, opened);
+        Assert.Equal(0, stopped);
+    }
+
+    [Fact]
+    public async Task ARestartRequest_IsRefused_WhenTheProgramDoesNotOfferIt()
+    {
+        var name = NewPipeName();
+        using var listener = ActivationListener.TryStart(name, () => Task.CompletedTask, NullLogger.Instance, () => Task.CompletedTask);
+
+        Assert.False(await ActivationClient.TryRestartAsync(name, TimeSpan.FromSeconds(5)));
+        Assert.Equal("ERR", await SendRawAsync(name, "RESTART\n"));
+    }
+
+    [Fact]
+    public async Task ARestartRequest_ThatTheProgramRefuses_IsAnsweredWithAnError()
+    {
+        var name = NewPipeName();
+        using var listener = ActivationListener.TryStart(
+            name,
+            () => Task.CompletedTask,
+            NullLogger.Instance,
+            onRestart: () => throw new InvalidOperationException("Cannot restart here."));
+
+        Assert.False(await ActivationClient.TryRestartAsync(name, TimeSpan.FromSeconds(5)));
+        Assert.True(await ActivationClient.TryActivateAsync(name, TimeSpan.FromSeconds(5)));
     }
 
     private static async Task<string> SendRawAsync(string name, string message)

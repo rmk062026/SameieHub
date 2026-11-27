@@ -1,9 +1,11 @@
 @page "/innstillinger/sikkerhetskopi"
 @using SameieHub.Infrastructure.Backup
 @using SameieHub.Infrastructure.Restore
+@using SameieHub.Web.Hosting
 @implements IDisposable
 @inject BackupTransfer Transfer
 @inject IDatabaseRestore Restore
+@inject ShutdownService Shutdown
 @inject HousingUnitService HousingUnitService
 @inject BoardCaseService BoardCaseService
 @inject TaskItemService TaskService
@@ -28,14 +30,40 @@
                 <text> Den er fra en eldre versjon og er oppgradert automatisk. Filen du valgte er ikke endret.</text>
             }
         </p>
-        <p class="mb-2"><strong>Dette må du gjøre nå:</strong></p>
-        <ol>
-            <li>Lukk SameieHub. Det er ikke nok å lukke nettleseren: programmet (vinduet det kjører i) må stoppes.</li>
-            <li>Start SameieHub på nytt.</li>
-            <li>Gjenopprettingen gjennomføres da automatisk, og du ser resultatet på forsiden.</li>
-        </ol>
+        <p class="mb-2"><strong>Gjenopprettingen er ennå ikke gjennomført.</strong> Den gjennomføres når SameieHub starter på nytt.</p>
+        @if (Shutdown.CanRestart)
+        {
+            <p>
+                Velg «Avslutt og start på nytt». SameieHub lukkes og starter igjen av seg selv, og gjenopprettingen gjennomføres under oppstarten.
+                Du ser resultatet på forsiden når nettleseren åpnes igjen.
+            </p>
+            <p>Starter ikke SameieHub igjen av seg selv, starter du det fra Start-menyen. Gjenopprettingen gjennomføres da likevel.</p>
+        }
+        else
+        {
+            <p class="mb-2"><strong>Dette må du gjøre nå:</strong></p>
+            <ol>
+                @if (Shutdown.CanShutDown)
+                {
+                    <li>Velg «Avslutt SameieHub» nederst i menyen. Det er ikke nok å lukke nettleseren: programmet må stoppes.</li>
+                    <li>Start SameieHub på nytt fra Start-menyen.</li>
+                }
+                else
+                {
+                    <li>Lukk SameieHub. Det er ikke nok å lukke nettleseren: programmet (vinduet det kjører i) må stoppes.</li>
+                    <li>Start SameieHub på nytt.</li>
+                }
+                <li>Gjenopprettingen gjennomføres da automatisk, og du ser resultatet på forsiden.</li>
+            </ol>
+        }
         <p>Dataene du har nå tas vare på i en egen mappe, slik at de kan reddes hvis noe skulle gå galt. Frem til du starter på nytt er ingenting endret, og du kan avbryte.</p>
-        <button type="button" id="cancel-pending" class="btn btn-outline-secondary" disabled="@_isBusy" @onclick="CancelPending">Avbryt gjenopprettingen</button>
+        <div class="form-actions">
+            @if (Shutdown.CanRestart)
+            {
+                <button type="button" id="restart-now" class="btn btn-primary" disabled="@_isBusy" @onclick="RestartNow">Avslutt og start på nytt</button>
+            }
+            <button type="button" id="cancel-pending" class="btn btn-outline-secondary" disabled="@_isBusy" @onclick="CancelPending">Avbryt gjenopprettingen</button>
+        </div>
     </div>
 }
 
@@ -393,6 +421,13 @@
             DatabaseRestoreFailure.WriteFailed => "Gjenopprettingen kunne ikke forberedes. Kontroller at det er ledig plass på disken, og prøv igjen. Dataene dine er uendret.",
             _ => UploadProblem(BackupFileStatus.Invalid)!
         };
+    }
+
+    private void RestartNow()
+    {
+        // Only asks the program to stop and start again. The restore itself is carried out by the new program at startup, before the
+        // database is opened, exactly as when the person closes and starts SameieHub by hand.
+        Shutdown.Request(restart: true);
     }
 
     private void CancelPending()

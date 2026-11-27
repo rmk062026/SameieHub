@@ -22,11 +22,22 @@ internal static class WebAppSetup
         builder.Services.AddScoped<ChargingService>();
         builder.Services.AddSingleton(TimeProvider.System);
 
+        // Registered in every start so the pages can ask it, but only the Windows mode lets it stop the program.
+        builder.Services.AddSingleton(provider => new ShutdownService(
+            provider.GetRequiredService<IHostApplicationLifetime>(),
+            provider.GetRequiredService<ILogger<ShutdownService>>(),
+            canShutDown: windowsHost,
+            canRestart: windowsHost && RestartLaunch.CanStartItself(Environment.ProcessPath),
+            MessageDelay));
+
         if (windowsHost)
         {
             builder.Services.AddSingleton<AccessSession>();
         }
     }
+
+    // Long enough for the browser to show "SameieHub avsluttes" before the connection ends, short enough that nobody waits for it.
+    private static readonly TimeSpan MessageDelay = TimeSpan.FromMilliseconds(1500);
 
     public static void UsePipeline(WebApplication app, bool windowsHost)
     {

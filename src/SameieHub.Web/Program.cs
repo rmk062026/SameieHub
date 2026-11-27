@@ -36,6 +36,22 @@ if (windowsHost && args.Contains("--stop"))
     return accepted ? 0 : 3;
 }
 
+// Only the test build can be asked to restart from outside (the package test uses it). The installed program has no such command.
+if (windowsHost && args.Contains("--restart"))
+{
+    if (!WindowsHost.TestHooksAllowed())
+    {
+        Console.WriteLine("Dette valget finnes bare i testbyggingen.");
+
+        return 4;
+    }
+
+    var accepted = await ActivationClient.TryRestartAsync(ActivationPipe.NameFor(databasePath), TimeSpan.FromSeconds(10));
+    Console.WriteLine(accepted ? "SameieHub ble bedt om å starte på nytt." : "Fant ikke noe SameieHub-program som kunne starte på nytt.");
+
+    return accepted ? 0 : 3;
+}
+
 // Told to the installer from the very start, so an update never replaces files under a program that is still starting up.
 using var runningMarker = windowsHost ? RunningMarker.Create() : null;
 
@@ -50,12 +66,21 @@ if (windowsHost)
         : SetupInProgress.IsActive() ? StartupMessages.For(StartupFailureReason.SetupInProgress) : null;
     if (failure == null)
     {
+        // A program started by the one that has just stopped itself waits until that process has ended (and then for the instance lock),
+        // so the two never use the database at the same time. An ordinary start does not wait for anything.
+        var previousProcessId = RestartLaunch.GetPreviousProcessId(args);
+        if (previousProcessId != null)
+        {
+            RestartLaunch.WaitForExit(previousProcessId.Value, TimeSpan.FromSeconds(20));
+        }
+
         var result = await WindowsStartup.PrepareAsync(
             databasePath,
             app.Services.GetRequiredService<IDatabaseRestore>(),
             () => app.Services.GetRequiredService<DatabaseUpgrader>().UpgradeAsync(),
             app.Logger,
-            () => ActivationClient.TryActivateAsync(ActivationPipe.NameFor(databasePath), TimeSpan.FromSeconds(5)));
+            () => ActivationClient.TryActivateAsync(ActivationPipe.NameFor(databasePath), TimeSpan.FromSeconds(5)),
+            waitForLock: previousProcessId != null ? TimeSpan.FromSeconds(10) : null);
         if (result.ActivatedRunningInstance)
         {
             Console.WriteLine("SameieHub kjører allerede. Åpner en ny fane i nettleseren.");
@@ -124,9 +149,34 @@ if (!windowsHost)
     return 0;
 }
 
-return await RunWindowsHostAsync(app, instanceLock!, unattended);
+var shutdown = app.Services.GetRequiredService<ShutdownService>();
+var exitCode = await RunWindowsHostAsync(app, instanceLock!, unattended, shutdown);
 
-static async Task<int> RunWindowsHostAsync(WebApplication app, InstanceLock instanceLock, bool unattended)
+// The instance lock and the database were released when the program stopped, so a restart can only begin now.
+if (exitCode == 0 && shutdown.RestartRequested)
+{
+    return RestartProgram(args, app.Logger, unattended);
+}
+
+return exitCode;
+
+static int RestartProgram(string[] args, ILogger logger, bool unattended)
+{
+    var programPath = Environment.ProcessPath;
+    if (RestartLaunch.CanStartItself(programPath)
+        && RestartLaunch.TryStart(programPath!, RestartLaunch.BuildArguments(args, Environment.ProcessId), logger))
+    {
+        Console.WriteLine("SameieHub starter på nytt …");
+
+        return 0;
+    }
+
+    WindowsConsole.ShowFailure(StartupMessages.For(StartupFailureReason.RestartFailed), unattended);
+
+    return 4;
+}
+
+static async Task<int> RunWindowsHostAsync(WebApplication app, InstanceLock instanceLock, bool unattended, ShutdownService shutdown)
 {
     using (instanceLock)
     {
@@ -148,7 +198,7 @@ static async Task<int> RunWindowsHostAsync(WebApplication app, InstanceLock inst
                 return;
             }
 
-            activation = AnnounceStart(app, launcher, databasePath);
+            activation = AnnounceStart(app, launcher, databasePath, shutdown);
         });
         WindowsConsole.SetTitle();
         WindowsConsole.RegisterCloseHandler(app.Lifetime, app.Logger);
@@ -175,7 +225,7 @@ static async Task<int> RunWindowsHostAsync(WebApplication app, InstanceLock inst
     }
 }
 
-static ActivationListener? AnnounceStart(WebApplication app, BrowserLauncher launcher, string databasePath)
+static ActivationListener? AnnounceStart(WebApplication app, BrowserLauncher launcher, string databasePath, ShutdownService shutdown)
 {
     var address = WindowsHost.GetAddress(app);
     if (address == null)
@@ -193,11 +243,26 @@ static ActivationListener? AnnounceStart(WebApplication app, BrowserLauncher lau
         app.Logger,
         () =>
         {
+            // The installer's request goes through the same path as the button, so an open browser tab shows the message first.
             app.Logger.LogInformation("The program was asked to stop.");
-            app.Lifetime.StopApplication();
+            if (!shutdown.Request(restart: false))
+            {
+                app.Lifetime.StopApplication();
+            }
 
             return Task.CompletedTask;
-        });
+        },
+        WindowsHost.TestHooksAllowed()
+            ? () =>
+            {
+                if (!shutdown.Request(restart: true))
+                {
+                    throw new InvalidOperationException("The program cannot start itself again here.");
+                }
+
+                return Task.CompletedTask;
+            }
+            : null);
     launcher.OpenAsync();
 
     return activation;

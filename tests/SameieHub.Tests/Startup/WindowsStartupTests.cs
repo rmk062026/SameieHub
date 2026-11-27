@@ -69,6 +69,84 @@ public class WindowsStartupTests : IDisposable
     }
 
     [Fact]
+    public async Task ARestartedProgram_WaitsUntilTheOldOneHasReleasedTheLock_AndThenAppliesTheRestoreOnce()
+    {
+        var restore = new RecordingRestore();
+        var oldInstance = InstanceLock.TryAcquire(InstanceLock.PathFor(DatabasePath));
+        var activated = 0;
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(400);
+            oldInstance!.Dispose();
+        });
+
+        using var result = await WindowsStartup.PrepareAsync(
+            DatabasePath,
+            restore,
+            () => CreateUpgrader().UpgradeAsync(),
+            NullLogger.Instance,
+            () =>
+            {
+                activated++;
+
+                return Task.FromResult(true);
+            },
+            waitForLock: TimeSpan.FromSeconds(10));
+
+        Assert.Null(result.Failure);
+        Assert.NotNull(result.Lock);
+        Assert.False(result.ActivatedRunningInstance);
+        Assert.Equal(0, activated);
+        Assert.Equal(1, restore.ApplyCalls);
+    }
+
+    [Fact]
+    public async Task ARestartedProgram_GivesUpAfterTheTimeLimit_WithoutTouchingTheDatabase_AndDoesNotTryAgain()
+    {
+        var restore = new RecordingRestore();
+        using var oldInstance = InstanceLock.TryAcquire(InstanceLock.PathFor(DatabasePath));
+
+        var result = await WindowsStartup.PrepareAsync(
+            DatabasePath,
+            restore,
+            () => CreateUpgrader().UpgradeAsync(),
+            NullLogger.Instance,
+            waitForLock: TimeSpan.FromMilliseconds(400));
+
+        Assert.Null(result.Lock);
+        Assert.Equal(StartupFailureReason.AlreadyRunning, result.Failure!.Reason);
+        Assert.Equal(0, restore.ApplyCalls);
+        Assert.False(File.Exists(DatabasePath));
+    }
+
+    [Fact]
+    public async Task TwoProgramsThatStartAtTheSameTime_NeverBothApplyTheRestore()
+    {
+        var restore = new RecordingRestore();
+
+        var first = WindowsStartup.PrepareAsync(DatabasePath, restore, () => CreateUpgrader().UpgradeAsync(), NullLogger.Instance, waitForLock: TimeSpan.FromMilliseconds(300));
+        var second = WindowsStartup.PrepareAsync(DatabasePath, restore, () => CreateUpgrader().UpgradeAsync(), NullLogger.Instance, waitForLock: TimeSpan.FromMilliseconds(300));
+        using var results = new CompositeResults(await Task.WhenAll(first, second));
+
+        Assert.Equal(1, results.All.Count(result => result.Lock != null));
+        Assert.Equal(1, results.All.Count(result => result.Failure?.Reason == StartupFailureReason.AlreadyRunning));
+        Assert.Equal(1, restore.ApplyCalls);
+    }
+
+    private sealed class CompositeResults(StartupResult[] all) : IDisposable
+    {
+        public StartupResult[] All { get; } = all;
+
+        public void Dispose()
+        {
+            foreach (var result in All)
+            {
+                result.Dispose();
+            }
+        }
+    }
+
+    [Fact]
     public async Task AnUnresolvedRestore_StopsTheStartWithoutCreatingADatabase_AndReleasesTheLock()
     {
         var restore = new RecordingRestore { Outcome = RestoreOutcomeKind.Unresolved };

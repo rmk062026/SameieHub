@@ -1139,3 +1139,8 @@ a:focus-visible,
         min-height: 2.75rem;
     }
 }
+
+/* The program is stopping on purpose (ShutdownNotice.razor.js sets the mark), so the reconnect dialog would only confuse. */
+html[data-sameiehub-stopped] #components-reconnect-modal {
+    display: none !important;
+}

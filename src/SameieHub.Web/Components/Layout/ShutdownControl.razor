@@ -1,0 +1,74 @@
+@using SameieHub.Web.Hosting
+@inject ShutdownService Shutdown
+
+@if (Shutdown.CanShutDown)
+{
+    @if (!_asking)
+    {
+        <button type="button" class="footer-button" id="shutdown-open" data-testid="shutdown-open" @ref="_openButton" @onclick="Ask">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v8M7.5 6.5a7 7 0 1 0 9 0" /></svg>
+            <span>Avslutt SameieHub</span>
+        </button>
+    }
+    else
+    {
+        <div class="shutdown-confirm" role="group" aria-labelledby="shutdown-title" aria-describedby="shutdown-text" data-testid="shutdown-confirm" @onkeydown="CancelOnEscape">
+            <p id="shutdown-title" class="shutdown-title">Avslutte SameieHub?</p>
+            <p id="shutdown-text">
+                Programmet stopper, og denne siden slutter å virke. Dataene dine endres ikke. Start SameieHub fra Start-menyen når du vil bruke det igjen.
+            </p>
+            <div class="shutdown-actions">
+                <button type="button" id="confirm-shutdown" class="btn btn-light btn-sm" @onclick="Confirm">Avslutt</button>
+                <button type="button" id="cancel-shutdown" class="btn btn-outline-light btn-sm" @ref="_cancelButton" @onclick="Cancel">Avbryt</button>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    private ElementReference _openButton;
+    private ElementReference _cancelButton;
+    private bool _asking;
+    private bool _focusCancel;
+    private bool _focusOpen;
+
+    private void Ask()
+    {
+        _asking = true;
+        _focusCancel = true;
+    }
+
+    private void Cancel()
+    {
+        _asking = false;
+        _focusOpen = true;
+    }
+
+    private void Confirm()
+    {
+        Shutdown.Request(restart: false);
+    }
+
+    private void CancelOnEscape(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            Cancel();
+        }
+    }
+
+    // The safe choice gets the focus, so a keyboard user who presses Enter by reflex cancels instead of stopping the program.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_focusCancel)
+        {
+            _focusCancel = false;
+            await _cancelButton.FocusAsync();
+        }
+        else if (_focusOpen)
+        {
+            _focusOpen = false;
+            await _openButton.FocusAsync();
+        }
+    }
+}

@@ -91,6 +91,43 @@ svg {
             outline-offset: 2px;
         }
 
+.sidebar-footer {
+    display: none;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0 0.75rem 1rem;
+}
+
+    .sidebar-footer.open {
+        display: flex;
+    }
+
+    .sidebar-footer ::deep a.about-link {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        min-height: 2.75rem;
+        padding: 0.7rem 0.85rem;
+        color: var(--sh-sidebar-text);
+        border-radius: var(--sh-radius);
+        text-decoration: none;
+    }
+
+        .sidebar-footer ::deep a.about-link:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: #fff;
+        }
+
+        .sidebar-footer ::deep a.about-link.active {
+            background: var(--sh-primary);
+            color: #fff;
+        }
+
+        .sidebar-footer ::deep a.about-link:focus-visible {
+            outline: 2px solid #fff;
+            outline-offset: 2px;
+        }
+
 @media (min-width: 768px) {
     .sidebar {
         width: 16rem;
@@ -110,6 +147,10 @@ svg {
     }
 
     .main-nav {
+        display: flex;
+    }
+
+    .sidebar-footer {
         display: flex;
     }
 }

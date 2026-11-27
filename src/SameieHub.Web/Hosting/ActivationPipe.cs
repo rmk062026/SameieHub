@@ -7,7 +7,7 @@ namespace SameieHub.Web.Hosting;
 /// <summary>
 /// How a second start of the program reaches the one that is already running. The second start connects to a named pipe and says
 /// <c>OPEN</c>; the running program then opens the browser itself, with a launch code it made itself. No code, path or program text
-/// ever travels through the pipe, and the only command that exists is <c>OPEN</c>.
+/// ever travels through the pipe, and the commands that exist are <c>OPEN</c>, <c>STOP</c> (the installer) and <c>RESTART</c> (test builds only).
 /// </summary>
 internal static class ActivationPipe
 {
@@ -31,6 +31,9 @@ internal sealed class ActivationListener : IDisposable
     public const string OpenCommand = "OPEN";
     public const string StopCommand = "STOP";
 
+    /// <summary>Only answered when the program offers a restart, which only the test build does. It lets the package test check a restart without a browser.</summary>
+    public const string RestartCommand = "RESTART";
+
     private const int MaxMessageBytes = 16;
     private const int MaxServerInstances = 4;
 
@@ -42,15 +45,17 @@ internal sealed class ActivationListener : IDisposable
     private readonly string _name;
     private readonly Func<Task> _onOpen;
     private readonly Func<Task>? _onStop;
+    private readonly Func<Task>? _onRestart;
     private readonly ILogger _logger;
     private readonly CancellationTokenSource _stop = new();
     private Task _loop = Task.CompletedTask;
 
-    private ActivationListener(string name, Func<Task> onOpen, Func<Task>? onStop, ILogger logger)
+    private ActivationListener(string name, Func<Task> onOpen, Func<Task>? onStop, Func<Task>? onRestart, ILogger logger)
     {
         _name = name;
         _onOpen = onOpen;
         _onStop = onStop;
+        _onRestart = onRestart;
         _logger = logger;
     }
 
@@ -58,7 +63,7 @@ internal sealed class ActivationListener : IDisposable
     /// Starts listening, or returns null when the pipe cannot be created (for example because another user already holds the name).
     /// The program then runs without this convenience, and a second start shows the message that the program already runs.
     /// </summary>
-    public static ActivationListener? TryStart(string name, Func<Task> onOpen, ILogger logger, Func<Task>? onStop = null)
+    public static ActivationListener? TryStart(string name, Func<Task> onOpen, ILogger logger, Func<Task>? onStop = null, Func<Task>? onRestart = null)
     {
         NamedPipeServerStream first;
         try
@@ -72,7 +77,7 @@ internal sealed class ActivationListener : IDisposable
             return null;
         }
 
-        var listener = new ActivationListener(name, onOpen, onStop, logger);
+        var listener = new ActivationListener(name, onOpen, onStop, onRestart, logger);
         listener._loop = Task.Run(() => listener.RunAsync(first));
 
         return listener;
@@ -181,6 +186,10 @@ internal sealed class ActivationListener : IDisposable
             await RunCommandAsync(pipe, () => Task.CompletedTask, "stop", cancellation);
             await _onStop();
         }
+        else if (message == RestartCommand + "\n" && _onRestart != null)
+        {
+            await RunCommandAsync(pipe, _onRestart, "restart", cancellation);
+        }
         else
         {
             await ReplyAsync(pipe, "ERR\n", cancellation);
@@ -274,6 +283,12 @@ internal static class ActivationClient
     public static Task<bool> TryStopAsync(string pipeName, TimeSpan connectTimeout)
     {
         return SendAsync(pipeName, ActivationListener.StopCommand, connectTimeout);
+    }
+
+    /// <summary>Asks the running program to stop and start again. Only a test build answers. False means nobody accepted it.</summary>
+    public static Task<bool> TryRestartAsync(string pipeName, TimeSpan connectTimeout)
+    {
+        return SendAsync(pipeName, ActivationListener.RestartCommand, connectTimeout);
     }
 
     private static async Task<bool> SendAsync(string pipeName, string command, TimeSpan connectTimeout)

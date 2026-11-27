@@ -185,7 +185,7 @@ internal static class WindowsConsole
         Console.WriteLine();
         Console.WriteLine("SameieHub kjører.");
         Console.WriteLine("Nettleseren åpnes av seg selv. Lukket du den? Start SameieHub på nytt (SameieHub.exe): da åpnes en ny fane.");
-        Console.WriteLine("Lukk dette vinduet eller trykk Ctrl+C for å avslutte SameieHub. Å lukke nettleseren avslutter ikke programmet.");
+        Console.WriteLine("Velg «Avslutt SameieHub» nederst i menyen i nettleseren, lukk dette vinduet eller trykk Ctrl+C for å avslutte. Å lukke nettleseren avslutter ikke programmet.");
         Console.WriteLine("Intern testversjon: tilgangen er beskyttet lokalt, men databasen er ikke kryptert. Bruk bare fiktive data.");
         Console.WriteLine();
     }

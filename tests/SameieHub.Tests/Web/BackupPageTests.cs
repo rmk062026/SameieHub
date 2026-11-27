@@ -274,6 +274,98 @@ public class BackupPageTests : UiTestBase, IAsyncLifetime
         Assert.Contains("Lukk SameieHub", cut.Find("[data-testid=restore-pending]").TextContent);
     }
 
+    [Fact]
+    public async Task Restart_InDevelopment_KeepsTheManualInstruction_AndHasNoButtonThatCouldStopTheServer()
+    {
+        UseEngines();
+        await Engine.PrepareAsync(_validBackup);
+
+        var cut = RenderPage();
+
+        var pending = cut.Find("[data-testid=restore-pending]").TextContent;
+        Assert.Contains("Lukk SameieHub", pending);
+        Assert.Empty(cut.FindAll("#restart-now"));
+        Assert.NotNull(cut.Find("#cancel-pending"));
+    }
+
+    [Fact]
+    public async Task Restart_InWindowsMode_OffersExitAndRestart_AndSaysThatTheRestoreHasNotHappenedYet()
+    {
+        UseShutdown(canShutDown: true, canRestart: true);
+        UseEngines();
+        await Engine.PrepareAsync(_validBackup);
+
+        var cut = RenderPage();
+
+        var pending = cut.Find("[data-testid=restore-pending]");
+        Assert.Contains("ennå ikke gjennomført", pending.TextContent);
+        Assert.Contains("Start-menyen", pending.TextContent);
+        Assert.Equal("Avslutt og start på nytt", cut.Find("#restart-now").TextContent.Trim());
+        Assert.Equal("button", cut.Find("#restart-now").GetAttribute("type"));
+        Assert.NotNull(cut.Find("#cancel-pending"));
+        Assert.False(Shutdown.IsRequested);
+    }
+
+    [Fact]
+    public async Task Restart_Click_AsksTheProgramToRestart_AndDoesNotApplyTheRestoreItself()
+    {
+        UseShutdown(canShutDown: true, canRestart: true);
+        JSInterop.SetupModule("./Components/Layout/ShutdownNotice.razor.js").SetupVoid("markStopped");
+        UseEngines();
+        await Engine.PrepareAsync(_validBackup);
+        var cut = RenderPage();
+
+        cut.Find("#restart-now").Click();
+
+        Assert.True(Shutdown.IsRequested);
+        Assert.True(Shutdown.RestartRequested);
+        Assert.NotNull(Engine.GetPending());
+        Assert.Null(Engine.GetLastOutcome());
+    }
+
+    [Fact]
+    public async Task Restart_WhenTheProgramCannotStartItself_PointsToTheMenuButtonAndTheStartMenu()
+    {
+        UseShutdown(canShutDown: true, canRestart: false);
+        UseEngines();
+        await Engine.PrepareAsync(_validBackup);
+
+        var cut = RenderPage();
+
+        var pending = cut.Find("[data-testid=restore-pending]").TextContent;
+        Assert.Empty(cut.FindAll("#restart-now"));
+        Assert.Contains("Avslutt SameieHub", pending);
+        Assert.Contains("Start-menyen", pending);
+    }
+
+    [Fact]
+    public async Task Restart_CancellingTheWaitingRestore_StillWorksInWindowsMode_AndTheRestartButtonGoesAway()
+    {
+        UseShutdown(canShutDown: true, canRestart: true);
+        UseEngines();
+        await Engine.PrepareAsync(_validBackup);
+        var cut = RenderPage();
+
+        cut.Find("#cancel-pending").Click();
+
+        Assert.Null(Engine.GetPending());
+        Assert.Empty(cut.FindAll("[data-testid=restore-pending]"));
+        Assert.Empty(cut.FindAll("#restart-now"));
+        Assert.False(Shutdown.IsRequested);
+    }
+
+    [Fact]
+    public void Restart_WithNothingWaiting_HasNoRestartButton_AndNoRestoreIsEverStartedByTheButtons()
+    {
+        UseShutdown(canShutDown: true, canRestart: true);
+        UseEngines();
+
+        var cut = RenderPage();
+
+        Assert.Empty(cut.FindAll("#restart-now"));
+        Assert.Empty(cut.FindAll("[data-testid=restore-pending]"));
+    }
+
     [Theory]
     [InlineData("text", "ikke en gyldig sikkerhetskopi")]
     [InlineData("other", "ikke fra SameieHub")]

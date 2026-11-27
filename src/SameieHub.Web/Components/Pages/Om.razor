@@ -1,0 +1,35 @@
+@page "/om"
+@using SameieHub.Web.Hosting
+
+<PageTitle>Om SameieHub – SameieHub</PageTitle>
+
+<PageHeader Title="Om SameieHub" Description="Hvilken versjon du bruker, og hvor du finner hjelp." />
+
+<section class="surface-card form-section" aria-labelledby="about-title">
+    <h2 id="about-title">SameieHub</h2>
+    <p>Et lokalt program for å holde orden på boenheter, styresaker, oppgaver og elbillading i et lite sameie.</p>
+
+    <dl class="detail-list">
+        <dt>Installert versjon</dt>
+        <dd data-testid="about-version">@AppVersion.Current</dd>
+    </dl>
+</section>
+
+<section class="surface-card form-section" aria-labelledby="data-title">
+    <h2 id="data-title">Dataene dine</h2>
+    <p>
+        Alt som legges inn i SameieHub lagres lokalt, i en databasefil på denne datamaskinen. Ingenting sendes til internett,
+        og programmet trenger ikke internett for å fungere.
+    </p>
+    <p>
+        Lag en sikkerhetskopi jevnlig. Det gjør du under <a href="/innstillinger/sikkerhetskopi">Sikkerhetskopi</a>.
+    </p>
+</section>
+
+<section class="surface-card form-section" aria-labelledby="help-title" data-testid="about-help">
+    <h2 id="help-title">Dokumentasjon og hjelp</h2>
+    <p>
+        Veiledninger og dokumentasjon finnes i README og i mappen «docs» i prosjektet på GitHub:
+        <a href="https://github.com/rmk062026/SameieHub" target="_blank" rel="noopener noreferrer">github.com/rmk062026/SameieHub</a>.
+    </p>
+</section>

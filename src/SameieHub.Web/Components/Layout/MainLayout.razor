@@ -1,6 +1,15 @@
-﻿@inherits LayoutComponentBase
+﻿@using SameieHub.Web.Hosting
+@inherits LayoutComponentBase
+@implements IDisposable
 @inject NavigationManager Navigation
+@inject ShutdownService Shutdown
 
+@if (Shutdown.IsRequested)
+{
+    <ShutdownNotice />
+}
+else
+{
 <a class="skip-link" href="@SkipHref" @onclick="FocusContentAsync" @onclick:preventDefault>Hopp til innhold</a>
 
 <div class="app-shell">
@@ -12,6 +21,7 @@
         </div>
     </main>
 </div>
+}
 
 <div id="blazor-error-ui" data-nosnippet>
     Det oppstod en uventet feil.
@@ -21,6 +31,22 @@
 
 @code {
     private ElementReference _content;
+
+    protected override void OnInitialized()
+    {
+        Shutdown.Requested += OnShutdownRequested;
+    }
+
+    // Every open page shows the message, not only the one where the button was pressed.
+    private void OnShutdownRequested()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        Shutdown.Requested -= OnShutdownRequested;
+    }
 
     /// <summary>
     /// The address of the current page with the fragment. A plain "#main-content" would be read against the base address of the

@@ -1,0 +1,15 @@
+.shutdown-page {
+    display: flex;
+    min-height: 100vh;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem 1rem;
+}
+
+.shutdown-card {
+    max-width: 36rem;
+}
+
+    .shutdown-card h1 {
+        margin-bottom: 1rem;
+    }

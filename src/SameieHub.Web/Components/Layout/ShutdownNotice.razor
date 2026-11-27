@@ -1,0 +1,78 @@
+@using SameieHub.Infrastructure.Restore
+@using SameieHub.Web.Hosting
+@inject ShutdownService Shutdown
+@inject IDatabaseRestore Restore
+@inject IJSRuntime JS
+
+<PageTitle>@(Restarting ? "SameieHub starter på nytt" : "SameieHub avsluttes")</PageTitle>
+
+<main class="shutdown-page" data-testid="shutdown-notice">
+    <div class="surface-card shutdown-card" role="status">
+        @if (Restarting)
+        {
+            <h1>SameieHub starter på nytt</h1>
+            <p>
+                Programmet lukkes og starter igjen av seg selv. Om et øyeblikk åpnes en ny fane i nettleseren.
+                Du kan lukke denne fanen.
+            </p>
+            @if (_restoreIsWaiting)
+            {
+                <p>
+                    Gjenopprettingen du klargjorde gjennomføres under oppstarten, og du ser resultatet på forsiden.
+                    Åpnes ikke SameieHub igjen, start det fra Start-menyen. Gjenopprettingen gjennomføres da likevel.
+                </p>
+            }
+            else
+            {
+                <p>
+                    Åpnes ikke SameieHub igjen, start det fra Start-menyen. Dataene dine er ikke endret av omstarten.
+                </p>
+            }
+        }
+        else
+        {
+            <h1>SameieHub avsluttes</h1>
+            <p>Programmet stopper nå. Du kan lukke denne fanen.</p>
+            <p>Dataene dine er lagret. Start SameieHub fra Start-menyen når du vil bruke det igjen.</p>
+            @if (_restoreIsWaiting)
+            {
+                <p>
+                    Du har klargjort en gjenoppretting. Den gjennomføres første gang du starter SameieHub igjen, og
+                    ikke før.
+                </p>
+            }
+        }
+    </div>
+</main>
+
+@code {
+    private const string ModulePath = "./Components/Layout/ShutdownNotice.razor.js";
+
+    private bool _restoreIsWaiting;
+
+    private bool Restarting => Shutdown.RestartRequested;
+
+    protected override void OnInitialized()
+    {
+        _restoreIsWaiting = Restore.GetPending() != null;
+    }
+
+    // The connection to the program ends within a couple of seconds. The script tells the page not to show the reconnect dialog for that.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        try
+        {
+            await using var module = await JS.InvokeAsync<IJSObjectReference>("import", ModulePath);
+            await module.InvokeVoidAsync("markStopped");
+        }
+        catch (Exception exception) when (exception is JSException or JSDisconnectedException or InvalidOperationException)
+        {
+            // The message is already on the page. Without the script, the reconnect dialog may show while the program ends.
+        }
+    }
+}

@@ -39,6 +39,14 @@
             <span>Sikkerhetskopi</span>
         </NavLink>
     </nav>
+
+    <div class="sidebar-footer @(_menuOpen ? "open" : "")" data-testid="sidebar-footer">
+        <NavLink class="about-link" href="/om" data-testid="about-link" @onclick="CloseMenu">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 11v6M12 7.5v.01" /></svg>
+            <span>Om SameieHub</span>
+        </NavLink>
+        <ShutdownControl />
+    </div>
 </aside>
 
 @code {

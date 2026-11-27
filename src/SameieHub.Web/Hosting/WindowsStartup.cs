@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using SameieHub.Infrastructure.Persistence;
 using SameieHub.Infrastructure.Restore;
 
@@ -18,7 +19,8 @@ internal enum StartupFailureReason
     ServerCouldNotStart,
     UnexpectedError,
     SetupInProgress,
-    UnsafeNetworkBinding
+    UnsafeNetworkBinding,
+    RestartFailed
 }
 
 /// <param name="Reason">What stopped the start. Only this is logged, never the message, which can contain a path.</param>
@@ -54,17 +56,20 @@ internal sealed class StartupResult : IDisposable
 /// </summary>
 internal static class WindowsStartup
 {
+    private static readonly TimeSpan LockPollInterval = TimeSpan.FromMilliseconds(100);
+
     public static async Task<StartupResult> PrepareAsync(
         string databasePath,
         IDatabaseRestore restore,
         Func<Task> upgradeDatabase,
         ILogger logger,
-        Func<Task<bool>>? activateRunningInstance = null)
+        Func<Task<bool>>? activateRunningInstance = null,
+        TimeSpan? waitForLock = null)
     {
         InstanceLock? instanceLock;
         try
         {
-            instanceLock = InstanceLock.TryAcquire(InstanceLock.PathFor(databasePath));
+            instanceLock = await AcquireLockAsync(InstanceLock.PathFor(databasePath), waitForLock ?? TimeSpan.Zero);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
@@ -94,6 +99,25 @@ internal static class WindowsStartup
         }
 
         return new StartupResult(instanceLock, null);
+    }
+
+    /// <summary>
+    /// A program that was started by the one that is stopping waits a little for the lock, because the old program may still be on its way
+    /// out. An ordinary start does not wait: a lock that is held then means another program really is running.
+    /// </summary>
+    private static async Task<InstanceLock?> AcquireLockAsync(string lockFilePath, TimeSpan wait)
+    {
+        var waited = Stopwatch.StartNew();
+        while (true)
+        {
+            var instanceLock = InstanceLock.TryAcquire(lockFilePath);
+            if (instanceLock != null || waited.Elapsed >= wait)
+            {
+                return instanceLock;
+            }
+
+            await Task.Delay(LockPollInterval);
+        }
     }
 
     private static async Task<StartupFailure?> RunStepsAsync(IDatabaseRestore restore, Func<Task> upgradeDatabase, ILogger logger)
@@ -188,6 +212,8 @@ internal static class StartupMessages
                 "En installasjon eller avinstallasjon av SameieHub pågår. Vent til den er ferdig, og start SameieHub på nytt.",
             StartupFailureReason.UnsafeNetworkBinding =>
                 "SameieHub ble stoppet fordi serveren lyttet på en annen adresse enn 127.0.0.1 (en innstilling la til en nettverksadresse). Ingenting er endret. Fjern innstillingen og start på nytt.",
+            StartupFailureReason.RestartFailed =>
+                "SameieHub er avsluttet, men kunne ikke starte på nytt av seg selv. Start SameieHub fra Start-menyen. Hvis du hadde klargjort en gjenoppretting, gjennomføres den da.",
             StartupFailureReason.ServerCouldNotStart =>
                 "SameieHub kunne ikke starte den lokale serveren. Start programmet på nytt. Hvis det skjer igjen, se loggfilen i mappen «logs».",
             _ => "SameieHub kunne ikke starte."
