@@ -84,7 +84,8 @@ jobs:
           $listed = (Get-Content "$setup.sha256" -Raw).Trim().Split(' ')[0]
           $actual = (Get-FileHash $setup -Algorithm SHA256).Hash.ToLowerInvariant()
           if ($listed -ne $actual) { throw "The SHA-256 does not match: $listed and $actual" }
-          $version = (Get-Item $setup).VersionInfo.FileVersion
+          $info = (Get-Item $setup).VersionInfo
+          $version = "$($info.FileMajorPart).$($info.FileMinorPart).$($info.FileBuildPart).$($info.FilePrivatePart)"
           if ($version -ne '0.8.4.0') { throw "Unexpected file version: $version" }
           "Installer $expectedName, version $version, SHA-256 $actual"
 
