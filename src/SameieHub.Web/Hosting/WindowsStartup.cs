@@ -16,7 +16,9 @@ internal enum StartupFailureReason
     MigrationFailed,
     DemoDatabaseNotAllowed,
     ServerCouldNotStart,
-    UnexpectedError
+    UnexpectedError,
+    SetupInProgress,
+    UnsafeNetworkBinding
 }
 
 /// <param name="Reason">What stopped the start. Only this is logged, never the message, which can contain a path.</param>
@@ -182,6 +184,10 @@ internal static class StartupMessages
                 "Demodatabasen kan ikke brukes i Windows-modus. Start demoen med Start-demo.cmd.",
             StartupFailureReason.UnexpectedError =>
                 "SameieHub kunne ikke starte på grunn av en uventet feil. Programmet har ikke gjort flere endringer i databasen. Se loggfilen i mappen «logs» ved siden av databasen.",
+            StartupFailureReason.SetupInProgress =>
+                "En installasjon eller avinstallasjon av SameieHub pågår. Vent til den er ferdig, og start SameieHub på nytt.",
+            StartupFailureReason.UnsafeNetworkBinding =>
+                "SameieHub ble stoppet fordi serveren lyttet på en annen adresse enn 127.0.0.1 (en innstilling la til en nettverksadresse). Ingenting er endret. Fjern innstillingen og start på nytt.",
             StartupFailureReason.ServerCouldNotStart =>
                 "SameieHub kunne ikke starte den lokale serveren. Start programmet på nytt. Hvis det skjer igjen, se loggfilen i mappen «logs».",
             _ => "SameieHub kunne ikke starte."

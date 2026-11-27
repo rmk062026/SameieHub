@@ -9,7 +9,11 @@ and the start file, and a zip of the folder. Nothing is installed, and nothing i
 #>
 param(
     [string]$Version = '0.8.2-test',
-    [string]$OutputRoot = ''
+    [string]$OutputRoot = '',
+    # A build for the automatic checks only: it honours the test setting Launch:UrlFile, which the installed program must not. Never ship it.
+    [switch]$TestHooks,
+    # Only the folder, no zip (the installer is made from the folder).
+    [switch]$NoZip
 )
 
 $ErrorActionPreference = 'Stop'
@@ -17,7 +21,7 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 if (-not $OutputRoot) { $OutputRoot = Join-Path $root 'artifacts\windows' }
 $project = Join-Path $root 'src\SameieHub.Web\SameieHub.Web.csproj'
-$packageName = "SameieHub-$Version-win-x64-test"
+$packageName = if ($TestHooks) { "SameieHub-$Version-win-x64-testhooks" } else { "SameieHub-$Version-win-x64-test" }
 $stage = Join-Path $OutputRoot $packageName
 $zip = Join-Path $OutputRoot "$packageName.zip"
 
@@ -30,7 +34,7 @@ if (Test-Path $zip) { Remove-Item -LiteralPath $zip -Force }
 # Without debug symbols the folder is smaller and contains no source paths.
 dotnet publish $project -c Release -r win-x64 --self-contained true `
     -p:PublishTrimmed=false -p:PublishSingleFile=false -p:DebugType=none -p:DebugSymbols=false `
-    -p:Version=$Version -o $stage | Out-Host
+    -p:Version=$Version -p:SameieHubTestHooks=$(if ($TestHooks) { 'true' } else { 'false' }) -o $stage | Out-Host
 if ($LASTEXITCODE -ne 0) { throw 'dotnet publish failed.' }
 
 # The development settings are only for the development environment, which the Windows program never uses.
@@ -41,13 +45,15 @@ Copy-Item (Join-Path $root 'packaging\windows\*') $stage
 
 if (-not (Test-Path (Join-Path $stage 'SameieHub.exe'))) { throw 'SameieHub.exe was not produced.' }
 
-Add-Type -AssemblyName System.IO.Compression.FileSystem
-[System.IO.Compression.ZipFile]::CreateFromDirectory($stage, $zip, [System.IO.Compression.CompressionLevel]::Optimal, $true)
+if (-not $NoZip) {
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    [System.IO.Compression.ZipFile]::CreateFromDirectory($stage, $zip, [System.IO.Compression.CompressionLevel]::Optimal, $true)
+}
 
 $folderBytes = (Get-ChildItem $stage -Recurse -File | Measure-Object Length -Sum).Sum
 $fileCount = (Get-ChildItem $stage -Recurse -File).Count
 Write-Host ("Folder: {0}  ({1:N1} MB, {2} files)" -f $stage, ($folderBytes / 1MB), $fileCount)
-Write-Host ("Zip:    {0}  ({1:N1} MB)" -f $zip, ((Get-Item $zip).Length / 1MB))
+if (-not $NoZip) { Write-Host ("Zip:    {0}  ({1:N1} MB)" -f $zip, ((Get-Item $zip).Length / 1MB)) }
 
-# The path of the zip is the only output, so another script can use it.
-$zip
+# The only output is the path of the zip (or of the folder with -NoZip), so another script can use it.
+if ($NoZip) { $stage } else { $zip }

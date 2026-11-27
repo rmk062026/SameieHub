@@ -58,6 +58,18 @@ dotnet run --project src/SameieHub.Web --no-launch-profile -- --windows-host "--
 - Bruk alltid en egen testdatabase med `--Database:Path`. Demodatabasen avvises i Windows-modus (bruk `Start-demo.cmd`).
 - Siden M8-3 krever Windows-modus en sesjonscookie. Programmet åpner nettleseren med en engangskode (`/start#kode`). Adressen i vinduet fungerer ikke alene. Start programmet en gang til for å åpne en ny fane. For skript: `--unattended` sammen med `--Launch:UrlFile=<fil>` (eller miljøvariabelen `Launch__UrlFile`) skriver startadressen til filen i stedet for å åpne nettleseren. Det er en testmekanisme, ikke for normal bruk. Se [WINDOWS_DISTRIBUTION_PLAN.md](WINDOWS_DISTRIBUTION_PLAN.md), vedlegg A og C.
 
+### Installasjonsprogram (M8-4)
+```powershell
+winget install JRSoftware.InnoSetup
+.\scripts\Build-Installer.ps1 -Version 0.8.4-test.1
+.\scripts\Test-Installer.ps1 -Setup <ny Setup.exe> -OldSetup <eldre Setup.exe>
+```
+- `Build-Installer.ps1` publiserer programmet (uten testkrokene), kompilerer `installer\SameieHub.iss` med Inno Setup og lager `artifacts\installer\SameieHub-<versjon>-win-x64-Setup.exe` med en `.sha256`-fil. Versjonen må være som `1.2.3` eller `1.2.3-test.1`.
+- Installasjonen er per bruker (ingen administrator) til `%LOCALAPPDATA%\Programs\SameieHub`, med Start-meny-snarvei og valgfri skrivebordssnarvei. Oppdatering er en ny installasjonsfil med høyere versjon (samme `AppId`). Avinstallasjon beholder alltid dataene i `%LOCALAPPDATA%\SameieHub`.
+- `Test-Installer.ps1` installerer og avinstallerer på ekte (stille). Den nekter å kjøre hvis SameieHub allerede er installert for brukeren, bruker aldri den ordinære databasen og trenger `python`.
+- Testbyggingen for røykprøven lages med `.\scripts\Publish-Windows.ps1 -TestHooks`. Den skal aldri installeres eller deles.
+- Den publiserte filen bruker alltid beskyttet Windows-modus. `SAMEIEHUB_WINDOWS_HOST=0` virker bare i utviklingsstarten. Se [WINDOWS_DISTRIBUTION_PLAN.md](WINDOWS_DISTRIBUTION_PLAN.md), vedlegg D.
+
 ### Windows-pakken (M8-2)
 Den interne testpakken lages og kontrolleres med to skript. Pakken er en selvstendig mappe (`SameieHub.exe` og runtime), og trenger ikke .NET hos den som starter den.
 
@@ -70,6 +82,6 @@ Den interne testpakken lages og kontrolleres med to skript. Pakken er en selvste
 ```
 
 - Pakken legges i `artifacts\windows` (ignorert av git). Pakk ut zip-filen og dobbeltklikk `SameieHub.exe` (eller `Start-SameieHub.cmd`).
-- Den publiserte filen bruker Windows-modus uten flagg. Merket legges bare på ved en self-contained bygging, så `dotnet run` og testene er uendret. `SAMEIEHUB_WINDOWS_HOST=0` slår modusen av for en publisert fil.
+- Den publiserte filen bruker Windows-modus uten flagg. Merket legges bare på ved en self-contained bygging, så `dotnet run` og testene er uendret. Siden M8-4 kan ingenting slå modusen av i en publisert fil.
 - **Pakken bruker databasen i `%LOCALAPPDATA%\SameieHub`, altså den ordinære.** Under testing: sett `Database__Path` til en midlertidig fil, slik røykprøven gjør.
 - Røykprøven bruker bare en midlertidig database og kjøres også i CI (jobben `windows-package`). Se [WINDOWS_DISTRIBUTION_PLAN.md](WINDOWS_DISTRIBUTION_PLAN.md), vedlegg B.

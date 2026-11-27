@@ -26,6 +26,7 @@ internal static class WindowsHost
     private static readonly TimeSpan ShutdownTimeout = TimeSpan.FromSeconds(3);
 
     private const string DefaultModeMetadataKey = "SameieHub.DefaultHostMode";
+    private const string TestHooksMetadataKey = "SameieHub.TestHooks";
 
     public static bool IsRequested(string[] args)
     {
@@ -33,22 +34,17 @@ internal static class WindowsHost
     }
 
     /// <summary>
-    /// The flag always wins. The published Windows program uses the mode without any flag, so a person can start it by
-    /// double-clicking. <c>SAMEIEHUB_WINDOWS_HOST=0</c> switches that off, for testing the published files the development way.
+    /// The published Windows program always uses the protected mode: no flag, environment variable or setting can switch it off. Only
+    /// the development start (<c>dotnet run</c>, the tests) can choose, with <c>--windows-host</c> or <c>SAMEIEHUB_WINDOWS_HOST</c> set to 1 or 0.
     /// </summary>
     public static bool IsRequested(string[] args, string? environmentValue, bool isPublishedWindowsBuild)
     {
-        if (args.Contains(SwitchName))
+        if (isPublishedWindowsBuild || args.Contains(SwitchName))
         {
             return true;
         }
 
-        return environmentValue switch
-        {
-            "1" => true,
-            "0" => false,
-            _ => isPublishedWindowsBuild
-        };
+        return environmentValue == "1";
     }
 
     /// <summary>
@@ -57,8 +53,35 @@ internal static class WindowsHost
     /// </summary>
     public static bool IsPublishedWindowsBuild(System.Reflection.Assembly assembly)
     {
+        return HasMetadata(assembly, DefaultModeMetadataKey, "Windows");
+    }
+
+    /// <summary>True only for a build made for the automatic checks (<c>-p:SameieHubTestHooks=true</c>), never for the installed program.</summary>
+    public static bool HasTestHooksMarker(System.Reflection.Assembly assembly)
+    {
+        return HasMetadata(assembly, TestHooksMetadataKey, "true");
+    }
+
+    /// <summary>
+    /// The test hook <c>Launch:UrlFile</c> (which writes a launch code to a file) works in development and in a build made for testing,
+    /// but never in the published program that is installed.
+    /// </summary>
+    public static bool TestHooksAllowed()
+    {
+        var assembly = typeof(WindowsHost).Assembly;
+
+        return TestHooksAllowed(IsPublishedWindowsBuild(assembly), HasTestHooksMarker(assembly));
+    }
+
+    public static bool TestHooksAllowed(bool isPublishedWindowsBuild, bool hasTestHooksMarker)
+    {
+        return !isPublishedWindowsBuild || hasTestHooksMarker;
+    }
+
+    private static bool HasMetadata(System.Reflection.Assembly assembly, string key, string value)
+    {
         return System.Reflection.CustomAttributeExtensions.GetCustomAttributes<System.Reflection.AssemblyMetadataAttribute>(assembly)
-            .Any(metadata => metadata.Key == DefaultModeMetadataKey && metadata.Value == "Windows");
+            .Any(metadata => metadata.Key == key && metadata.Value == value);
     }
 
     public static bool IsUnattended(string[] args)
@@ -89,7 +112,22 @@ internal static class WindowsHost
     /// <summary>The address the server actually listens on. Only known after the server has started.</summary>
     public static string? GetAddress(WebApplication app)
     {
-        return app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()?.Addresses.FirstOrDefault();
+        return GetAddresses(app).FirstOrDefault();
+    }
+
+    public static IReadOnlyList<string> GetAddresses(WebApplication app)
+    {
+        return app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()?.Addresses.ToList() ?? [];
+    }
+
+    /// <summary>
+    /// True only when every address the server listens on is 127.0.0.1. Settings such as <c>Kestrel:Endpoints</c> can add more
+    /// addresses to the one the program asks for; the program checks after the start and stops itself if one is not loopback.
+    /// </summary>
+    public static bool AreAllLoopback(IReadOnlyCollection<string> addresses)
+    {
+        return addresses.Count > 0
+            && addresses.All(address => Uri.TryCreate(address, UriKind.Absolute, out var uri) && uri.Host == "127.0.0.1");
     }
 
     /// <summary>
@@ -259,7 +297,7 @@ internal sealed class BrowserLauncher
         }
 
         var url = $"{address}{StartPage.Path}#{_app.Services.GetRequiredService<AccessSession>().CreateLaunchCode()}";
-        var urlFile = _app.Configuration["Launch:UrlFile"];
+        var urlFile = WindowsHost.TestHooksAllowed() ? _app.Configuration["Launch:UrlFile"] : null;
         if (_unattended)
         {
             if (!string.IsNullOrEmpty(urlFile))

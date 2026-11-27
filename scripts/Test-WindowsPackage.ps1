@@ -1,9 +1,11 @@
 <#
 .SYNOPSIS
 Smoke test of the internal Windows test package. It unpacks the zip to a temporary folder, starts SameieHub.exe the way a double-click
-does (no flags) against a temporary database, checks that nothing can be reached without the session cookie, plays the browser's part
+does (no flags, and with SAMEIEHUB_WINDOWS_HOST=0 set to try to weaken it) against a temporary database, checks that nothing can be reached without the session cookie, plays the browser's part
 (the one-time code, the cookie, a second start), stops the program the way a person would, and checks that nothing is left behind.
 The ordinary database in AppData is never used, and the test data is empty.
+
+The zip must be the test-hooks build (Publish-Windows.ps1 -TestHooks): the checks need Launch:UrlFile to play the browser's part.
 
 .EXAMPLE
 .\scripts\Test-WindowsPackage.ps1 -Zip .\artifacts\windows\SameieHub-0.8.2-test-win-x64-test.zip
@@ -60,6 +62,8 @@ try {
     $urlFile = Join-Path $work 'launch-url.txt'
     $env:Database__Path = $database
     $env:Launch__UrlFile = $urlFile
+    # An attempt to switch the protected mode off. It must have no effect on the published program, so every check below also proves that.
+    $env:SAMEIEHUB_WINDOWS_HOST = '0'
     try {
         $arguments = @('--unattended')
         if ($StopWith -eq 'close') {
@@ -73,6 +77,7 @@ try {
     finally {
         Remove-Item Env:Database__Path
         Remove-Item Env:Launch__UrlFile
+        Remove-Item Env:SAMEIEHUB_WINDOWS_HOST
     }
 
     $address = $null

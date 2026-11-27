@@ -24,8 +24,8 @@ jobs:
       - name: Test
         run: dotnet test SameieHub.slnx --no-build --configuration Release --verbosity normal
 
-  # The internal Windows test package (M8-2): published self-contained, started the way a double-click starts it, checked, and
-  # stopped. The zip is kept as a CI artifact for internal checking only. It is not a release and contains no data.
+  # The Windows program made for the automatic checks (M8-2, M8-3): published self-contained with the test hooks (which the installed
+  # program does not have), started the way a double-click starts it, checked, and stopped. It is not kept: it is not what is installed.
   windows-package:
     runs-on: windows-latest
     needs: build-and-test
@@ -36,21 +36,68 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
-      - name: Publish the Windows test package
+      - name: Publish the Windows program with the test hooks
         id: publish
         shell: pwsh
         run: |
-          $zip = ./scripts/Publish-Windows.ps1 -Version "0.8.2-ci.${{ github.run_number }}"
+          $zip = ./scripts/Publish-Windows.ps1 -Version "0.8.4-ci.${{ github.run_number }}" -TestHooks | Select-Object -Last 1
           "zip=$zip" >> $env:GITHUB_OUTPUT
 
-      - name: Smoke test the package
+      - name: Smoke test the program
         shell: pwsh
         run: ./scripts/Test-WindowsPackage.ps1 -Zip "${{ steps.publish.outputs.zip }}"
 
-      - name: Keep the zip as an internal artifact
+  # The installer (M8-4): built with Inno Setup from the normal build (no test hooks), checked, and tested on the file system: install,
+  # start, update while the program runs, uninstall and install again, with the user's data checked after each step. The installer is
+  # kept as an internal CI artifact. It is not signed, and it is not a release.
+  windows-installer:
+    runs-on: windows-latest
+    needs: build-and-test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          $known = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe", "$env:ProgramFiles\Inno Setup 6\ISCC.exe"
+          if (-not ($known | Where-Object { Test-Path $_ })) { choco install innosetup --no-progress -y }
+
+      - name: Build an older and a newer installer
+        id: build
+        shell: pwsh
+        run: |
+          $old = ./scripts/Build-Installer.ps1 -Version "0.8.3-ci.${{ github.run_number }}" | Select-Object -Last 1
+          $new = ./scripts/Build-Installer.ps1 -Version "0.8.4-ci.${{ github.run_number }}" | Select-Object -Last 1
+          "old=$old" >> $env:GITHUB_OUTPUT
+          "new=$new" >> $env:GITHUB_OUTPUT
+
+      - name: Check the file name, the version and the SHA-256
+        shell: pwsh
+        run: |
+          $setup = "${{ steps.build.outputs.new }}"
+          $expectedName = "SameieHub-0.8.4-ci.${{ github.run_number }}-win-x64-Setup.exe"
+          if ((Split-Path $setup -Leaf) -ne $expectedName) { throw "Unexpected file name: $(Split-Path $setup -Leaf)" }
+          $listed = (Get-Content "$setup.sha256" -Raw).Trim().Split(' ')[0]
+          $actual = (Get-FileHash $setup -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($listed -ne $actual) { throw "The SHA-256 does not match: $listed and $actual" }
+          $version = (Get-Item $setup).VersionInfo.FileVersion
+          if ($version -ne '0.8.4.0') { throw "Unexpected file version: $version" }
+          "Installer $expectedName, version $version, SHA-256 $actual"
+
+      - name: Test install, update, uninstall and reinstall
+        shell: pwsh
+        run: ./scripts/Test-Installer.ps1 -Setup "${{ steps.build.outputs.new }}" -OldSetup "${{ steps.build.outputs.old }}" -UseDefaultDirectory
+
+      - name: Keep the installer as an internal artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SameieHub-windows-test-package
-          path: ${{ steps.publish.outputs.zip }}
+          name: SameieHub-windows-installer
+          path: |
+            ${{ steps.build.outputs.new }}
+            ${{ steps.build.outputs.new }}.sha256
           retention-days: 7
           if-no-files-found: error

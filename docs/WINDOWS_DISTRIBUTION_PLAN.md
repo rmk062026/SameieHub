@@ -1,6 +1,6 @@
 # Windows-distribusjon: analyse og plan (M8)
 
-**Status:** planen er godkjent (D1–D12, med presiseringer). **M8-1 er gjennomført** (vedlegg A) og **M8-2 er gjennomført** (vedlegg B) og **M8-3 er gjennomført** (vedlegg C: tilgangsbeskyttelse og andre oppstart). M8-4 til M8-6 er ikke startet. Ingen installasjonsprogram og ingen endringer i domene, migreringer eller grensesnitt er laget. Dokumentet bygger på det koden gjør i dag (kontrollert 2026-11-26, commit `f373965`) og på en testpublisering som ble gjort i en midlertidig mappe utenfor repoet.
+**Status:** planen er godkjent (D1–D12, med presiseringer). **M8-1 er gjennomført** (vedlegg A) og **M8-2 er gjennomført** (vedlegg B) **M8-3 er gjennomført** (vedlegg C: tilgangsbeskyttelse og andre oppstart) og **M8-4 er gjennomført** (vedlegg D: installasjonsprogram og sikkerhetsretting). M8-5 og M8-6 er ikke startet. Ingen installasjonsprogram og ingen endringer i domene, migreringer eller grensesnitt er laget. Dokumentet bygger på det koden gjør i dag (kontrollert 2026-11-26, commit `f373965`) og på en testpublisering som ble gjort i en midlertidig mappe utenfor repoet.
 
 **Målet:** en vanlig Windows-bruker installerer SameieHub, starter det fra Start-menyen, får grensesnittet åpnet automatisk, beholder dataene sine ved oppdatering og kan avslutte programmet på en tydelig måte. Ingen Visual Studio, ingen PowerShell, ingen `dotnet`-kommandoer.
 
@@ -593,7 +593,7 @@ Web-prosjektet har fått `AssemblyName = SameieHub` og, for å beholde alt annet
 Den publiserte `SameieHub.exe` bruker Windows-modus av seg selv. Prosjektfilen legger bare ved et `AssemblyMetadata`-merke (`SameieHub.DefaultHostMode = Windows`) når byggingen er **self-contained**. Det er derfor aldri satt for `dotnet run`, `dotnet test` eller vanlig `dotnet build`. Rekkefølgen er:
 
 1. `--windows-host` slår alltid modusen på (beholdt, nyttig ved testing av vanlig bygg).
-2. Ellers: `SAMEIEHUB_WINDOWS_HOST` = `1` slår på, `0` slår av (for å kjøre de publiserte filene som i utvikling).
+2. Ellers: `SAMEIEHUB_WINDOWS_HOST` = `1` slår på. **Siden M8-4 kan `0` ikke lenger slå modusen av i den publiserte filen** (se vedlegg D.1). I utviklingsstarten (`dotnet run`) er `0` det samme som ingen verdi.
 3. Ellers: på hvis merket finnes.
 
 Testet: enhetstester av valget, og den publiserte pakken startet uten flagg og lyttet på `127.0.0.1` med en tilfeldig port. Ordinær database og demodatabase har uendret sti.
@@ -768,7 +768,7 @@ Testet: første start, andre start, tre nesten samtidige starter, en klient som 
 
 ### C.6 Testverktøy for røykprøven
 
-For at CI skal kunne spille nettleserens rolle, finnes innstillingen `Launch:UrlFile`, som **bare virker sammen med `--unattended`**: programmet skriver da startadressen (med koden) til den filen i stedet for å åpne nettleseren. Den er ikke en del av normal bruk. Er den satt, ligger en gyldig kode i en fil i 60 sekunder (til den brukes). Filen ligger i testens midlertidige mappe og slettes sammen med den.
+For at CI skal kunne spille nettleserens rolle, finnes innstillingen `Launch:UrlFile`, som **bare virker sammen med `--unattended`, og siden M8-4 bare i utviklingsstarten og i en testbygging (`-TestHooks`), aldri i det installerte programmet** (vedlegg D.1): programmet skriver da startadressen (med koden) til den filen i stedet for å åpne nettleseren. Den er ikke en del av normal bruk. Er den satt, ligger en gyldig kode i en fil i 60 sekunder (til den brukes). Filen ligger i testens midlertidige mappe og slettes sammen med den.
 
 ### C.7 Hva som er testet
 
@@ -815,3 +815,122 @@ For at CI skal kunne spille nettleserens rolle, finnes innstillingen `Launch:Url
 - Databasen er ukryptert og beskyttes av Windows-filtilgang og eventuell BitLocker, som før.
 
 Pakken er fortsatt en **intern testversjon**. Den skal ikke distribueres før en ren maskin og en test med flere Windows-brukere er gjort (D12), og ikke brukes med virkelige personopplysninger.
+
+---
+
+## Vedlegg D. M8-4: Installasjonsprogram (Inno Setup) og sikkerhetsretting (gjennomført)
+
+### D.1 Sikkerhetsretting: ingen vei utenom tilgangsvakten i den distribuerte filen
+
+M8-3 lot `SAMEIEHUB_WINDOWS_HOST=0` slå av Windows-modus i den publiserte filen, og da startet programmet uten vakt. Det er rettet før installasjonsprogrammet ble bygget:
+
+- **Den publiserte `SameieHub.exe` bruker alltid beskyttet Windows-modus.** Valget har ikke lenger noen inngang som kan overstyre det: ingen miljøvariabel, argument eller innstilling. Merket i assemblyen (self-contained bygging) gir modusen, og `IsRequested` sjekker det først. Utviklingsstarten (`dotnet run`, testene, demoen) er uendret: `--windows-host` og `SAMEIEHUB_WINDOWS_HOST=1` slår modusen på der.
+- **Testmekanismen `Launch:UrlFile` er avgrenset.** Den virker bare i utviklingsstarten og i en bygging merket `-p:SameieHubTestHooks=true` (`Publish-Windows.ps1 -TestHooks`), som bare CI-røykprøven bruker og som ikke lagres eller installeres. I det installerte programmet ignoreres den: det finnes ingen vei til å hente ut en engangskode. Testet i det installerte programmet (ingen fil lages). `--unattended` virker i alle bygg, men den bare hindrer at nettleseren åpnes og at meldingsbokser vises. Den gir ingen kode.
+- **Fail closed mot ekstra adresser.** Innstillinger som `Kestrel:Endpoints` **legger til** adresser i tillegg til den programmet ber om (testet: en ekstra `0.0.0.0` ble lyttet på). Programmet sjekker derfor etter oppstart at alle adresser er `127.0.0.1`, og stopper seg selv med en forklaring og avslutningskode 1 hvis ikke. Det er et lite tidsrom (millisekunder) før sjekken, der vakten fortsatt gjelder.
+
+**Gjennomgang av andre veier som kunne gi samme effekt:**
+
+| Vei | Utfall |
+|---|---|
+| `SAMEIEHUB_WINDOWS_HOST=0` | Rettet. Testet i enhetstest, i CI-røykprøven og mot det installerte programmet: forsiden gir 403 |
+| `--windows-host=false`, ukjente argumenter | Har ingen virkning i den publiserte filen |
+| `--urls`, `ASPNETCORE_URLS` | Ignoreres (programmet angir adressen selv). Testet: lytter bare på `127.0.0.1` |
+| `Kestrel:Endpoints` (innstilling, miljøvariabel, argument) | Legger til adresser. Fanget av sjekken over (testet) |
+| `AllowedHosts` (innstilling, miljøvariabel, argument) | Programmet setter den sist og overstyrer. Testet: fremmed vertsnavn gir fortsatt 400 |
+| `appsettings.json` i programmappen | Ingen innstilling i den slår av vakten. Se D.8 om at mappen kan skrives av brukeren |
+| `Launch:UrlFile` | Rettet, se over |
+| `--seed-demo`, `--check-demo`, demodatabasen | Avvises i Windows-modus (som før) |
+| `ASPNETCORE_ENVIRONMENT=Development` | Påvirker ikke vakten (den er alltid først i pipelinen) |
+| `Database__Path` | Velger bare database. Demodatabasen avvises |
+| Å bytte programfiler, `DOTNET_STARTUP_HOOKS`, `ASPNETCORE_HOSTINGSTARTUPASSEMBLIES` | **Utenfor det programmet kan forsvare seg mot**: et program som samme bruker kan allerede lese databasen. Se D.8 |
+
+### D.2 Installasjonsprogrammet
+
+`installer/SameieHub.iss` (Inno Setup 6), bygget med `scripts/Build-Installer.ps1`. Filnavn: `SameieHub-<versjon>-win-x64-Setup.exe`, og en fil `.sha256` ved siden av.
+
+| Egenskap | Verdi |
+|---|---|
+| Brukere og rettigheter | Én Windows-bruker. `PrivilegesRequired=lowest`: ingen administratorrettigheter og ingen UAC-spørsmål |
+| Programmappe | `%LOCALAPPDATA%\Programs\SameieHub` (kan velges i veiviseren) |
+| Snarveier | Start-meny (`SameieHub`). Valgfri snarvei på skrivebordet (av som standard). Snarveien starter `SameieHub.exe` **uten argumenter** |
+| Installerte apper | Oppføring med navn og versjon (`HKCU\...\Uninstall\{AppId}_is1`) |
+| Språk | Norsk (Inno Setups norske språkfil) og egne norske meldinger |
+| `AppId` | Fast (`8D3F6B2A-5C1E-4B7A-9E64-2F0A7C1D5E93`) i alle versjoner, så en ny versjon er en oppdatering. **Må aldri endres** |
+| Størrelse | 40,0 MB (programmappen er 125,4 MB, 505 filer) |
+| Ikke med | Database, loggfiler, `LES-MEG.txt` og `Start-SameieHub.cmd` (de hører til zip-pakken) |
+| Signering | Ingen. Windows SmartScreen kan advare om «ukjent utgiver». Det er med vilje, og ikke erstattet med et selvlaget sertifikat |
+
+**Installasjon** kopierer bare programfiler og lager snarvei og oppføring. **Den kjører aldri databasemigrering og rører aldri `%LOCALAPPDATA%\SameieHub`**: migreringen skjer ved første oppstart av det installerte programmet, med sikkerhetskopi før oppgradering (M8-1).
+
+**Oppdatering** er den samme filen med høyere versjon (samme `AppId`, samme mappe). Før filene byttes, fjernes bare programmets egne filtyper og mappen `wwwroot` (`[InstallDelete]`), så filer en eldre versjon hadde og den nye ikke har, forsvinner. Avinstallasjonsfilen og alt utenfor programmappen røres ikke.
+
+**Avinstallasjon** (Apper, eller `unins000.exe`) fjerner programmappen, snarveiene og oppføringen. **Brukerdata beholdes alltid**, og avinstallasjonen sier hvor de ligger (`%LOCALAPPDATA%\SameieHub`).
+
+### D.3 Hvor hva lagres
+
+| Hva | Sted | Rører installasjonen det? |
+|---|---|---|
+| Programfiler | `%LOCALAPPDATA%\Programs\SameieHub` | Ja: installeres, byttes ved oppdatering, fjernes ved avinstallasjon |
+| Database | `%LOCALAPPDATA%\SameieHub\sameiehub.db` (+ `-wal`, `-shm`) | **Nei** |
+| Loggfiler | `%LOCALAPPDATA%\SameieHub\logs` | **Nei** |
+| Sikkerhetskopier før oppgradering | `%LOCALAPPDATA%\SameieHub\pre-migration` | **Nei** |
+| Gjenopprettingsfiler | `%LOCALAPPDATA%\SameieHub\restore` | **Nei** |
+| Demodatabase | `%LOCALAPPDATA%\SameieHubDemo` | **Nei** |
+
+### D.4 Et program som kjører
+
+- **Oppdagelse:** programmet holder en navngitt mutex (`SameieHub.Running`) fra det starter og til det avsluttes. Installasjonsprogrammet sjekker den (`CheckForMutexes`) før noen fil byttes, og avinstalleringen gjør det samme.
+- **Kontrollert avslutning:** er programmet i bruk, spør veiviseren om det skal bes om å avslutte på en trygg måte (en stille installasjon gjør det uten å spørre). Det startes `SameieHub.exe --stop`, som bruker pipen fra M8-3 (bare den nåværende Windows-brukeren) med en ny kommando, `STOP`. Programmet svarer og stopper deretter som ved Ctrl+C (tre sekunders frist, SQLite-transaksjoner er atomiske). **Prosessen blir aldri avsluttet med tvang.**
+- **Hvis det ikke stopper:** installasjonen venter inntil 20 sekunder, og stopper så uten å bytte noen fil, med en melding på norsk (avslutningskode 7 i stille modus). Testet med en mutex uten noe program bak: filene var urørt.
+- **Programmet starter mens installasjonen pågår:** Inno Setup holder `SameieHubSetup` (bekreftet med ekte installasjon: mutexen finnes i økten). Programmet sjekker den og nekter å starte med en forklaring (avslutningskode 1). Testet.
+- **Tidsvindu:** programmet viser mutexen fra første øyeblikk (også mens det starter opp), så en oppdatering ikke kan bytte filer under et program som ennå ikke er ferdig startet. `--stop` venter i 10 sekunder på pipen.
+- **Ny kommando på pipen:** `STOP` er den eneste nye. Alt annet avvises som før (testet). Et annet program som samme bruker kan stoppe programmet med den, men kan allerede avslutte prosessen.
+
+### D.5 Slik bygges, installeres og testes det
+
+```powershell
+winget install JRSoftware.InnoSetup                              # én gang (Inno Setup 6)
+.\scripts\Build-Installer.ps1 -Version 0.8.4-test.1             # publiserer, kompilerer og lager .sha256
+.\scripts\Test-Installer.ps1 -Setup .\artifacts\installer\SameieHub-0.8.4-test.2-win-x64-Setup.exe `
+    -OldSetup .\artifacts\installer\SameieHub-0.8.4-test.1-win-x64-Setup.exe
+```
+
+`Test-Installer.ps1` kjører en ekte installasjon på filsystemet (stille, med `/VERYSILENT`) og sjekker: førstegangsinstallasjon, programmet fra den installerte mappen, forsøk på å svekke beskyttelsen, avslutning med `--stop`, oppdatering mens programmet kjører, et program som ikke lar seg stoppe, start under installasjon, avinstallasjon og ny installasjon, med en fiktiv boenhet i en midlertidig database og en fiktiv markørfil i den virkelige datamappen (mappen sammenlignes før og etter). **Installert programmet startes med `Database__Path` mot en midlertidig fil, aldri den ordinære databasen.** Skriptet nekter å kjøre hvis SameieHub allerede er installert. Det trenger `python` for å lese og skrive i testdatabasen. 61 kontroller.
+
+CI (`windows-installer`): installerer Inno Setup, bygger en eldre og en nyere installasjonsfil, kontrollerer filnavn, versjon og SHA-256, kjører testen over med standardmappen, og lagrer den nye installasjonsfilen og `.sha256` som intern artifact (7 dager, ingen GitHub Release). Jobben `windows-package` (røykprøven fra M8-2/M8-3) bygger nå med testkrokene og lagrer ikke zip-filen, siden den ikke er det som installeres.
+
+### D.6 Pipe og administratorrettigheter
+
+- Installasjonen er per bruker og krever ikke administrator. Det installerte programmet startes av brukeren uten forhøyning. Pipen får da den nåværende brukerens konto som eier (testet i M8-3).
+- En forhøyet start (som CI-maskinen) gir Administratorer-gruppen som eier av pipen. M8-4 gjør ingenting som krever forhøyning.
+- **Uavklart sikkerhetskontroll: en annen vanlig Windows-bruker.** Maskinen har ingen aktiv ekstra standardkonto, og å opprette en krever administratorrettigheter som denne testen ikke har. Tilgangslisten er kontrollert (ingen bred gruppe), men at en annen bruker faktisk **ikke** kan koble til pipen eller porten, er ikke prøvd.
+
+### D.7 Resultat på en faktisk Windows-maskin (utviklingsmaskinen)
+
+| Kontroll | Resultat |
+|---|---|
+| `Test-Installer.ps1`, installasjon i en midlertidig mappe | 61 av 61 kontroller bestått |
+| Samme, med standardmappen `%LOCALAPPDATA%\Programs\SameieHub` | 61 av 61 bestått |
+| Start via Start-menyens snarvei (med testdatabase), andre klikk | Programmet kjører fra den installerte mappen, beskyttet (403 uten sesjon), og andre klikk ba det kjørende programmet åpne nettleseren |
+| Veiviseren (norsk) og `SameieHubSetup`-mutexen | Veiviseren vises som «Installere - SameieHub …», og mutexen finnes i økten |
+| Avinstallasjon | Programmappe, snarvei og oppføring borte. Test-databasen, loggfilene og markørfilen i datamappen beholdt |
+| Den ordinære databasen | Ikke brukt. Datamappen er sammenlignet før og etter hver test |
+| Etter testene | Ingenting av installasjonen ligger igjen (mappe, snarvei, oppføring kontrollert) |
+
+En feil ble funnet og rettet underveis: testen regnet et gammelt loggutdrag som «programmet har startet», så installasjonen kunne starte mens et program ennå startet opp. Det avslørte at programmet bare viste mutexen etter at oppstarten var ferdig. Mutexen vises nå fra første øyeblikk, og testen venter på en ny start.
+
+**Ikke testet:**
+- **En ren Windows-maskin eller virtuell maskin uten .NET.** Ikke tilgjengelig. Installasjonen er bare prøvd på utviklingsmaskinen og på GitHub-maskinen, som begge har .NET.
+- Nettleserens faktiske åpning fra den installerte snarveien: programmet kaller standardnettleseren (uten feil i loggen), men innlogging med engangskode er ikke prøvd mot det installerte programmet, fordi det ikke har testkroker. Innloggingen er testet mot testbyggingen (CI og manuelt i M8-3).
+- Interaktiv installasjon i veiviseren (klikk gjennom sidene). Bare stille installasjon og oppstarten av veiviseren er prøvd.
+- En annen Windows-bruker (D.6) og SmartScreen.
+
+### D.8 Gjenværende risiko
+
+- **Programmappen kan skrives av brukeren** (per bruker-installasjon). Et program som samme bruker kan bytte ut `SameieHub.exe` eller en DLL. Det kan også lese databasen direkte, så det er ikke en ny risiko, men det betyr at vakten ikke kan forsvare seg mot slikt. Installasjon under `Program Files` ville krevd administrator og ikke endret mye for brukerens egne data.
+- **Usignert.** Ingen utgiver kan bekreftes, og SmartScreen kan advare. SHA-256 følger med, men beviser bare at filen er den samme som ble bygget.
+- **Ingen blokkering av nedgradering.** En eldre installasjonsfil kan installeres over en nyere. Programmet avviser da en database fra en nyere versjon (M8-1), og en nyere installasjonsfil løser det.
+- **Antivirus.** Ikke testet mot andre produkter enn Windows' egne.
+- **`--unattended`** skjuler meldingsbokser ved oppstartsfeil og hindrer at nettleseren åpnes, i alle bygg. Det gir ingen kode, men kan skjule en feil for den som bruker det.
+- **Fail closed-sjekken** av adresser kjører etter at serveren har startet (se D.1).
+- Gjenværende risiko fra M8-3 (kode i kommandolinjen i opptil 60 sekunder, ukryptert database, sesjoner) er uendret (vedlegg C.8).

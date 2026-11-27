@@ -921,3 +921,6 @@ Programmet har to startmåter. Den vanlige er uendret. Den andre (`--windows-hos
 
 ### Tilgangsbeskyttelse i Windows-modus (M8-3)
 I Windows-modus ligger en vakt (`AccessGuardMiddleware`) først i pipelinen. Alt unntatt `/start` krever en sesjonscookie, og `Origin` og `Sec-Fetch-Site` kontrolleres for alle forespørsler, også Blazor-WebSocket. Cookien fås ved å løse inn en engangskode som programmet gir til nettleseren det selv åpner. Sesjonen og kodene ligger bare i minnet. En andre start ber det kjørende programmet åpne en ny fane gjennom en navngitt pipe som bare den nåværende Windows-brukeren har tilgang til. Se [WINDOWS_DISTRIBUTION_PLAN.md](WINDOWS_DISTRIBUTION_PLAN.md), vedlegg C, for forløpet, valgene (blant annet hvorfor ikke ASP.NET Cores cookie-autentisering) og gjenværende risiko. Utviklingsstarten og demoen har ingen vakt.
+
+### Installasjon og kjørende program (M8-4)
+Den publiserte `SameieHub.exe` bruker alltid beskyttet Windows-modus, og ingen innstilling kan slå vakten av. Programmet viser to navngitte mutexer til installasjonsprogrammet (`SameieHub.Running` mens det kjører, og det sjekker `SameieHubSetup` mens en installasjon pågår), og pipen har en kommando til: `STOP`, som får programmet til å avslutte som ved Ctrl+C. Se [WINDOWS_DISTRIBUTION_PLAN.md](WINDOWS_DISTRIBUTION_PLAN.md), vedlegg D.

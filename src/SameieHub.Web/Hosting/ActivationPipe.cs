@@ -29,6 +29,7 @@ internal static class ActivationPipe
 internal sealed class ActivationListener : IDisposable
 {
     public const string OpenCommand = "OPEN";
+    public const string StopCommand = "STOP";
 
     private const int MaxMessageBytes = 16;
     private const int MaxServerInstances = 4;
@@ -40,14 +41,16 @@ internal sealed class ActivationListener : IDisposable
 
     private readonly string _name;
     private readonly Func<Task> _onOpen;
+    private readonly Func<Task>? _onStop;
     private readonly ILogger _logger;
     private readonly CancellationTokenSource _stop = new();
     private Task _loop = Task.CompletedTask;
 
-    private ActivationListener(string name, Func<Task> onOpen, ILogger logger)
+    private ActivationListener(string name, Func<Task> onOpen, Func<Task>? onStop, ILogger logger)
     {
         _name = name;
         _onOpen = onOpen;
+        _onStop = onStop;
         _logger = logger;
     }
 
@@ -55,7 +58,7 @@ internal sealed class ActivationListener : IDisposable
     /// Starts listening, or returns null when the pipe cannot be created (for example because another user already holds the name).
     /// The program then runs without this convenience, and a second start shows the message that the program already runs.
     /// </summary>
-    public static ActivationListener? TryStart(string name, Func<Task> onOpen, ILogger logger)
+    public static ActivationListener? TryStart(string name, Func<Task> onOpen, ILogger logger, Func<Task>? onStop = null)
     {
         NamedPipeServerStream first;
         try
@@ -69,7 +72,7 @@ internal sealed class ActivationListener : IDisposable
             return null;
         }
 
-        var listener = new ActivationListener(name, onOpen, logger);
+        var listener = new ActivationListener(name, onOpen, onStop, logger);
         listener._loop = Task.Run(() => listener.RunAsync(first));
 
         return listener;
@@ -168,22 +171,33 @@ internal sealed class ActivationListener : IDisposable
             return;
         }
 
-        if (message != OpenCommand + "\n")
+        if (message == OpenCommand + "\n")
+        {
+            await RunCommandAsync(pipe, _onOpen, "open the browser", cancellation);
+        }
+        else if (message == StopCommand + "\n" && _onStop != null)
+        {
+            // The answer is sent before the program starts to stop, so the one who asked knows the request was accepted.
+            await RunCommandAsync(pipe, () => Task.CompletedTask, "stop", cancellation);
+            await _onStop();
+        }
+        else
         {
             await ReplyAsync(pipe, "ERR\n", cancellation);
-
-            return;
         }
+    }
 
+    private async Task RunCommandAsync(NamedPipeServerStream pipe, Func<Task> action, string what, CancellationToken cancellation)
+    {
         try
         {
-            await _onOpen();
+            await action();
             await ReplyAsync(pipe, "OK\n", cancellation);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            // Whatever went wrong while opening the browser, the second start must still get an answer and the program must keep running.
-            _logger.LogWarning("The browser could not be opened for a second start ({ExceptionType}).", exception.GetType().Name);
+            // Whatever went wrong, the one who asked must still get an answer and the program must keep running.
+            _logger.LogWarning("The request to {Action} failed ({ExceptionType}).", what, exception.GetType().Name);
             await ReplyAsync(pipe, "ERR\n", cancellation);
         }
     }
@@ -251,14 +265,25 @@ internal static class ActivationClient
     private static readonly TimeSpan AnswerTimeout = TimeSpan.FromSeconds(10);
 
     /// <summary>Asks the running program to open the browser. False means nobody answered in time, and the caller shows the "already running" message.</summary>
-    public static async Task<bool> TryActivateAsync(string pipeName, TimeSpan connectTimeout)
+    public static Task<bool> TryActivateAsync(string pipeName, TimeSpan connectTimeout)
+    {
+        return SendAsync(pipeName, ActivationListener.OpenCommand, connectTimeout);
+    }
+
+    /// <summary>Asks the running program to shut down in the normal, orderly way. Used by the installer. False means nobody accepted it.</summary>
+    public static Task<bool> TryStopAsync(string pipeName, TimeSpan connectTimeout)
+    {
+        return SendAsync(pipeName, ActivationListener.StopCommand, connectTimeout);
+    }
+
+    private static async Task<bool> SendAsync(string pipeName, string command, TimeSpan connectTimeout)
     {
         // CurrentUserOnly also makes the client check that the pipe belongs to the current user, so a pipe made by someone else is not trusted.
         await using var client = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
         try
         {
             await client.ConnectAsync((int)connectTimeout.TotalMilliseconds);
-            await client.WriteAsync(Encoding.ASCII.GetBytes(ActivationListener.OpenCommand + "\n"));
+            await client.WriteAsync(Encoding.ASCII.GetBytes(command + "\n"));
 
             using var timeout = new CancellationTokenSource(AnswerTimeout);
             var buffer = new byte[8];

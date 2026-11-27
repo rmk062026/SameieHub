@@ -27,13 +27,27 @@ if ((seedDemo || checkDemo) && !DemoDatabaseSeeder.IsDemoDatabasePath(builder.Co
 var databasePath = builder.Configuration["Database:Path"] ?? DatabaseLocation.GetDefaultPath();
 WebAppSetup.AddServices(builder, databasePath, windowsHost);
 
+// The installer asks a running program to stop in the orderly way (the same shutdown as Ctrl+C) through the pipe, instead of ending the process.
+if (windowsHost && args.Contains("--stop"))
+{
+    var accepted = await ActivationClient.TryStopAsync(ActivationPipe.NameFor(databasePath), TimeSpan.FromSeconds(10));
+    Console.WriteLine(accepted ? "SameieHub ble bedt om å avslutte." : "Fant ikke noe SameieHub-program som kjører.");
+
+    return accepted ? 0 : 3;
+}
+
+// Told to the installer from the very start, so an update never replaces files under a program that is still starting up.
+using var runningMarker = windowsHost ? RunningMarker.Create() : null;
+
 var app = builder.Build();
 
 InstanceLock? instanceLock = null;
 if (windowsHost)
 {
     var isDemo = WindowsHost.UsesDemoDatabase(databasePath) || seedDemo || checkDemo;
-    var failure = isDemo ? StartupMessages.For(StartupFailureReason.DemoDatabaseNotAllowed) : null;
+    var failure = isDemo
+        ? StartupMessages.For(StartupFailureReason.DemoDatabaseNotAllowed)
+        : SetupInProgress.IsActive() ? StartupMessages.For(StartupFailureReason.SetupInProgress) : null;
     if (failure == null)
     {
         var result = await WindowsStartup.PrepareAsync(
@@ -117,9 +131,25 @@ static async Task<int> RunWindowsHostAsync(WebApplication app, InstanceLock inst
     using (instanceLock)
     {
         var launcher = new BrowserLauncher(app, unattended);
+        var databasePath = app.Configuration["Database:Path"] ?? DatabaseLocation.GetDefaultPath();
         ActivationListener? activation = null;
+        var unsafeBinding = false;
         WindowsHost.RegisterShutdown(app.Lifetime, app.Logger);
-        app.Lifetime.ApplicationStarted.Register(() => activation = AnnounceStart(app, launcher, databasePath: app.Configuration["Database:Path"] ?? DatabaseLocation.GetDefaultPath()));
+        app.Lifetime.ApplicationStarted.Register(() =>
+        {
+            if (!WindowsHost.AreAllLoopback(WindowsHost.GetAddresses(app)))
+            {
+                // Fail closed: a setting added an address that is not 127.0.0.1, so nothing is opened and the program stops at once.
+                unsafeBinding = true;
+                app.Logger.LogError("The server listens on an address other than 127.0.0.1, so it is stopped.");
+                WindowsConsole.ShowFailure(StartupMessages.For(StartupFailureReason.UnsafeNetworkBinding), unattended);
+                app.Lifetime.StopApplication();
+
+                return;
+            }
+
+            activation = AnnounceStart(app, launcher, databasePath);
+        });
         WindowsConsole.SetTitle();
         WindowsConsole.RegisterCloseHandler(app.Lifetime, app.Logger);
 
@@ -141,7 +171,7 @@ static async Task<int> RunWindowsHostAsync(WebApplication app, InstanceLock inst
 
         app.Logger.LogInformation("SameieHub has stopped.");
 
-        return 0;
+        return unsafeBinding ? 1 : 0;
     }
 }
 
@@ -156,8 +186,18 @@ static ActivationListener? AnnounceStart(WebApplication app, BrowserLauncher lau
     app.Logger.LogInformation("SameieHub is running on {Address}.", address);
     WindowsConsole.ShowRunningBanner();
 
-    // From now on a second start can ask this program to open the browser again.
-    var activation = ActivationListener.TryStart(ActivationPipe.NameFor(databasePath), launcher.OpenAsync, app.Logger);
+    // From now on a second start can ask this program to open the browser again, and the installer can ask it to stop.
+    var activation = ActivationListener.TryStart(
+        ActivationPipe.NameFor(databasePath),
+        launcher.OpenAsync,
+        app.Logger,
+        () =>
+        {
+            app.Logger.LogInformation("The program was asked to stop.");
+            app.Lifetime.StopApplication();
+
+            return Task.CompletedTask;
+        });
     launcher.OpenAsync();
 
     return activation;

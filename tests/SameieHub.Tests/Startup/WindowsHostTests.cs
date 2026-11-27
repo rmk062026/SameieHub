@@ -53,12 +53,93 @@ public class WindowsHostTests : IDisposable
         Assert.True(WindowsHost.IsRequested([], "1", isPublishedWindowsBuild: false));
     }
 
-    [Fact]
-    public void ThePublishedWindowsBuildUsesTheWindowsModeByItself_ButCanBeSwitchedOff()
+    [Theory]
+    [InlineData(null)]
+    [InlineData("0")]
+    [InlineData("1")]
+    [InlineData("false")]
+    [InlineData("")]
+    public void ThePublishedWindowsBuildAlwaysUsesTheProtectedMode_WhateverTheEnvironmentSays(string? environmentValue)
     {
-        Assert.True(WindowsHost.IsRequested([], null, isPublishedWindowsBuild: true));
-        Assert.False(WindowsHost.IsRequested([], "0", isPublishedWindowsBuild: true));
-        Assert.True(WindowsHost.IsRequested(["--windows-host"], "0", isPublishedWindowsBuild: true));
+        Assert.True(WindowsHost.IsRequested([], environmentValue, isPublishedWindowsBuild: true));
+        Assert.True(WindowsHost.IsRequested(["--unattended", "--Database:Path=x"], environmentValue, isPublishedWindowsBuild: true));
+    }
+
+    [Fact]
+    public void TheDevelopmentStartCanStillSwitchTheWindowsModeOffAndOn()
+    {
+        Assert.False(WindowsHost.IsRequested([], "0", isPublishedWindowsBuild: false));
+        Assert.True(WindowsHost.IsRequested([], "1", isPublishedWindowsBuild: false));
+    }
+
+    [Theory]
+    [InlineData(false, false, true)]
+    [InlineData(false, true, true)]
+    [InlineData(true, false, false)]
+    [InlineData(true, true, true)]
+    public void TheTestHooksAreOnlyAvailableInDevelopmentOrInABuildMadeForTesting(bool published, bool hooksMarker, bool expected)
+    {
+        Assert.Equal(expected, WindowsHost.TestHooksAllowed(published, hooksMarker));
+    }
+
+    [Fact]
+    public void TheDevelopmentBuildHasNeitherMarker()
+    {
+        Assert.False(WindowsHost.HasTestHooksMarker(typeof(Program).Assembly));
+    }
+
+    [Theory]
+    [InlineData("http://127.0.0.1:5000", true)]
+    [InlineData("http://127.0.0.1:0", true)]
+    [InlineData("http://0.0.0.0:5000", false)]
+    [InlineData("http://[::]:5000", false)]
+    [InlineData("http://[::1]:5000", false)]
+    [InlineData("http://localhost:5000", false)]
+    [InlineData("http://192.168.1.20:5000", false)]
+    [InlineData("https://127.0.0.1:5001", true)]
+    [InlineData("garbage", false)]
+    public void OnlyTheLoopbackAddressIsSafe(string address, bool expected)
+    {
+        Assert.Equal(expected, WindowsHost.AreAllLoopback([address]));
+        Assert.False(WindowsHost.AreAllLoopback(["http://127.0.0.1:5000", "http://0.0.0.0:5001"]));
+        Assert.False(WindowsHost.AreAllLoopback([]));
+    }
+
+    [Fact]
+    public async Task AnExtraAddressFromTheSettings_IsFoundByTheCheck_SoTheProgramCanStopItself()
+    {
+        var builder = WindowsHost.CreateBuilder([$"--Database:Path={DatabasePath}", "--Kestrel:Endpoints:Extra:Url=http://0.0.0.0:0"], _contentRoot);
+        await using var app = builder.Build();
+        app.MapGet("/", () => "ok");
+        await app.StartAsync();
+
+        var addresses = WindowsHost.GetAddresses(app);
+
+        Assert.False(WindowsHost.AreAllLoopback(addresses), string.Join(", ", addresses));
+    }
+
+    [Fact]
+    public async Task ASettingOrArgumentThatAllowsEveryHostName_DoesNotWeakenTheHostCheck()
+    {
+        var builder = WindowsHost.CreateBuilder([$"--Database:Path={DatabasePath}", "--AllowedHosts=*"], _contentRoot);
+        await using var app = builder.Build();
+        app.MapGet("/", () => "ok");
+        await app.StartAsync();
+        using var client = new HttpClient();
+        using var request = new HttpRequestMessage(HttpMethod.Get, WindowsHost.GetAddress(app));
+        request.Headers.Host = "evil.example";
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task TheNormalSetup_ListensOnTheLoopbackAddressOnly()
+    {
+        await using var app = await StartAppAsync();
+
+        Assert.True(WindowsHost.AreAllLoopback(WindowsHost.GetAddresses(app)));
     }
 
     [Fact]

@@ -182,9 +182,60 @@ public class ActivationPipeTests
     }
 
     [Fact]
-    public void TheOnlyCommandIsOpen_SoNoCodePathOrProgramTextCanBeSentOverThePipe()
+    public void TheOnlyCommandsAreOpenAndStop_SoNoCodePathOrProgramTextCanBeSentOverThePipe()
     {
         Assert.Equal("OPEN", ActivationListener.OpenCommand);
+        Assert.Equal("STOP", ActivationListener.StopCommand);
+    }
+
+    [Fact]
+    public async Task TheInstallerCanAskTheRunningProgramToStop_AndItAnswersBeforeItStops()
+    {
+        var name = NewPipeName();
+        var stopped = 0;
+        using var listener = ActivationListener.TryStart(name, () => Task.CompletedTask, NullLogger.Instance, () =>
+        {
+            Interlocked.Increment(ref stopped);
+
+            return Task.CompletedTask;
+        });
+
+        var result = await ActivationClient.TryStopAsync(name, TimeSpan.FromSeconds(5));
+
+        Assert.True(result);
+        Assert.Equal(1, stopped);
+    }
+
+    [Fact]
+    public async Task AStopRequest_IsRefusedWhenTheProgramHasNoWayToStop_AndOpenStillWorks()
+    {
+        var name = NewPipeName();
+        var opened = 0;
+        using var listener = ActivationListener.TryStart(name, () =>
+        {
+            Interlocked.Increment(ref opened);
+
+            return Task.CompletedTask;
+        }, NullLogger.Instance);
+
+        Assert.False(await ActivationClient.TryStopAsync(name, TimeSpan.FromSeconds(5)));
+        Assert.True(await ActivationClient.TryActivateAsync(name, TimeSpan.FromSeconds(5)));
+        Assert.Equal(1, opened);
+    }
+
+    [Fact]
+    public async Task AStopRequest_DoesNotOpenTheBrowser_AndAnOpenRequestDoesNotStop()
+    {
+        var name = NewPipeName();
+        var opened = 0;
+        var stopped = 0;
+        using var listener = ActivationListener.TryStart(name, () => { opened++; return Task.CompletedTask; }, NullLogger.Instance, () => { stopped++; return Task.CompletedTask; });
+
+        await ActivationClient.TryStopAsync(name, TimeSpan.FromSeconds(5));
+        await ActivationClient.TryActivateAsync(name, TimeSpan.FromSeconds(5));
+
+        Assert.Equal(1, opened);
+        Assert.Equal(1, stopped);
     }
 
     private static async Task<string> SendRawAsync(string name, string message)

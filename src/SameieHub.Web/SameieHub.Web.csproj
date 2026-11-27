@@ -17,6 +17,14 @@
     </AssemblyAttribute>
   </ItemGroup>
 
+  <!-- A self-contained build made only for the automatic checks. Without this marker, the installed program ignores Launch:UrlFile. -->
+  <ItemGroup Condition="'$(SelfContained)' == 'true' And '$(SameieHubTestHooks)' == 'true'">
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>SameieHub.TestHooks</_Parameter1>
+      <_Parameter2>true</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
+
   <ItemGroup>
     <InternalsVisibleTo Include="SameieHub.Tests" />
   </ItemGroup>
