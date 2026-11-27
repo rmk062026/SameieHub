@@ -78,8 +78,9 @@ function Invoke-Uninstall {
     if (-not (Test-Path $uninstaller)) { return $false }
     $env:Database__Path = $database
     try { Start-Process $uninstaller -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' | Out-Null } finally { Remove-Item Env:Database__Path -ErrorAction SilentlyContinue }
-    # The uninstaller starts a copy of itself and ends, so the real end is when the entry and the program are gone.
-    return (Wait-Until { -not (Test-Path $uninstallKey) -and -not (Test-Path (Join-Path $installDir 'SameieHub.exe')) } 90)
+    # The uninstaller starts a copy of itself and ends, and the copy then deletes the uninstaller file after it has finished. The real end
+    # is when the entry, the program and the uninstaller are all gone. Installing again before that could have the late deletion remove the new uninstaller.
+    return (Wait-Until { -not (Test-Path $uninstallKey) -and -not (Test-Path (Join-Path $installDir 'SameieHub.exe')) -and -not (Test-Path $uninstaller) } 120)
 }
 
 function Get-RunningProgram { return @(Get-Process -Name SameieHub -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path.StartsWith($installDir, [StringComparison]::OrdinalIgnoreCase) }) }
