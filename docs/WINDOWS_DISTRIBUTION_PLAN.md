@@ -758,7 +758,7 @@ Samme sperre som før avgjør om et program kjører. Når sperren er opptatt:
 4. Kan pipen ikke nås (programmet starter eller stopper akkurat nå, eller pipen mangler), vises den vanlige meldingen «SameieHub kjører allerede …» med kode 1.
 
 **Tilgangskontroll på pipen:**
-- Pipen lages med `PipeOptions.CurrentUserOnly`, som gir tilgang bare til den nåværende Windows-brukeren. Testet: tilgangslisten gir den nåværende brukeren tilgang og ingen bred gruppe (Everyone, Users, Authenticated Users, Interactive, Network, Anonymous). **Det er ikke testet med en annen Windows-konto.**
+- Pipen lages med `PipeOptions.CurrentUserOnly`, som gir tilgang bare til den nåværende Windows-brukeren. Testet: tilgangslisten gir den nåværende brukeren tilgang og ingen bred gruppe (Everyone, Users, Authenticated Users, Interactive, Network, Anonymous). Kjører programmet **forhøyet** (som administrator), gis tilgang til gruppen Administratorer i stedet, fordi det er eieren av et forhøyet token. Det fant CI-maskinen, som kjører slik. Da kan andre administratorer bruke pipen, og de kan uansett lese alt. **Det er ikke testet med en annen Windows-konto.**
 - Klienten bruker også `CurrentUserOnly`, så den stoler ikke på en pipe som en annen bruker har laget. Navnet er ikke hemmelig; det er tilgangskontrollen som beskytter.
 - **Bare én kommando finnes: `OPEN`.** En melding er høyst 16 byte og må være nøyaktig `OPEN` og linjeskift. Alt annet (annen tekst, stier, programtekst, for lang, uten linjeskift) gir `ERR` eller ingen svar, og åpner ingenting (testet).
 - Tilkoblinger behandles én og én med to sekunders grense, så en klient som ikke sender noe, ikke kan blokkere. Alle svarene er korte og faste.

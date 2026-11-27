@@ -170,7 +170,12 @@ public class ActivationPipeTests
             WellKnownSidType.AnonymousSid
         };
 
-        Assert.Contains(rules, rule => rule.AccessControlType == AccessControlType.Allow && rule.IdentityReference.Equals(user));
+        // A normal program is given to the user's own account. A program running elevated (as the CI runner does) is given to the
+        // Administrators group instead, because that is the owner of an elevated token.
+        var runsElevated = new WindowsPrincipal(WindowsIdentity.GetCurrent()).IsInRole(WindowsBuiltInRole.Administrator);
+        Assert.Contains(rules, rule =>
+            rule.AccessControlType == AccessControlType.Allow
+            && (rule.IdentityReference.Equals(user) || (runsElevated && ((SecurityIdentifier)rule.IdentityReference).IsWellKnown(WellKnownSidType.BuiltinAdministratorsSid))));
         Assert.DoesNotContain(rules, rule =>
             rule.AccessControlType == AccessControlType.Allow
             && broadGroups.Any(group => ((SecurityIdentifier)rule.IdentityReference).IsWellKnown(group)));
