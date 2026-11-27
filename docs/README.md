@@ -36,6 +36,15 @@ Disse ble skrevet i samme endring som koden, milepæl for milepæl, og beskriver
 | [WINDOWS_DISTRIBUTION_PLAN.md](WINDOWS_DISTRIBUTION_PLAN.md) | Plan for selvstendig Windows-versjon: arkitekturvalg, oppstart og avslutning, sikkerhet, lagring, installasjon og milepæler (M8, bare plan) |
 | [USABILITY_REVIEW.md](USABILITY_REVIEW.md) | Brukervennlighet, antakelser om det første sameiet og anbefalinger (M4T-P1.2) |
 
+## Møteadministrasjon: forberedelse (studenten skriver koden, ingen møtekode finnes)
+
+| Dokument | Innhold |
+|---|---|
+| [MEETING_MODULE_LEARNING_GUIDE.md](MEETING_MODULE_LEARNING_GUIDE.md) | Læringsguide: C#/.NET-konseptene med eksempler fra koden, øvelser og kontrollspørsmål |
+| [MEETING_MODULE_ARCHITECTURE.md](MEETING_MODULE_ARCHITECTURE.md) | Faktisk arkitektur og dataflyt, og hvordan en ny modul kobles inn |
+| [MEETING_MODULE_IMPLEMENTATION_PLAN.md](MEETING_MODULE_IMPLEMENTATION_PLAN.md) | Utviklingsrutine, foreslått faglig struktur, milepæler og åpne beslutninger |
+| [MEETING_MODULE_REFERENCE.md](MEETING_MODULE_REFERENCE.md) | Fil-for-fil-oversikt over eksisterende kode som forbilde |
+
 ## Status (kontrollert mot koden)
 
 - Ferdig gjennom alle lag: boenheter, styresaker, oppgaver, dashboard, demodata.
